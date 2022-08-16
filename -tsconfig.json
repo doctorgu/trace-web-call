@@ -1,0 +1,22 @@
+{
+  "compilerOptions": {
+    "esModuleInterop": true,
+    "strict": true,
+    "moduleResolution": "Node",
+    "noImplicitAny": true,
+    "forceConsistentCasingInFileNames": true,
+    "noFallthroughCasesInSwitch": true,
+    "isolatedModules": false,
+    "useUnknownInCatchVariables": false,
+    "inlineSourceMap": true,
+    "rootDir": "src",
+    "outDir": "src/tsc-out",
+    "sourceMap": true,
+    "module": "es6",
+    "target": "es5"
+  },
+  "ts-node": {
+    "esm": true
+  },
+  "lib": ["es5"]
+}
