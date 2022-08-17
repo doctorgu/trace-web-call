@@ -1,5 +1,5 @@
 import { parse } from 'java-parser';
-import { getClosingPosition } from './util';
+import { getClosingPosition, trimSpecific } from './util';
 
 type Keyword =
   | 'LCurly'
@@ -32,18 +32,19 @@ type PathsAndImage = {
   image: string;
 };
 
-type Annotation = {
+export type Annotation = {
   name: string;
-  value: string;
+  values: string[];
 };
 
-type VarInfo = {
+export type VarInfo = {
   annotations: Annotation[];
   typeName: string;
   instanceName: string;
 };
 
-type CallerInfo = {
+export type CallerInfo = {
+  typeName: string;
   instanceName: string;
   methodName: string;
   stringLiteral: string;
@@ -53,6 +54,18 @@ type MethodInfo = {
   annotations: Annotation[];
   name: string;
   callers: CallerInfo[];
+};
+
+export type MethodInfoFind = MethodInfo & {
+  className: string;
+  implementsName: string;
+};
+
+export type ClassInfo = {
+  className: string;
+  implementsName: string;
+  vars: VarInfo[];
+  methods: MethodInfo[];
 };
 
 function getItemByPath(parent: any, paths: string[]): any[] {
@@ -93,7 +106,7 @@ function getImageValue(parent: any, pathDotSeparated: string): string {
   const paths = pathDotSeparated.split('.');
 
   const imageParents = getItemByPath(parent, paths);
-  if (!imageParents) return '';
+  if (!imageParents.length) return '';
 
   const image = imageParents[0].image;
   return image;
@@ -138,28 +151,6 @@ function getAllValues(parent: any): string[] {
   return pathsRet;
 }
 
-// modifiers: FieldModifiers or MethodModifiers
-function getAnnotations(modifiers: any[]): Annotation[] {
-  const annotations: Annotation[] = [];
-
-  for (let nMod = 0; nMod < modifiers.length; nMod += 1) {
-    const modifier = modifiers[nMod];
-    // GetMapping
-    const name = getImageValue(modifier, 'annotation.typeName.Identifier');
-    if (name) {
-      // "/api/manual/v1/categoryhandler"
-      const value = getImageValue(
-        modifier,
-        'annotation.elementValue.expression.ternaryExpression.binaryExpression.unaryExpression.primary.primaryPrefix.literal.StringLiteral'
-      );
-
-      annotations.push({ name, value });
-    }
-  }
-
-  return annotations;
-}
-
 function endsWith(paths: string[], ...finds: Keyword[]): boolean {
   const finds2 = [...finds];
 
@@ -184,9 +175,9 @@ function includes(paths: string[], ...finds: Keyword[]): boolean {
 
   return true;
 }
-function endsWithSeparator(paths: string[]): boolean {
-  return endsWith(paths, 'LCurly') || endsWith(paths, 'RCurly') || endsWith(paths, 'Semicolon');
-}
+// function endsWithSeparator(paths: string[]): boolean {
+//   return endsWith(paths, 'LCurly') || endsWith(paths, 'RCurly') || endsWith(paths, 'Semicolon');
+// }
 
 function getVars(pathsAndImageList: PathsAndImage[]): VarInfo[] {
   const fieldDecls = pathsAndImageList.filter(({ paths, image }) => includes(paths, 'fieldDeclaration'));
@@ -206,9 +197,9 @@ function getVars(pathsAndImageList: PathsAndImage[]): VarInfo[] {
 
     if (includes(paths, 'annotation')) {
       if (includes(paths, 'typeName', 'Identifier')) {
-        annotations.push({ name: image, value: '' });
+        annotations.push({ name: image, values: [] });
       } else if (includes(paths, 'StringLiteral')) {
-        annotations[annotations.length - 1].value = image;
+        annotations[annotations.length - 1].values.push(trimSpecific(image, '"'));
       }
     } else if (includes(paths, 'unannType')) {
       typeName = image;
@@ -250,16 +241,17 @@ function getCallerInfos(
 
   const STEP_00_NONE = 0;
   const STEP_01_FIRST = 1;
-  const STEP_14_LBrace = 14;
+  const STEP_14_LBraceAfterFirst = 14;
   const STEP_15_StringLiteral = 15;
 
   const STEP_02_DOT = 2;
   const STEP_03_REST = 3;
-  const STEP_04_LBrace = 4;
+  const STEP_04_LBraceAfterRest = 4;
   const STEP_05_StringLiteral = 5;
 
   const callers: CallerInfo[] = [];
 
+  let typeName = '';
   let firstName = '';
   let restName = '';
   for (let i = posLCurly; i <= posRCurly; i++) {
@@ -277,17 +269,22 @@ function getCallerInfos(
       ) &&
       step === STEP_00_NONE
     ) {
-      const goToNext = callerOnlyInVars ? vars.some(({ instanceName }) => instanceName === image) : true;
-      if (goToNext) {
+      if (callerOnlyInVars) {
+        const varByInstance = vars.find(({ instanceName }) => instanceName === image);
+        if (varByInstance) {
+          step = STEP_01_FIRST;
+          typeName = varByInstance.typeName;
+        }
+      } else {
         step = STEP_01_FIRST;
       }
     } else if (endsWith(paths, 'primary', 'primaryPrefix', 'fqnOrRefType', 'Dot') && step === STEP_01_FIRST) {
       step = STEP_02_DOT;
     } else if (endsWith(paths, 'primary', 'primarySuffix', 'methodInvocationSuffix', 'LBrace')) {
       if (step === STEP_01_FIRST) {
-        step = STEP_14_LBrace;
+        step = STEP_14_LBraceAfterFirst;
       } else if (step === STEP_03_REST) {
-        step = STEP_04_LBrace;
+        step = STEP_04_LBraceAfterRest;
       }
     } else if (
       endsWith(
@@ -303,9 +300,9 @@ function getCallerInfos(
     ) {
       step = STEP_03_REST;
     } else if (endsWith(paths, 'primary', 'primaryPrefix', 'literal', 'StringLiteral')) {
-      if (step === STEP_04_LBrace) {
+      if (step === STEP_04_LBraceAfterRest) {
         step = STEP_05_StringLiteral;
-      } else if (step === STEP_14_LBrace) {
+      } else if (step === STEP_14_LBraceAfterFirst) {
         step = STEP_15_StringLiteral;
       }
     } else {
@@ -314,18 +311,20 @@ function getCallerInfos(
 
     if (step === STEP_01_FIRST) {
       firstName = image;
-    } else if (step === STEP_14_LBrace) {
-      callers.push({ instanceName: '', methodName: firstName, stringLiteral: '' });
-      firstName = '';
-      restName = '';
     } else if (step === STEP_03_REST) {
       restName = image;
-
-      callers.push({ instanceName: firstName, methodName: restName, stringLiteral: '' });
+    } else if (step === STEP_04_LBraceAfterRest) {
+      callers.push({ typeName, instanceName: firstName, methodName: restName, stringLiteral: '' });
+      typeName = '';
+      firstName = '';
+      restName = '';
+    } else if (step === STEP_14_LBraceAfterFirst) {
+      callers.push({ typeName: '', instanceName: '', methodName: firstName, stringLiteral: '' });
+      typeName = '';
       firstName = '';
       restName = '';
     } else if (step === STEP_05_StringLiteral || step === STEP_15_StringLiteral) {
-      callers[callers.length - 1].stringLiteral = image;
+      callers[callers.length - 1].stringLiteral = trimSpecific(image, '"');
     }
   }
 
@@ -337,28 +336,28 @@ function getMethods(pathsAndImageList: PathsAndImage[], vars: VarInfo[], callerO
 
   const methods: MethodInfo[] = [];
   let annotations: Annotation[] = [];
-  let name = '';
+  let methodName = '';
   let callers: CallerInfo[] = [];
   for (let i = 0; i < methodDecls.length; i++) {
     const { paths, image } = methodDecls[i];
 
     if (includes(paths, 'annotation')) {
       if (includes(paths, 'typeName', 'Identifier')) {
-        annotations.push({ name: image, value: '' });
+        annotations.push({ name: image, values: [] });
       } else if (includes(paths, 'StringLiteral')) {
-        annotations[annotations.length - 1].value = image;
+        annotations[annotations.length - 1].values.push(trimSpecific(image, '"'));
       }
     } else if (includes(paths, 'methodDeclarator', 'Identifier')) {
-      name = image;
+      methodName = image;
     } else if (includes(paths, 'LCurly')) {
       const posLCurly = i;
       const posRCurly = getRCurlyPosition(methodDecls, posLCurly);
       callers = getCallerInfos(methodDecls, vars, posLCurly, posRCurly, callerOnlyInVars);
 
-      methods.push({ annotations, name, callers });
+      methods.push({ annotations, name: methodName, callers });
 
       annotations = [];
-      name = '';
+      methodName = '';
       callers = [];
 
       i = posRCurly;
@@ -368,12 +367,20 @@ function getMethods(pathsAndImageList: PathsAndImage[], vars: VarInfo[], callerO
   return methods;
 }
 
-export function getClassInfo(content: string, callerOnlyInVars: boolean): { vars: VarInfo[]; methods: MethodInfo[] } {
+export function getClassInfo(content: string, callerOnlyInVars: boolean): ClassInfo {
   const cst = parse(content);
   const cst2 = cst as any;
-  const classBodys: any[] = getItemByPath(
+
+  const normalClassDeclaration = getItemByPath(
     cst2,
-    'ordinaryCompilationUnit.typeDeclaration.classDeclaration.normalClassDeclaration.classBody'.split('.')
+    'ordinaryCompilationUnit.typeDeclaration.classDeclaration.normalClassDeclaration'.split('.')
+  );
+  const classBodys = getItemByPath(normalClassDeclaration[0], 'classBody'.split('.'));
+
+  const className = getImageValue(normalClassDeclaration[0], 'typeIdentifier.Identifier');
+  const implementsName = getImageValue(
+    normalClassDeclaration[0],
+    'superinterfaces.interfaceTypeList.interfaceType.classType.Identifier'
   );
 
   const paths: string[] = [];
@@ -383,9 +390,5 @@ export function getClassInfo(content: string, callerOnlyInVars: boolean): { vars
   const vars = getVars(pathsAndImageList);
   const methods = getMethods(pathsAndImageList, vars, callerOnlyInVars);
 
-  // console.log(JSON.stringify(vars, null, '  '));
-  console.log(JSON.stringify(methods, null, '  '));
-  console.log('x');
-
-  return { vars, methods };
+  return { className, implementsName, vars, methods };
 }

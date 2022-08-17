@@ -14,6 +14,25 @@ export function removeComment(value: string): string {
   return value.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, '');
 }
 
+export function removeCommentSql(value: string): string {
+  return value.replace(/\/\*[\s\S]*?\*\/|--.*/g, '');
+}
+
+/*
+--Example
+console.log(trimSpecific('"a"b"', '"') === 'a"b');
+console.log(trimSpecific('""ab"""', '"') === 'ab');
+console.log(trimSpecific('"', '"') === '');
+console.log(trimSpecific('"a', '"') === 'a');
+console.log(trimSpecific('a"', '"') === 'a');
+console.log(trimSpecific('[a]', '[]') === 'a');
+console.log(trimSpecific('{[a]}', '[{}]') === 'a');
+*/
+export function trimSpecific(value: string, find: string): string {
+  const find2 = escapeRegexp(find);
+  return value.replace(new RegExp(`^[${find2}]*(.*?)[${find2}]*$`), '$1');
+}
+
 export function getCommentRange(value: string): [number, number][] {
   const range: [number, number][] = [];
 

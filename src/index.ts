@@ -1,33 +1,77 @@
-import { readFileSync } from 'fs';
-import { findFiles } from './common/util';
-import { getClassInfo } from './common/classHelper';
-import { getXmls } from './common/xmlHelper';
+import { writeFileSync } from 'fs';
+import { config } from './config/config';
+import {
+  RouteInfo,
+  MappingToTables,
+  getMethodInfoFinds,
+  getXmlNodeInfoFinds,
+  getTableNamesByMethod,
+} from './common/traceHelper';
 
-async function getControllerInfo(rootDir: string, filePattern: string) {
-  const callerOnlyInVars = true;
-  for await (const fullPath of findFiles(rootDir, filePattern)) {
-    const content = readFileSync(fullPath, { encoding: 'utf-8' });
-    getClassInfo(content, callerOnlyInVars);
+async function getMappingToTables(): Promise<MappingToTables[]> {
+  const methodsInControllers = await getMethodInfoFinds(config.path.controller, '*Controller.java', 'controller');
+  const methodsInServiceImpls = await getMethodInfoFinds(config.path.service, '*Impl.java', 'serviceImpl');
+  const methods = methodsInControllers.concat(methodsInServiceImpls);
 
-    console.log(fullPath);
+  const xmls = await getXmlNodeInfoFinds(config.path.xml, '*.xml');
+
+  const mappingAndTables: MappingToTables[] = [];
+
+  for (let nMethod = 0; nMethod < methodsInControllers.length; nMethod++) {
+    const methodInControllers = methodsInControllers[nMethod];
+    const { className, annotations, name: methodName } = methodInControllers;
+    const mappingHasValue = annotations.find(({ name, values }) => name.endsWith('Mapping') && values.length);
+    if (!mappingHasValue) continue;
+
+    const routes: RouteInfo[] = [];
+    const { name: mappingName, values } = mappingHasValue;
+
+    for (let nValue = 0; nValue < values.length; nValue++) {
+      const value = values[nValue];
+      routes.push({ routeType: 'mapping', value: `${mappingName}(${value})` });
+      routes.push({ routeType: 'method', value: `${className}.${methodName}` });
+
+      const tables = getTableNamesByMethod(methodInControllers, methods, xmls, routes);
+      mappingAndTables.push({ mapping: mappingHasValue, tables, routes });
+      // console.log(routes);
+    }
+  }
+  // console.log(mappingAndTables);
+  return mappingAndTables;
+}
+
+async function writeMappingToTables() {
+  const mapToTables: string[] = [];
+  const routeLogs: string[] = [];
+  const mappingToTables = await getMappingToTables();
+  for (const { mapping, tables, routes } of mappingToTables) {
+    for (let nValue = 0; nValue < mapping.values.length; nValue++) {
+      const value = mapping.values[nValue];
+      mapToTables.push(`${value}: ${[...tables].join(',')}`);
+      routeLogs.push(routes.map(({ routeType, value }) => `${routeType.padStart(7, ' ')}: ${value}`).join('\n'));
+    }
+  }
+
+  writeFileSync(config.path.output.mapToTables, mapToTables.join('\n'), 'utf-8');
+  writeFileSync(config.path.output.routes, routeLogs.join('\n\n'), 'utf-8');
+}
+// writeMappingToTables();
+
+async function doTest() {
+  console.log(config.path.test);
+  const methodsInControllers = await getMethodInfoFinds(
+    config.path.test,
+    'AnnotationTestController.java',
+    'controller'
+  );
+  for (let nMethod = 0; nMethod < methodsInControllers.length; nMethod++) {
+    const methodInControllers = methodsInControllers[nMethod];
+    const { annotations } = methodInControllers;
+    console.log(annotations);
   }
 }
-async function getServiceImplInfo(rootDir: string, filePattern: string) {
-  const callerOnlyInVars = false;
-  for await (const fullPath of findFiles(rootDir, filePattern)) {
-    const content = readFileSync(fullPath, { encoding: 'utf-8' });
-    getClassInfo(content, callerOnlyInVars);
+doTest();
 
-    console.log(fullPath);
-  }
-}
-async function getXmlIds(rootDir: string, filePattern: string) {
-  for await (const fullPath of findFiles(rootDir, filePattern)) {
-    const xml = readFileSync(fullPath, 'utf-8');
-    const xmls = getXmls(xml);
-    console.log(JSON.stringify(xmls, null, '  '));
-  }
-}
 // getControllerInfo(
 //   'D:\\Temp\\kbbizmicro-sb\\bz-manual-api-common\\src\\main\\java\\biz\\micro\\portal\\manual\\api\\common\\controller',
 //   'ManualEditorController.java'
@@ -36,4 +80,4 @@ async function getXmlIds(rootDir: string, filePattern: string) {
 //   'D:\\Temp\\kbbizmicro-sb\\bz-manual-api-common\\src\\main\\java\\biz\\micro\\portal\\manual\\api\\common\\spring\\service',
 //   'ManualServiceImpl.java'
 // );
-getXmlIds('D:\\Temp\\kbbizmicro-sb\\bz-manual-api-common\\src\\main\\resources\\sql\\oracle', 'DocNotice.xml');
+// getXmlIds('D:\\Temp\\kbbizmicro-sb\\bz-manual-api-common\\src\\main\\resources\\sql\\oracle', 'manual_common.xml');

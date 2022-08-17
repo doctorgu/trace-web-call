@@ -1,16 +1,47 @@
 import { Element, parseXml } from 'libxmljs2';
+import { removeCommentSql } from './util';
 
-type XmlNodeInfo = {
+export type XmlNodeInfo = {
   id: string;
   tagName: string;
   params: Map<string, string>;
+  tables: Set<string>;
 };
-type XmlInfo = {
+export type XmlInfo = {
   namespace: string;
   nodes: XmlNodeInfo[];
 };
+export type XmlNodeInfoFind = XmlNodeInfo & {
+  namespace: string;
+};
 
-export function getXmls(xml: string): XmlInfo | null {
+function getWords(sql: string): Map<string, number> {
+  const words = new Map<string, number>();
+
+  let m: RegExpExecArray | null;
+  const re = /\w+/g;
+  while ((m = re.exec(sql)) !== null) {
+    const word = m[0];
+    const count = (words.has(word) ? (words.get(word) as number) : 0) + 1;
+    words.set(word, count);
+  }
+
+  return words;
+}
+
+function getTables(words: Map<string, number>, tablesAll: Set<string>): Set<string> {
+  const tables = new Set<string>();
+
+  for (const [word] of words) {
+    if (tablesAll.has(word)) {
+      tables.add(word);
+    }
+  }
+
+  return tables;
+}
+
+export function getXmlInfo(xml: string, tablesAll: Set<string>): XmlInfo | null {
   const doc = parseXml(xml);
   const root = doc.root();
   if (!root) return null;
@@ -27,6 +58,11 @@ export function getXmls(xml: string): XmlInfo | null {
 
     const tagName = elem.name();
 
+    const text = elem.text();
+    const sql = removeCommentSql(text);
+    const words = getWords(sql);
+    const tables = getTables(words, tablesAll);
+
     let id = '';
     const params = new Map<string, string>();
     const attrs = elem.attrs();
@@ -41,7 +77,7 @@ export function getXmls(xml: string): XmlInfo | null {
     }
     if (!id) continue;
 
-    nodes.push({ id, tagName, params });
+    nodes.push({ id, tagName, params, tables: new Set(tables) });
   }
 
   return { namespace, nodes: nodes };
