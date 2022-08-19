@@ -41,6 +41,26 @@ function getTables(words: Map<string, number>, tablesAll: Set<string>): Set<stri
   return tables;
 }
 
+function getTextInclude(parent: Element, root: Element) {
+  const childNodes = parent.childNodes();
+  const texts: string[] = [];
+  for (const childNode of childNodes) {
+    const elem = childNode as Element;
+    if (!elem.attr) continue;
+
+    const tagName = elem.name();
+    if (tagName !== 'include') continue;
+
+    const refid = elem.attr('refid')?.value();
+    const nodeFound = root.get(`sql[@id='${refid}']`);
+    if (!nodeFound) continue;
+
+    const elemFound = nodeFound as Element;
+    texts.push(elemFound.text());
+  }
+  return texts.join('\n');
+}
+
 export function getXmlInfo(xml: string, tablesAll: Set<string>): XmlInfo | null {
   const doc = parseXml(xml);
   const root = doc.root();
@@ -57,10 +77,15 @@ export function getXmlInfo(xml: string, tablesAll: Set<string>): XmlInfo | null 
     if (!elem.attr) continue;
 
     const tagName = elem.name();
+    if (tagName === 'sql') continue;
+
+    const textInclude = getTextInclude(elem, root);
+    const sqlInclude = removeCommentSql(textInclude);
 
     const text = elem.text();
     const sql = removeCommentSql(text);
-    const words = getWords(sql);
+
+    const words = getWords(`${sqlInclude}\n${sql}`);
     const tables = getTables(words, tablesAll);
 
     let id = '';
@@ -80,5 +105,5 @@ export function getXmlInfo(xml: string, tablesAll: Set<string>): XmlInfo | null 
     nodes.push({ id, tagName, params, tables: new Set(tables) });
   }
 
-  return { namespace, nodes: nodes };
+  return { namespace, nodes };
 }

@@ -25,7 +25,8 @@ type Keyword =
   | 'primarySuffix'
   | 'methodInvocationSuffix'
   | 'LBrace'
-  | 'literal';
+  | 'literal'
+  | 'This';
 
 type PathsAndImage = {
   paths: string[];
@@ -56,67 +57,151 @@ type MethodInfo = {
   callers: CallerInfo[];
 };
 
-export type MethodInfoFind = MethodInfo & {
+export type MethodInfoFind = {
   className: string;
   implementsName: string;
+  mappingValues: string[];
+  name: string;
+  callers: CallerInfo[];
+};
+
+type ClassHeader = {
+  name: string;
+  implementsName: string;
+  extendsName: string;
+  annotations: Annotation[];
 };
 
 export type ClassInfo = {
-  className: string;
-  implementsName: string;
+  classHeader: ClassHeader;
   vars: VarInfo[];
   methods: MethodInfo[];
 };
 
-function getItemByPath(parent: any, paths: string[]): any[] {
-  const children = parent.children;
-  if (!children) return [];
-
-  const kvList = Object.entries(children);
+function getProperty(parent: any, paths: string[]): any {
+  const kvList = Object.entries(parent);
   for (let i = 0; i < kvList.length; i += 1) {
-    const [key, value] = kvList[i];
+    const [key] = kvList[i];
 
     if (paths[0] !== key) continue;
 
-    const prop = children[key];
+    const child = parent[key];
     paths.shift();
     if (paths.length === 0) {
-      return prop;
+      return child;
     }
 
-    if (Array.isArray(value) && value.length) {
-      let child = prop[0];
-
-      const index = Number.parseInt(paths[0]);
-      if (!isNaN(index)) {
-        if (index >= value.length) throw new Error(`index: ${index} is larger than value.length: ${value.length}`);
-
-        child = prop[index];
-        paths.shift();
-      }
-
-      return getItemByPath(child, paths);
-    }
+    return getProperty(child, paths);
   }
 
-  return [];
+  return null;
 }
 
-function getImageValue(parent: any, pathDotSeparated: string): string {
+// function getItemByPath(parent: any, paths: string[]): any[] {
+//   const children = parent.children;
+//   if (!children) return [];
+
+//   const kvList = Object.entries(children);
+//   for (let i = 0; i < kvList.length; i += 1) {
+//     const [key, value] = kvList[i];
+
+//     if (paths[0] !== key) continue;
+
+//     const prop = children[key];
+//     paths.shift();
+//     if (paths.length === 0) {
+//       return prop;
+//     }
+
+//     if (Array.isArray(value) && value.length) {
+//       let child = prop[0];
+
+//       const index = Number.parseInt(paths[0]);
+//       if (!isNaN(index)) {
+//         if (index >= value.length) throw new Error(`index: ${index} is larger than value.length: ${value.length}`);
+
+//         child = prop[index];
+//         paths.shift();
+//       }
+
+//       return getItemByPath(child, paths);
+//     }
+//   }
+
+//   return [];
+// }
+
+function getValue(parent: any, pathDotSeparated: string): string {
   const paths = pathDotSeparated.split('.');
 
-  const imageParents = getItemByPath(parent, paths);
-  if (!imageParents.length) return '';
+  const prop = getProperty(parent, paths);
+  if (prop === null) return '';
 
-  const image = imageParents[0].image;
-  return image;
+  return prop;
+}
+// function getImageValue(parent: any, pathDotSeparated: string): string {
+//   const paths = pathDotSeparated.split('.');
+
+//   const imageParents = getItemByPath(parent, paths);
+//   if (!imageParents.length) return '';
+
+//   const image = imageParents[0].image;
+//   return image;
+// }
+
+function getSimplifiedCst(pathsAndImageList: PathsAndImage[]) {
+  const treeNew: any = {};
+  for (let i = 0; i < pathsAndImageList.length; i++) {
+    const { paths, image } = pathsAndImageList[i];
+
+    let child = treeNew;
+    for (let i = 0; i < paths.length - 1; i++) {
+      const path = paths[i];
+
+      if (!(path in child)) {
+        const nextPathIsIndex = !isNaN(parseInt(paths[i + 1]));
+        if (nextPathIsIndex) {
+          child[path] = [];
+        } else {
+          child[path] = {};
+        }
+      }
+      child = child[path];
+    }
+    child[paths[paths.length - 1]] = image;
+  }
+  return treeNew;
 }
 
-function getAllValueAndPaths(parent: any, paths: string[], pathsAndImageList: PathsAndImage[]): void {
+function getPathsAndImageListFromSimpleCst2(parent: any, paths: string[], pathsAndImageList: PathsAndImage[]): void {
+  if (typeof parent === 'string') {
+    pathsAndImageList.push({ paths, image: parent });
+    return;
+  }
+
+  const kvList = Object.entries(parent);
+  for (let nKv = 0; nKv < kvList.length; nKv++) {
+    const [key, value] = kvList[nKv];
+
+    const prop = parent[key];
+
+    const pathsNew = [...paths];
+    pathsNew.push(key);
+    getPathsAndImageListFromSimpleCst2(prop, pathsNew, pathsAndImageList);
+  }
+}
+function getPathsAndImageListFromSimpleCst(parent: any) {
+  const paths: string[] = [];
+  const pathsAndImageList: PathsAndImage[] = [];
+  getPathsAndImageListFromSimpleCst2(parent, paths, pathsAndImageList);
+  return pathsAndImageList;
+}
+
+function getPathsAndImageListFromCst2(parent: any, paths: string[], pathsAndImageList: PathsAndImage[]): void {
   const children = parent.children;
-  const image = parent.image;
   // All leaf property name which has value is always 'image', so do not add 'image' to paths
-  if (image) {
+  if ('image' in parent) {
+    const image = parent.image;
     pathsAndImageList.push({ paths, image });
     return;
   }
@@ -136,20 +221,26 @@ function getAllValueAndPaths(parent: any, paths: string[], pathsAndImageList: Pa
         const pathsNew = [...paths];
         pathsNew.push(key);
         if (useIndex) pathsNew.push(i.toString());
-        getAllValueAndPaths(prop[i], pathsNew, pathsAndImageList);
+        getPathsAndImageListFromCst2(prop[i], pathsNew, pathsAndImageList);
       }
     }
   }
 }
-
-function getAllValues(parent: any): string[] {
+function getPathsAndImageListFromCst(parent: any) {
   const paths: string[] = [];
   const pathsAndImageList: PathsAndImage[] = [];
-  getAllValueAndPaths(parent, paths, pathsAndImageList);
-
-  const pathsRet = pathsAndImageList.map(({ image }) => image);
-  return pathsRet;
+  getPathsAndImageListFromCst2(parent, paths, pathsAndImageList);
+  return pathsAndImageList;
 }
+
+// function getAllValues(parent: any): string[] {
+//   const paths: string[] = [];
+//   const pathsAndImageList: PathsAndImage[] = [];
+//   getPathsAndImageList(parent, paths, pathsAndImageList);
+
+//   const pathsRet = pathsAndImageList.map(({ image }) => image);
+//   return pathsRet;
+// }
 
 function endsWith(paths: string[], ...finds: Keyword[]): boolean {
   const finds2 = [...finds];
@@ -165,19 +256,64 @@ function endsWith(paths: string[], ...finds: Keyword[]): boolean {
   return true;
 }
 function includes(paths: string[], ...finds: Keyword[]): boolean {
-  let index = paths.indexOf(finds[0]);
-  if (index === -1) return false;
+  let fromIndex = 0;
 
-  for (let i = 1; i < finds.length; i++) {
-    index++;
-    if (finds[i] !== paths[index]) return false;
+  while (true) {
+    let index = paths.indexOf(finds[0], fromIndex);
+    if (index === -1) return false;
+
+    fromIndex = index + 1;
+
+    let found = true;
+    for (let i = 1; i < finds.length; i++) {
+      index++;
+      if (finds[i] !== paths[index]) {
+        found = false;
+        break;
+      }
+    }
+    if (found) return true;
   }
-
-  return true;
 }
 // function endsWithSeparator(paths: string[]): boolean {
 //   return endsWith(paths, 'LCurly') || endsWith(paths, 'RCurly') || endsWith(paths, 'Semicolon');
 // }
+
+function getClassHeader(cst2: any): ClassHeader {
+  const classDeclaration = getProperty(cst2, 'ordinaryCompilationUnit.typeDeclaration.classDeclaration'.split('.'));
+
+  const classModifier = getProperty(classDeclaration, 'classModifier'.split('.'));
+  let annotations: Annotation[] = [];
+  if (classModifier !== null) {
+    const pathsAndImageList = getPathsAndImageListFromSimpleCst(classModifier);
+    for (let i = 0; i < pathsAndImageList.length; i++) {
+      const { paths, image } = pathsAndImageList[i];
+
+      if (includes(paths, 'annotation')) {
+        if (endsWith(paths, 'typeName', 'Identifier')) {
+          annotations.push({ name: image, values: [] });
+        } else if (endsWith(paths, 'StringLiteral')) {
+          annotations[annotations.length - 1].values.push(trimSpecific(image, '"'));
+        }
+      }
+    }
+  }
+
+  const name = getValue(classDeclaration, 'normalClassDeclaration.typeIdentifier.Identifier');
+  const extendsName = getValue(classDeclaration, 'normalClassDeclaration.superclass.classType.Identifier');
+  const implementsName = getValue(
+    classDeclaration,
+    'normalClassDeclaration.superinterfaces.interfaceTypeList.interfaceType.classType.Identifier'
+  );
+
+  // const className = getImageValue(classDeclarations[0], 'normalClassDeclaration.typeIdentifier.Identifier');
+  // const extendsName = getImageValue(classDeclarations[0], 'normalClassDeclaration.superclass.classType.Identifier');
+  // const implementsName = getImageValue(
+  //   classDeclarations[0],
+  //   'normalClassDeclaration.superinterfaces.interfaceTypeList.interfaceType.classType.Identifier'
+  // );
+  return { name, implementsName, extendsName, annotations };
+}
 
 function getVars(pathsAndImageList: PathsAndImage[]): VarInfo[] {
   const fieldDecls = pathsAndImageList.filter(({ paths, image }) => includes(paths, 'fieldDeclaration'));
@@ -196,9 +332,9 @@ function getVars(pathsAndImageList: PathsAndImage[]): VarInfo[] {
     }
 
     if (includes(paths, 'annotation')) {
-      if (includes(paths, 'typeName', 'Identifier')) {
+      if (endsWith(paths, 'typeName', 'Identifier')) {
         annotations.push({ name: image, values: [] });
-      } else if (includes(paths, 'StringLiteral')) {
+      } else if (endsWith(paths, 'StringLiteral')) {
         annotations[annotations.length - 1].values.push(trimSpecific(image, '"'));
       }
     } else if (includes(paths, 'unannType')) {
@@ -254,11 +390,16 @@ function getCallerInfos(
   let typeName = '';
   let firstName = '';
   let restName = '';
-  for (let i = posLCurly; i <= posRCurly; i++) {
-    const { paths, image } = methodDecls[i];
+
+  const list = methodDecls.filter((v, i) => i >= posLCurly && i <= posRCurly);
+  for (let i = 0; i < list.length; i++) {
+    const { paths, image } = list[i];
+
+    // 'primary', 'primarySuffix' can be array or not
+    const includesPrimarySuffix = includes(paths, 'primary', 'primarySuffix');
 
     if (
-      endsWith(
+      (endsWith(
         paths,
         'primary',
         'primaryPrefix',
@@ -266,7 +407,8 @@ function getCallerInfos(
         'fqnOrRefTypePartFirst',
         'fqnOrRefTypePartCommon',
         'Identifier'
-      ) &&
+      ) ||
+        endsWith(paths, 'primary', 'primaryPrefix', 'This')) &&
       step === STEP_00_NONE
     ) {
       if (callerOnlyInVars) {
@@ -278,26 +420,15 @@ function getCallerInfos(
       } else {
         step = STEP_01_FIRST;
       }
-    } else if (endsWith(paths, 'primary', 'primaryPrefix', 'fqnOrRefType', 'Dot') && step === STEP_01_FIRST) {
+    } else if (endsWith(paths, 'Dot') && step === STEP_01_FIRST) {
       step = STEP_02_DOT;
-    } else if (endsWith(paths, 'primary', 'primarySuffix', 'methodInvocationSuffix', 'LBrace')) {
+    } else if (includesPrimarySuffix && endsWith(paths, 'methodInvocationSuffix', 'LBrace')) {
       if (step === STEP_01_FIRST) {
         step = STEP_14_LBraceAfterFirst;
       } else if (step === STEP_03_REST) {
         step = STEP_04_LBraceAfterRest;
       }
-    } else if (
-      endsWith(
-        paths,
-        'primary',
-        'primaryPrefix',
-        'fqnOrRefType',
-        'fqnOrRefTypePartRest',
-        'fqnOrRefTypePartCommon',
-        'Identifier'
-      ) &&
-      step === STEP_02_DOT
-    ) {
+    } else if (includes(paths, 'primary') && endsWith(paths, 'Identifier') && step === STEP_02_DOT) {
       step = STEP_03_REST;
     } else if (endsWith(paths, 'primary', 'primaryPrefix', 'literal', 'StringLiteral')) {
       if (step === STEP_04_LBraceAfterRest) {
@@ -324,7 +455,11 @@ function getCallerInfos(
       firstName = '';
       restName = '';
     } else if (step === STEP_05_StringLiteral || step === STEP_15_StringLiteral) {
-      callers[callers.length - 1].stringLiteral = trimSpecific(image, '"');
+      // stringLiteral can be 1 more but only save not empy string because it is only needed for SQL id.
+      const stringLiteral = trimSpecific(image, '"');
+      if (stringLiteral) {
+        callers[callers.length - 1].stringLiteral = stringLiteral;
+      }
     }
   }
 
@@ -342,9 +477,9 @@ function getMethods(pathsAndImageList: PathsAndImage[], vars: VarInfo[], callerO
     const { paths, image } = methodDecls[i];
 
     if (includes(paths, 'annotation')) {
-      if (includes(paths, 'typeName', 'Identifier')) {
+      if (endsWith(paths, 'typeName', 'Identifier')) {
         annotations.push({ name: image, values: [] });
-      } else if (includes(paths, 'StringLiteral')) {
+      } else if (endsWith(paths, 'StringLiteral')) {
         annotations[annotations.length - 1].values.push(trimSpecific(image, '"'));
       }
     } else if (includes(paths, 'methodDeclarator', 'Identifier')) {
@@ -369,26 +504,30 @@ function getMethods(pathsAndImageList: PathsAndImage[], vars: VarInfo[], callerO
 
 export function getClassInfo(content: string, callerOnlyInVars: boolean): ClassInfo {
   const cst = parse(content);
-  const cst2 = cst as any;
 
-  const normalClassDeclaration = getItemByPath(
-    cst2,
-    'ordinaryCompilationUnit.typeDeclaration.classDeclaration.normalClassDeclaration'.split('.')
-  );
-  const classBodys = getItemByPath(normalClassDeclaration[0], 'classBody'.split('.'));
+  const pathsAndImageList = getPathsAndImageListFromCst(cst);
+  const cst2 = getSimplifiedCst(pathsAndImageList);
 
-  const className = getImageValue(normalClassDeclaration[0], 'typeIdentifier.Identifier');
-  const implementsName = getImageValue(
-    normalClassDeclaration[0],
-    'superinterfaces.interfaceTypeList.interfaceType.classType.Identifier'
-  );
+  const classHeader = getClassHeader(cst2);
 
-  const paths: string[] = [];
-  const pathsAndImageList: PathsAndImage[] = [];
-  getAllValueAndPaths(classBodys[0], paths, pathsAndImageList);
+  // const normalClassDeclaration = getItemByPath(
+  //   cst,
+  //   'ordinaryCompilationUnit.typeDeclaration.classDeclaration.normalClassDeclaration'.split('.')
+  // );
+  // const classBodys = getItemByPath(normalClassDeclaration[0], 'classBody'.split('.'));
+
+  // const className = getImageValue(normalClassDeclaration[0], 'typeIdentifier.Identifier');
+  // const implementsName = getImageValue(
+  //   normalClassDeclaration[0],
+  //   'superinterfaces.interfaceTypeList.interfaceType.classType.Identifier'
+  // );
+
+  // const paths: string[] = [];
+  // const pathsAndImageList: PathsAndImage[] = [];
+  // getAllValueAndPaths(classBodys[0], paths, pathsAndImageList);
 
   const vars = getVars(pathsAndImageList);
   const methods = getMethods(pathsAndImageList, vars, callerOnlyInVars);
 
-  return { className, implementsName, vars, methods };
+  return { classHeader, vars, methods };
 }

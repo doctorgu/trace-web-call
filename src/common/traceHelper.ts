@@ -9,10 +9,11 @@ type ClassType = 'controller' | 'serviceImpl';
 export type RouteInfo = {
   routeType: 'mapping' | 'method' | 'xml' | 'table';
   value: string;
+  depth: number;
 };
 
 export type MappingToTables = {
-  mapping: Annotation;
+  mappingValue: string;
   tables: string[];
   routes: RouteInfo[];
 };
@@ -29,17 +30,29 @@ export async function getMethodInfoFinds(
   for await (const fullPath of findFiles(rootDir, filePattern)) {
     const content = readFileSync(fullPath, { encoding: 'utf-8' });
     const classInfo = getClassInfo(content, callerOnlyInVars);
-    const { className, implementsName, methods } = classInfo;
-    const findsCur = methods.map(({ annotations, name, callers }) => ({
-      className,
-      implementsName,
-      annotations,
-      name,
-      callers,
-    }));
+    const { classHeader, methods } = classInfo;
+    const { name: className, implementsName, annotations: annotationsClass } = classHeader;
+    const findsCur = methods.map(({ annotations, name, callers }) => {
+      const mappingClass = annotationsClass.find(({ name }) => name.endsWith('Mapping'));
+      const root = mappingClass?.values?.[0] || '';
+
+      const mappingValues: string[] = [];
+      const mappingCur = annotations.find(({ name }) => name.endsWith('Mapping'));
+      if (mappingCur) {
+        for (let i = 0; i < mappingCur.values.length; i++) {
+          mappingValues.push(`${root}${mappingCur.values[i]}`);
+        }
+      }
+
+      return {
+        className,
+        implementsName,
+        mappingValues,
+        name,
+        callers,
+      };
+    });
     finds = finds.concat(findsCur);
-    // console.log(JSON.stringify(classInfo, null, '  '));
-    // console.log(fullPath);
   }
 
   return finds;
@@ -81,7 +94,8 @@ export function getTableNamesByMethod(
   find: MethodInfoFind,
   methods: MethodInfoFind[],
   xmls: XmlNodeInfoFind[],
-  routes: RouteInfo[]
+  routes: RouteInfo[],
+  depth: number
 ): string[] {
   let tablesAll: string[] = [];
 
@@ -91,8 +105,8 @@ export function getTableNamesByMethod(
     if (stringLiteral) {
       const tables = getTablesByStringLiteral(xmls, stringLiteral);
       if (tables.length) {
-        routes.push({ routeType: 'xml', value: stringLiteral });
-        routes.push({ routeType: 'table', value: [...tables].join(',') });
+        routes.push({ routeType: 'xml', value: stringLiteral, depth: depth });
+        routes.push({ routeType: 'table', value: [...tables].join(','), depth: depth + 1 });
         tablesAll = tablesAll.concat(tables);
         continue;
       }
@@ -100,17 +114,16 @@ export function getTableNamesByMethod(
 
     const found = methods.find(({ className, implementsName, name }) => {
       if (typeName) {
-        const classNameFind = typeName === 'this' ? classNameThis : typeName;
-        return (className === classNameFind || implementsName === classNameFind) && name === methodName;
+        return (className === typeName || implementsName === typeName) && name === methodName;
       } else {
-        return className === classNameThis && name !== nameThis && name === methodName;
+        return className === classNameThis && name === methodName;
       }
     });
     if (found) {
       const value = `${typeName ? `${typeName}.` : ''}${methodName}`;
-      routes.push({ routeType: 'method', value });
+      routes.push({ routeType: 'method', value, depth });
 
-      const tables = getTableNamesByMethod(found, methods, xmls, routes);
+      const tables = getTableNamesByMethod(found, methods, xmls, routes, depth + 1);
       if (tables.length) {
         tablesAll = tablesAll.concat(tables);
         continue;

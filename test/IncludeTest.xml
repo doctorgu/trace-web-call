@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="IncludeTest">
+	<select id="getTwo" parameterType="map" resultType="DBObject">
+		<include refid="selectMyMenu"/>
+		UNION ALL
+		<include refid="selectCategory"/>
+		ORDER BY 1
+	</select>
+	
+	<sql id="selectMyMenu">
+		SELECT 1
+		FROM
+		PO_MYMENU
+	</sql>
+	<sql id="selectCategory">
+		SELECT 1
+		FROM
+		WM_CATEGORY
+	</sql>
+</mapper>

@@ -1,5 +1,7 @@
 package api.common.controller;
 
+@Controller
+@RequestMapping("/root")
 public class AnnotationTestController extends AbstractBaseController {
 	@RequestMapping("/abc/abc.do")
 	public ModelAndView getAbc(Model model) throws Exception {
@@ -31,7 +33,7 @@ public class AnnotationTestController extends AbstractBaseController {
 		return new ModelAndView("output/abc7", model);
 	}
 
-	@RequestMapping(value="/abc/abc9.do"+ACTION_NAME)
+	@RequestMapping(value="/abc/abc9"+ACTION_NAME)
 	public ModelAndView getAbc9(Model model) throws Exception {
 		return new ModelAndView("output/abc9", model);
 	}

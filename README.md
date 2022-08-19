@@ -22,6 +22,20 @@ Also shows all routes from API to SQL.
   - Controller file name must ends with `Controller.java`
   - Implementation file name must ends with `Impl.java`
 - No overloaded function exists
+- refid in include tag only references sql id in current file (not outer file)
+
+  ```xml
+  <sql id="myId">
+  select * from USER
+  </sql>
+
+  <select id="selectAdult">
+    <include refid="myId">
+    WHERE AGE >= 19;
+  </select>
+  ```
+
+- Table names in view cannot extract
 
 ## Run
 
@@ -37,13 +51,13 @@ Results will be like following after running `yarn dev` command.
 `routes.txt`:
 
 ```text
-mapping: GetMapping(/api/manual/v1/BizBuilderWorkHandler)
+mapping: /api/manual/v1/BizBuilderWorkHandler
  method: BizBuilderController.bizBuilderWorkHandler
  method: BizBuilderService.selectWorkList
     xml: BizBuilder.selectWorkList
   table: WB_WORK
 
-mapping: PostMapping(/api/manual/v1/csManualTabHandler)
+mapping: /api/manual/v1/csManualTabHandler
  method: CsManualController.csManualTabHandler
  method: CSManualService.selectEditorTabListNoClobByMualIdx
     xml: Manual.selectEditorTabListNoClobByMualIdx
