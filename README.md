@@ -35,7 +35,7 @@ Also shows all routes from API to SQL.
   </select>
   ```
 
-- Table names in view cannot extract
+- Table names in function, procedure, package cannot extract
 
 ## Run
 

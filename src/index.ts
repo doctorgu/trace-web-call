@@ -1,14 +1,15 @@
-import { writeFileSync } from 'fs';
+import { writeFileSync, readFileSync } from 'fs';
 import { config } from './config/config';
 import {
   RouteInfo,
-  MappingToTables,
+  MappingToObjects,
   getMethodInfoFinds,
   getXmlNodeInfoFinds,
   getTableNamesByMethod,
 } from './common/traceHelper';
+import { getViewAndTables } from './common/sqlHelper';
 
-async function getMappingToTables(): Promise<MappingToTables[]> {
+async function getMappingToTables(): Promise<MappingToObjects[]> {
   const methodsInControllers = await getMethodInfoFinds(config.path.controller, '*Controller.java', 'controller');
   const methodsInServiceImpls = await getMethodInfoFinds(config.path.service, '*Impl.java', 'serviceImpl');
   // const methodsInServiceImpls = await getMethodInfoFinds(
@@ -20,7 +21,7 @@ async function getMappingToTables(): Promise<MappingToTables[]> {
 
   const xmls = await getXmlNodeInfoFinds(config.path.xml, '*.xml');
 
-  const mappingAndTables: MappingToTables[] = [];
+  const mappingAndTables: MappingToObjects[] = [];
 
   for (let nMethod = 0; nMethod < methodsInControllers.length; nMethod++) {
     const methodInControllers = methodsInControllers[nMethod];
@@ -36,8 +37,8 @@ async function getMappingToTables(): Promise<MappingToTables[]> {
       routes.push({ routeType: 'mapping', value: `${mappingValue}`, depth: ++depth });
       routes.push({ routeType: 'method', value: `${className}.${methodName}`, depth: ++depth });
 
-      const tables = getTableNamesByMethod(methodInControllers, methods, xmls, routes, depth + 1);
-      mappingAndTables.push({ mappingValue, tables, routes });
+      const { tables, viewAndTables } = getTableNamesByMethod(methodInControllers, methods, xmls, routes, depth + 1);
+      mappingAndTables.push({ mappingValue, tables, viewAndTables, routes });
       // console.log(routes);
     }
   }
@@ -54,8 +55,13 @@ async function writeMappingToTables() {
   const mapToTables: string[] = [];
   const routeLogs: string[] = [];
   const mappingToTables = await getMappingToTables();
-  for (const { mappingValue, tables, routes } of mappingToTables) {
-    mapToTables.push(`${mappingValue}: ${[...tables].join(',')}`);
+  for (const { mappingValue, tables, viewAndTables, routes } of mappingToTables) {
+    const tablesComma = [...tables].sort().join(',');
+    const viewAndTablesComma = [...viewAndTables]
+      .map(([view, tables]) => `${view}(${[...tables].join(',')})`)
+      .join(',');
+
+    mapToTables.push(`${mappingValue}: ${tablesComma}${viewAndTablesComma ? `;VIEW:${viewAndTablesComma}` : ''}`);
     routeLogs.push(
       routes
         .map(({ routeType, value, depth }) => `${routeType.padStart(7, ' ')}: ${getBranch(depth)}${value}`)
@@ -70,6 +76,7 @@ writeMappingToTables();
 
 async function doTest() {
   console.log(config.path.test);
+
   // const methodsInControllers = await getMethodInfoFinds(
   //   config.path.test,
   //   'AnnotationTestController.java',
@@ -80,11 +87,19 @@ async function doTest() {
   //   const { mappingValues } = methodInControllers;
   //   console.log(mappingValues);
   // }
-  const xmls = await getXmlNodeInfoFinds(config.path.test, 'IncludeTest.xml');
-  for (let i = 0; i < xmls.length; i++) {
-    const { namespace, id, tagName, params, tables } = xmls[i];
-    console.log(namespace, id, tagName, params, tables);
-  }
+
+  // const xmls = await getXmlNodeInfoFinds(config.path.test, 'IncludeTest.xml');
+  // for (let i = 0; i < xmls.length; i++) {
+  //   const { namespace, id, tagName, params, tables } = xmls[i];
+  //   console.log(namespace, id, tagName, params, tables);
+  // }
+
+  // const viewSql = readFileSync(`${config.path.test}/viewTest.sql`, 'utf-8');
+  // const tables = new Set<string>(['TAB1', 'TAB2', 'TAB3', 'TAB4', 'TAB5', 'TAB6', 'TAB7', 'TAB8', 'TAB9']);
+  // const viewAndTables = getViewAndTables(viewSql, tables);
+  // const tablesUsed = viewAndTables.map(({ tables }) => [...tables]).flat();
+  // // ['TAB1', 'TAB2', 'TAB3', 'TAB4', 'TAB6', 'TAB7', 'TAB8']
+  // console.log(tablesUsed);
 }
 // doTest();
 

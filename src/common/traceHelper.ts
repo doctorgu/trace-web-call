@@ -1,20 +1,21 @@
 import { readFileSync, writeFileSync } from 'fs';
 import { findFiles } from './util';
 import { Annotation, MethodInfoFind, getClassInfo } from './classHelper';
-import { XmlNodeInfoFind, getXmlInfo } from './xmlHelper';
+import { XmlNodeInfoFind, getXmlInfo, getViewAndTables, ViewAndTables } from './sqlHelper';
 import { config } from '../config/config';
 
 type ClassType = 'controller' | 'serviceImpl';
 
 export type RouteInfo = {
-  routeType: 'mapping' | 'method' | 'xml' | 'table';
+  routeType: 'mapping' | 'method' | 'xml' | 'table' | 'view';
   value: string;
   depth: number;
 };
 
-export type MappingToTables = {
+export type MappingToObjects = {
   mappingValue: string;
-  tables: string[];
+  tables: Set<string>;
+  viewAndTables: ViewAndTables;
   routes: RouteInfo[];
 };
 
@@ -61,23 +62,34 @@ export async function getMethodInfoFinds(
 export async function getXmlNodeInfoFinds(rootDir: string, filePattern: string): Promise<XmlNodeInfoFind[]> {
   let finds: XmlNodeInfoFind[] = [];
 
+  const viewSql = config.viewSql();
+  const tables = config.tables();
+  const viewAndTables = getViewAndTables(viewSql, tables);
+
   for await (const fullPath of findFiles(rootDir, filePattern)) {
     const xml = readFileSync(fullPath, 'utf-8');
-    const xmlInfo = getXmlInfo(xml, config.tables());
+    const xmlInfo = getXmlInfo(xml, tables, viewAndTables);
     if (!xmlInfo) continue;
 
     const { namespace, nodes } = xmlInfo;
-    const findsCur = nodes.map(({ id, tagName, params, tables }) => ({ namespace, id, tagName, params, tables }));
+    const findsCur = nodes.map(({ id, tagName, params, tables, viewAndTables }) => ({
+      namespace,
+      id,
+      tagName,
+      params,
+      tables,
+      viewAndTables,
+    }));
     finds = finds.concat(findsCur);
-
-    // console.log(JSON.stringify(xmlInfo, null, '  '));
-    // console.log(fullPath);
   }
 
   return finds;
 }
 
-function getTablesByStringLiteral(xmls: XmlNodeInfoFind[], stringLiteral: string): string[] {
+function getObjectByStringLiteral(
+  xmls: XmlNodeInfoFind[],
+  stringLiteral: string
+): { tables: Set<string>; viewAndTables: ViewAndTables } | null {
   // User.updateInfo
   // User.UserDao.updateInfo
   const literals = stringLiteral.split('.');
@@ -85,9 +97,10 @@ function getTablesByStringLiteral(xmls: XmlNodeInfoFind[], stringLiteral: string
   const rest = literals.filter((v, i) => i >= 1).join('.');
 
   const nodeInfoFind = xmls.find(({ namespace, id }) => (namespace === first && id === rest) || id === stringLiteral);
-  if (!nodeInfoFind) return [];
+  if (!nodeInfoFind) return null;
 
-  return [...nodeInfoFind.tables].sort();
+  const { tables, viewAndTables } = nodeInfoFind;
+  return { tables, viewAndTables };
 }
 
 export function getTableNamesByMethod(
@@ -96,18 +109,31 @@ export function getTableNamesByMethod(
   xmls: XmlNodeInfoFind[],
   routes: RouteInfo[],
   depth: number
-): string[] {
+): { tables: Set<string>; viewAndTables: ViewAndTables } {
   let tablesAll: string[] = [];
+  let viewAndTablesAll: ViewAndTables = new Map<string, Set<string>>();
 
   const { className: classNameThis, name: nameThis, callers } = find;
   for (let i = 0; i < callers.length; i++) {
     const { typeName, methodName, stringLiteral } = callers[i];
     if (stringLiteral) {
-      const tables = getTablesByStringLiteral(xmls, stringLiteral);
-      if (tables.length) {
+      const ret = getObjectByStringLiteral(xmls, stringLiteral);
+      if (ret) {
+        const { tables, viewAndTables } = ret;
+
         routes.push({ routeType: 'xml', value: stringLiteral, depth: depth });
+
         routes.push({ routeType: 'table', value: [...tables].join(','), depth: depth + 1 });
-        tablesAll = tablesAll.concat(tables);
+        if (viewAndTables.size) {
+          routes.push({
+            routeType: 'view',
+            value: [...viewAndTables].map(([view, tables]) => `${view}(${[...tables].join(',')})`).join(','),
+            depth: depth + 1,
+          });
+        }
+
+        tablesAll = tablesAll.concat([...tables]);
+        [...viewAndTables].forEach(([view, tables]) => viewAndTablesAll.set(view, tables));
         continue;
       }
     }
@@ -123,13 +149,15 @@ export function getTableNamesByMethod(
       const value = `${typeName ? `${typeName}.` : ''}${methodName}`;
       routes.push({ routeType: 'method', value, depth });
 
-      const tables = getTableNamesByMethod(found, methods, xmls, routes, depth + 1);
-      if (tables.length) {
-        tablesAll = tablesAll.concat(tables);
+      const ret = getTableNamesByMethod(found, methods, xmls, routes, depth + 1);
+      if (ret) {
+        const { tables, viewAndTables } = ret;
+        tablesAll = tablesAll.concat([...tables]);
+        [...viewAndTables].forEach(([view, tables]) => viewAndTablesAll.set(view, tables));
         continue;
       }
     }
   }
 
-  return [...new Set(tablesAll)].sort();
+  return { tables: new Set(tablesAll), viewAndTables: viewAndTablesAll };
 }

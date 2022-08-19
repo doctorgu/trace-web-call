@@ -1,5 +1,5 @@
 import { parse } from 'java-parser';
-import { getClosingPosition, trimSpecific } from './util';
+import { getClosingPosition, removeCommentSql, trimSpecific } from './util';
 
 type Keyword =
   | 'LCurly'
@@ -97,40 +97,6 @@ function getProperty(parent: any, paths: string[]): any {
   return null;
 }
 
-// function getItemByPath(parent: any, paths: string[]): any[] {
-//   const children = parent.children;
-//   if (!children) return [];
-
-//   const kvList = Object.entries(children);
-//   for (let i = 0; i < kvList.length; i += 1) {
-//     const [key, value] = kvList[i];
-
-//     if (paths[0] !== key) continue;
-
-//     const prop = children[key];
-//     paths.shift();
-//     if (paths.length === 0) {
-//       return prop;
-//     }
-
-//     if (Array.isArray(value) && value.length) {
-//       let child = prop[0];
-
-//       const index = Number.parseInt(paths[0]);
-//       if (!isNaN(index)) {
-//         if (index >= value.length) throw new Error(`index: ${index} is larger than value.length: ${value.length}`);
-
-//         child = prop[index];
-//         paths.shift();
-//       }
-
-//       return getItemByPath(child, paths);
-//     }
-//   }
-
-//   return [];
-// }
-
 function getValue(parent: any, pathDotSeparated: string): string {
   const paths = pathDotSeparated.split('.');
 
@@ -139,15 +105,6 @@ function getValue(parent: any, pathDotSeparated: string): string {
 
   return prop;
 }
-// function getImageValue(parent: any, pathDotSeparated: string): string {
-//   const paths = pathDotSeparated.split('.');
-
-//   const imageParents = getItemByPath(parent, paths);
-//   if (!imageParents.length) return '';
-
-//   const image = imageParents[0].image;
-//   return image;
-// }
 
 function getSimplifiedCst(pathsAndImageList: PathsAndImage[]) {
   const treeNew: any = {};
@@ -509,23 +466,6 @@ export function getClassInfo(content: string, callerOnlyInVars: boolean): ClassI
   const cst2 = getSimplifiedCst(pathsAndImageList);
 
   const classHeader = getClassHeader(cst2);
-
-  // const normalClassDeclaration = getItemByPath(
-  //   cst,
-  //   'ordinaryCompilationUnit.typeDeclaration.classDeclaration.normalClassDeclaration'.split('.')
-  // );
-  // const classBodys = getItemByPath(normalClassDeclaration[0], 'classBody'.split('.'));
-
-  // const className = getImageValue(normalClassDeclaration[0], 'typeIdentifier.Identifier');
-  // const implementsName = getImageValue(
-  //   normalClassDeclaration[0],
-  //   'superinterfaces.interfaceTypeList.interfaceType.classType.Identifier'
-  // );
-
-  // const paths: string[] = [];
-  // const pathsAndImageList: PathsAndImage[] = [];
-  // getAllValueAndPaths(classBodys[0], paths, pathsAndImageList);
-
   const vars = getVars(pathsAndImageList);
   const methods = getMethods(pathsAndImageList, vars, callerOnlyInVars);
 

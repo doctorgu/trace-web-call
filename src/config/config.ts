@@ -7,6 +7,7 @@ type Config = {
     xml: string;
     data: {
       tables: string;
+      views: string;
     };
     output: {
       mapToTables: string;
@@ -15,6 +16,7 @@ type Config = {
     test: string;
   };
   tables: () => Set<string>;
+  viewSql: () => string;
 };
 
 export const config: Config = {
@@ -29,6 +31,7 @@ export const config: Config = {
     //'D:\\Temp\\kbbizmicro-sb\\bz-manual-api-common\\src\\main\\resources\\sql\\oracle',
     data: {
       tables: './data/tables.txt',
+      views: './data/views.sql',
     },
     output: {
       mapToTables: './output/mapToTables.txt',
@@ -39,5 +42,9 @@ export const config: Config = {
   tables: () => {
     const value = readFileSync(config.path.data.tables, 'utf-8');
     return new Set(value.split(/\r*\n/));
+  },
+  viewSql: () => {
+    const value = readFileSync(config.path.data.views, 'utf-8');
+    return value;
   },
 };
