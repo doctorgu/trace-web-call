@@ -218,7 +218,7 @@ export function testWildcardFileName(pattern: string, fileName: string, ignoreCa
 }
 
 // for await (const fullPath of findFiles(rootDir)) { }
-export function* findFiles(rootDir: string, pattern: string = ''): string | any | undefined {
+export function* findFiles(rootDir: string, pattern: string | RegExp = ''): string | any | undefined {
   const files = readdirSync(rootDir);
 
   for (let i = 0; i < files.length; i += 1) {
@@ -228,7 +228,11 @@ export function* findFiles(rootDir: string, pattern: string = ''): string | any 
       yield* findFiles(fullPath, pattern);
     } else {
       if (pattern) {
-        if (testWildcardFileName(pattern, file)) yield fullPath;
+        if (typeof pattern === 'string') {
+          if (testWildcardFileName(pattern, file)) yield fullPath;
+        } else {
+          if (pattern.test(file)) yield fullPath;
+        }
       } else {
         yield fullPath;
       }

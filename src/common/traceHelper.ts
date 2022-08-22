@@ -1,13 +1,13 @@
 import { readFileSync, writeFileSync } from 'fs';
 import { findFiles } from './util';
 import { Annotation, MethodInfoFind, getClassInfo } from './classHelper';
-import { XmlNodeInfoFind, getXmlInfo, getViewAndTables, ViewAndTables } from './sqlHelper';
+import { XmlNodeInfoFind, getXmlInfo, getObjectAndTables, ObjectAndTables } from './sqlHelper';
 import { config } from '../config/config';
 
 type ClassType = 'controller' | 'serviceImpl';
 
 export type RouteInfo = {
-  routeType: 'mapping' | 'method' | 'xml' | 'table' | 'view';
+  routeType: 'mapping' | 'method' | 'xml' | 'table' | 'view' | 'function' | 'procedure';
   value: string;
   depth: number;
 };
@@ -15,13 +15,13 @@ export type RouteInfo = {
 export type MappingToObjects = {
   mappingValue: string;
   tables: Set<string>;
-  viewAndTables: ViewAndTables;
+  objectAndTables: ObjectAndTables;
   routes: RouteInfo[];
 };
 
 export async function getMethodInfoFinds(
   rootDir: string,
-  filePattern: string,
+  filePattern: string | RegExp,
   classType: ClassType
 ): Promise<MethodInfoFind[]> {
   let finds: MethodInfoFind[] = [];
@@ -59,26 +59,29 @@ export async function getMethodInfoFinds(
   return finds;
 }
 
-export async function getXmlNodeInfoFinds(rootDir: string, filePattern: string): Promise<XmlNodeInfoFind[]> {
+export async function getXmlNodeInfoFinds(rootDir: string, filePattern: string | RegExp): Promise<XmlNodeInfoFind[]> {
   let finds: XmlNodeInfoFind[] = [];
 
-  const viewSql = config.viewSql();
   const tables = config.tables();
-  const viewAndTables = getViewAndTables(viewSql, tables);
+
+  const objectAndTables = new Map<string, Set<string>>();
+  [...config.objectAndTables('view')].forEach(([object, tables]) => objectAndTables.set(object, tables));
+  [...config.objectAndTables('function')].forEach(([object, tables]) => objectAndTables.set(object, tables));
+  [...config.objectAndTables('procedure')].forEach(([object, tables]) => objectAndTables.set(object, tables));
 
   for await (const fullPath of findFiles(rootDir, filePattern)) {
     const xml = readFileSync(fullPath, 'utf-8');
-    const xmlInfo = getXmlInfo(xml, tables, viewAndTables);
+    const xmlInfo = getXmlInfo(xml, tables, objectAndTables);
     if (!xmlInfo) continue;
 
     const { namespace, nodes } = xmlInfo;
-    const findsCur = nodes.map(({ id, tagName, params, tables, viewAndTables }) => ({
+    const findsCur = nodes.map(({ id, tagName, params, tables, objectAndTables }) => ({
       namespace,
       id,
       tagName,
       params,
       tables,
-      viewAndTables,
+      objectAndTables,
     }));
     finds = finds.concat(findsCur);
   }
@@ -89,7 +92,7 @@ export async function getXmlNodeInfoFinds(rootDir: string, filePattern: string):
 function getObjectByStringLiteral(
   xmls: XmlNodeInfoFind[],
   stringLiteral: string
-): { tables: Set<string>; viewAndTables: ViewAndTables } | null {
+): { tables: Set<string>; objectAndTables: ObjectAndTables } | null {
   // User.updateInfo
   // User.UserDao.updateInfo
   const literals = stringLiteral.split('.');
@@ -99,8 +102,8 @@ function getObjectByStringLiteral(
   const nodeInfoFind = xmls.find(({ namespace, id }) => (namespace === first && id === rest) || id === stringLiteral);
   if (!nodeInfoFind) return null;
 
-  const { tables, viewAndTables } = nodeInfoFind;
-  return { tables, viewAndTables };
+  const { tables, objectAndTables } = nodeInfoFind;
+  return { tables, objectAndTables };
 }
 
 export function getTableNamesByMethod(
@@ -109,9 +112,9 @@ export function getTableNamesByMethod(
   xmls: XmlNodeInfoFind[],
   routes: RouteInfo[],
   depth: number
-): { tables: Set<string>; viewAndTables: ViewAndTables } {
+): { tables: Set<string>; objectAndTables: ObjectAndTables } {
   let tablesAll: string[] = [];
-  let viewAndTablesAll: ViewAndTables = new Map<string, Set<string>>();
+  let objectAndTablesAll: ObjectAndTables = new Map<string, Set<string>>();
 
   const { className: classNameThis, name: nameThis, callers } = find;
   for (let i = 0; i < callers.length; i++) {
@@ -119,21 +122,24 @@ export function getTableNamesByMethod(
     if (stringLiteral) {
       const ret = getObjectByStringLiteral(xmls, stringLiteral);
       if (ret) {
-        const { tables, viewAndTables } = ret;
+        const { tables, objectAndTables } = ret;
 
         routes.push({ routeType: 'xml', value: stringLiteral, depth: depth });
 
         routes.push({ routeType: 'table', value: [...tables].join(','), depth: depth + 1 });
-        if (viewAndTables.size) {
-          routes.push({
-            routeType: 'view',
-            value: [...viewAndTables].map(([view, tables]) => `${view}(${[...tables].join(',')})`).join(','),
-            depth: depth + 1,
-          });
+        if (objectAndTables.size) {
+          for (const [object, tables] of objectAndTables) {
+            const objectType = config.objectType(object);
+            routes.push({
+              routeType: objectType,
+              value: [...tables].map((table) => `${object}(${[...tables].join(',')})`).join(','),
+              depth: depth + 1,
+            });
+          }
         }
 
         tablesAll = tablesAll.concat([...tables]);
-        [...viewAndTables].forEach(([view, tables]) => viewAndTablesAll.set(view, tables));
+        [...objectAndTables].forEach(([view, tables]) => objectAndTablesAll.set(view, tables));
         continue;
       }
     }
@@ -151,13 +157,13 @@ export function getTableNamesByMethod(
 
       const ret = getTableNamesByMethod(found, methods, xmls, routes, depth + 1);
       if (ret) {
-        const { tables, viewAndTables } = ret;
+        const { tables, objectAndTables } = ret;
         tablesAll = tablesAll.concat([...tables]);
-        [...viewAndTables].forEach(([view, tables]) => viewAndTablesAll.set(view, tables));
+        [...objectAndTables].forEach(([view, tables]) => objectAndTablesAll.set(view, tables));
         continue;
       }
     }
   }
 
-  return { tables: new Set(tablesAll), viewAndTables: viewAndTablesAll };
+  return { tables: new Set(tablesAll), objectAndTables: objectAndTablesAll };
 }

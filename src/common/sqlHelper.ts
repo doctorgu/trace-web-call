@@ -6,7 +6,7 @@ export type XmlNodeInfo = {
   tagName: string;
   params: Map<string, string>;
   tables: Set<string>;
-  viewAndTables: ViewAndTables;
+  objectAndTables: ObjectAndTables;
 };
 export type XmlInfo = {
   namespace: string;
@@ -16,7 +16,7 @@ export type XmlNodeInfoFind = XmlNodeInfo & {
   namespace: string;
 };
 
-export type ViewAndTables = Map<string, Set<string>>;
+export type ObjectAndTables = Map<string, Set<string>>;
 
 function getWords(sql: string): Map<string, number> {
   const words = new Map<string, number>();
@@ -35,31 +35,31 @@ function getWords(sql: string): Map<string, number> {
 function getObjects(
   words: Map<string, number>,
   tablesAll: Set<string>,
-  viewAndTablesAll: ViewAndTables
-): { tables: Set<string>; viewAndTables: ViewAndTables } {
+  objectAndTablesAll: ObjectAndTables
+): { tables: Set<string>; objectAndTables: ObjectAndTables } {
   const tables = new Set<string>();
-  const viewAndTables: ViewAndTables = new Map<string, Set<string>>();
+  const objectAndTables: ObjectAndTables = new Map<string, Set<string>>();
 
   for (const [word] of words) {
     if (tablesAll.has(word)) {
       tables.add(word);
     }
 
-    //const index = viewAndTablesAll.findIndex(({ view }) => view === word);
-    if (viewAndTablesAll.has(word)) {
-      const tablesInView = viewAndTablesAll.get(word) || new Set<string>();
-      viewAndTables.set(word, tablesInView);
-      [...tablesInView].forEach((t) => tables.add(t));
+    //const index = objectAndTablesAll.findIndex(({ view }) => view === word);
+    if (objectAndTablesAll.has(word)) {
+      const tablesInObject = objectAndTablesAll.get(word) || new Set<string>();
+      objectAndTables.set(word, tablesInObject);
+      [...tablesInObject].forEach((t) => tables.add(t));
     }
   }
 
-  return { tables, viewAndTables };
+  return { tables, objectAndTables };
 }
 
-export function getViewAndTables(viewSql: string, tablesAll: Set<string>): ViewAndTables {
-  const sqlNoComment = removeCommentSql(viewSql);
+export function getObjectAndTables(sql: string, tablesAll: Set<string>): ObjectAndTables {
+  const sqlNoComment = removeCommentSql(sql);
 
-  const viewAndTables: ViewAndTables = new Map<string, Set<string>>();
+  const objectAndTables: ObjectAndTables = new Map<string, Set<string>>();
   let m: RegExpExecArray | null;
   let re =
     /create(\s+or\s+replace)*((\s+no)*(\s+force))*\s+view\s+(?<schemaDot>"?[\w$#]+"?\.)*(?<view>"?[\w$#]+"?)\s+.+?as(?<sql>.+?);/gis;
@@ -70,10 +70,50 @@ export function getViewAndTables(viewSql: string, tablesAll: Set<string>): ViewA
 
     const words = getWords(sql);
     const { tables } = getObjects(words, tablesAll, new Map<string, Set<string>>());
-    viewAndTables.set(`${view}`, tables);
+    objectAndTables.set(`${view}`, tables);
   }
 
-  return viewAndTables;
+  return objectAndTables;
+}
+
+export function getFunctionAndTables(sql: string, tablesAll: Set<string>): ObjectAndTables {
+  const sqlNoComment = removeCommentSql(sql);
+
+  const objectAndTables: ObjectAndTables = new Map<string, Set<string>>();
+  let m: RegExpExecArray | null;
+  let re =
+    /create(\s+or\s+replace)*(\s+editionable|\s+noneditionable)*\s+function\s+(?<schemaDot>"?[\w$#]+"?\.)*(?<func>"?[\w$#]+"?)\s+.+?return(?<sql>.+?);/gis;
+  while ((m = re.exec(sqlNoComment)) !== null) {
+    // const schemaDot = m.groups?.schemaDot || '';
+    const func = trimSpecific(m.groups?.func || '', '"');
+    const sql = m.groups?.sql || '';
+
+    const words = getWords(sql);
+    const { tables } = getObjects(words, tablesAll, new Map<string, Set<string>>());
+    objectAndTables.set(`${func}`, tables);
+  }
+
+  return objectAndTables;
+}
+
+export function getProcedureAndTables(sql: string, tablesAll: Set<string>): ObjectAndTables {
+  const sqlNoComment = removeCommentSql(sql);
+
+  const objectAndTables: ObjectAndTables = new Map<string, Set<string>>();
+  let m: RegExpExecArray | null;
+  let re =
+    /create(\s+or\s+replace)*\s+procedure\s+(?<schemaDot>"?[\w$#]+"?\.)*(?<procedure>"?[\w$#]+"?)\s+.+?(is|as)(?<sql>.+?);/gis;
+  while ((m = re.exec(sqlNoComment)) !== null) {
+    // const schemaDot = m.groups?.schemaDot || '';
+    const procedure = trimSpecific(m.groups?.procedure || '', '"');
+    const sql = m.groups?.sql || '';
+
+    const words = getWords(sql);
+    const { tables } = getObjects(words, tablesAll, new Map<string, Set<string>>());
+    objectAndTables.set(`${procedure}`, tables);
+  }
+
+  return objectAndTables;
 }
 
 function getTextInclude(parent: Element, root: Element) {
@@ -96,7 +136,7 @@ function getTextInclude(parent: Element, root: Element) {
   return texts.join('\n');
 }
 
-export function getXmlInfo(xml: string, tablesAll: Set<string>, viewAndTablesAll: ViewAndTables): XmlInfo | null {
+export function getXmlInfo(xml: string, tablesAll: Set<string>, objectAndTablesAll: ObjectAndTables): XmlInfo | null {
   const doc = parseXml(xml);
   const root = doc.root();
   if (!root) return null;
@@ -121,7 +161,7 @@ export function getXmlInfo(xml: string, tablesAll: Set<string>, viewAndTablesAll
     const sql = removeCommentSql(text);
 
     const words = getWords(`${sqlInclude}\n${sql}`);
-    const { tables, viewAndTables } = getObjects(words, tablesAll, viewAndTablesAll);
+    const { tables, objectAndTables } = getObjects(words, tablesAll, objectAndTablesAll);
 
     let id = '';
     const params = new Map<string, string>();
@@ -137,7 +177,7 @@ export function getXmlInfo(xml: string, tablesAll: Set<string>, viewAndTablesAll
     }
     if (!id) continue;
 
-    nodes.push({ id, tagName, params, tables, viewAndTables });
+    nodes.push({ id, tagName, params, tables, objectAndTables });
   }
 
   return { namespace, nodes };

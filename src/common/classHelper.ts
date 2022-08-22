@@ -368,12 +368,13 @@ function getCallerInfos(
         endsWith(paths, 'primary', 'primaryPrefix', 'This')) &&
       step === STEP_00_NONE
     ) {
-      if (callerOnlyInVars) {
-        const varByInstance = vars.find(({ instanceName }) => instanceName === image);
-        if (varByInstance) {
-          step = STEP_01_FIRST;
-          typeName = varByInstance.typeName;
-        }
+      const varByInstance = vars.find(({ instanceName }) => instanceName === image);
+      if (varByInstance) {
+        typeName = varByInstance.typeName;
+      }
+
+      if (callerOnlyInVars && varByInstance) {
+        step = STEP_01_FIRST;
       } else {
         step = STEP_01_FIRST;
       }

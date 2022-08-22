@@ -7,11 +7,15 @@ import {
   getXmlNodeInfoFinds,
   getTableNamesByMethod,
 } from './common/traceHelper';
-import { getViewAndTables } from './common/sqlHelper';
+import { getObjectAndTables } from './common/sqlHelper';
 
 async function getMappingToTables(): Promise<MappingToObjects[]> {
   const methodsInControllers = await getMethodInfoFinds(config.path.controller, '*Controller.java', 'controller');
-  const methodsInServiceImpls = await getMethodInfoFinds(config.path.service, '*Impl.java', 'serviceImpl');
+  const methodsInServiceImpls = await getMethodInfoFinds(
+    config.path.service,
+    /.+Impl\.java|.+DAO\.java/,
+    'serviceImpl'
+  );
   // const methodsInServiceImpls = await getMethodInfoFinds(
   //   config.path.service,
   //   'CSManualServiceImpl.java',
@@ -37,8 +41,8 @@ async function getMappingToTables(): Promise<MappingToObjects[]> {
       routes.push({ routeType: 'mapping', value: `${mappingValue}`, depth: ++depth });
       routes.push({ routeType: 'method', value: `${className}.${methodName}`, depth: ++depth });
 
-      const { tables, viewAndTables } = getTableNamesByMethod(methodInControllers, methods, xmls, routes, depth + 1);
-      mappingAndTables.push({ mappingValue, tables, viewAndTables, routes });
+      const { tables, objectAndTables } = getTableNamesByMethod(methodInControllers, methods, xmls, routes, depth + 1);
+      mappingAndTables.push({ mappingValue, tables, objectAndTables, routes });
       // console.log(routes);
     }
   }
@@ -49,19 +53,17 @@ async function getMappingToTables(): Promise<MappingToObjects[]> {
 async function writeMappingToTables() {
   function getBranch(depth: number) {
     if (depth === 0) return '';
+    // return `|---${'-'.repeat((depth - 1) * 4)}`;
     return `${' '.repeat((depth - 1) * 4)}+-- `;
   }
 
   const mapToTables: string[] = [];
   const routeLogs: string[] = [];
   const mappingToTables = await getMappingToTables();
-  for (const { mappingValue, tables, viewAndTables, routes } of mappingToTables) {
+  for (const { mappingValue, tables, objectAndTables, routes } of mappingToTables) {
     const tablesComma = [...tables].sort().join(',');
-    const viewAndTablesComma = [...viewAndTables]
-      .map(([view, tables]) => `${view}(${[...tables].join(',')})`)
-      .join(',');
 
-    mapToTables.push(`${mappingValue}: ${tablesComma}${viewAndTablesComma ? `;VIEW:${viewAndTablesComma}` : ''}`);
+    mapToTables.push(`${mappingValue}: ${tablesComma}`);
     routeLogs.push(
       routes
         .map(({ routeType, value, depth }) => `${routeType.padStart(7, ' ')}: ${getBranch(depth)}${value}`)
@@ -96,8 +98,8 @@ async function doTest() {
 
   // const viewSql = readFileSync(`${config.path.test}/viewTest.sql`, 'utf-8');
   // const tables = new Set<string>(['TAB1', 'TAB2', 'TAB3', 'TAB4', 'TAB5', 'TAB6', 'TAB7', 'TAB8', 'TAB9']);
-  // const viewAndTables = getViewAndTables(viewSql, tables);
-  // const tablesUsed = viewAndTables.map(({ tables }) => [...tables]).flat();
+  // const objectAndTables = getObjectAndTables(viewSql, tables);
+  // const tablesUsed = objectAndTables.map(({ tables }) => [...tables]).flat();
   // // ['TAB1', 'TAB2', 'TAB3', 'TAB4', 'TAB6', 'TAB7', 'TAB8']
   // console.log(tablesUsed);
 }
