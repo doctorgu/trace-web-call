@@ -1,5 +1,5 @@
 import { parse } from 'java-parser';
-import { getClosingPosition, removeCommentSql, trimSpecific } from './util';
+import { findLastIndex, trimSpecific } from './util';
 
 type Keyword =
   | 'LCurly'
@@ -25,8 +25,18 @@ type Keyword =
   | 'primarySuffix'
   | 'methodInvocationSuffix'
   | 'LBrace'
+  | 'RBrace'
   | 'literal'
-  | 'This';
+  | 'This'
+  | 'variableDeclaratorId'
+  | 'unaryExpression'
+  | '0'
+  | '1'
+  | 'Comma'
+  | 'argumentList'
+  | 'formalParameterList'
+  | 'expression'
+  | 'formalParameter';
 
 type PathsAndImage = {
   paths: string[];
@@ -48,6 +58,7 @@ export type CallerInfo = {
   typeName: string;
   instanceName: string;
   methodName: string;
+  parameterCount: number;
   stringLiteral: string;
 };
 
@@ -55,6 +66,7 @@ type MethodInfo = {
   annotations: Annotation[];
   name: string;
   callers: CallerInfo[];
+  parameterCount: number;
 };
 
 export type MethodInfoFind = {
@@ -62,6 +74,7 @@ export type MethodInfoFind = {
   implementsName: string;
   mappingValues: string[];
   name: string;
+  parameterCount: number;
   callers: CallerInfo[];
 };
 
@@ -200,6 +213,9 @@ function getPathsAndImageListFromCst(parent: any) {
 // }
 
 function endsWith(paths: string[], ...finds: Keyword[]): boolean {
+  return endsWith2(paths, finds);
+}
+function endsWith2(paths: string[], finds: Keyword[]): boolean {
   const finds2 = [...finds];
 
   let index = paths.length;
@@ -212,7 +228,11 @@ function endsWith(paths: string[], ...finds: Keyword[]): boolean {
 
   return true;
 }
+
 function includes(paths: string[], ...finds: Keyword[]): boolean {
+  return includes2(paths, finds);
+}
+function includes2(paths: string[], finds: Keyword[]): boolean {
   let fromIndex = 0;
 
   while (true) {
@@ -232,12 +252,12 @@ function includes(paths: string[], ...finds: Keyword[]): boolean {
     if (found) return true;
   }
 }
-// function endsWithSeparator(paths: string[]): boolean {
-//   return endsWith(paths, 'LCurly') || endsWith(paths, 'RCurly') || endsWith(paths, 'Semicolon');
-// }
 
-function getClassHeader(cst2: any): ClassHeader {
-  const classDeclaration = getProperty(cst2, 'ordinaryCompilationUnit.typeDeclaration.classDeclaration'.split('.'));
+function getClassHeader(cstSimple: any): ClassHeader {
+  const classDeclaration = getProperty(
+    cstSimple,
+    'ordinaryCompilationUnit.typeDeclaration.classDeclaration'.split('.')
+  );
 
   const classModifier = getProperty(classDeclaration, 'classModifier'.split('.'));
   let annotations: Annotation[] = [];
@@ -323,113 +343,304 @@ function getRCurlyPosition(methodDecls: PathsAndImage[], posLCurly: number): num
   throw new Error(`RCurly not found after ${posLCurly} index.`);
 }
 
+function getRBracePosition(pathsAndImages: PathsAndImage[], posLBrace: number): number {
+  let counter = 1;
+
+  for (let i = posLBrace + 1; i < pathsAndImages.length; i += 1) {
+    const { paths } = pathsAndImages[i];
+    if (endsWith(paths, 'LBrace')) {
+      counter++;
+    } else if (endsWith(paths, 'RBrace')) {
+      counter--;
+    }
+
+    if (counter === 0) {
+      return i;
+    }
+  }
+
+  throw new Error(`RBrace not found after ${posLBrace} index.`);
+}
+
+// function getCallerInfos(
+//   methodDecls: PathsAndImage[],
+//   vars: VarInfo[],
+//   posLCurly: number,
+//   posRCurly: number,
+//   callerOnlyInVars: boolean
+// ): CallerInfo[] {
+//   let step = 0;
+
+//   const STEP_00_NONE = 0;
+//   const STEP_01_FIRST = 1;
+//   const STEP_14_LBraceAfterFirst = 14;
+//   const STEP_15_StringLiteral = 15;
+
+//   const STEP_02_DOT = 2;
+//   const STEP_03_REST = 3;
+//   const STEP_04_LBraceAfterRest = 4;
+//   const STEP_05_StringLiteral = 5;
+
+//   const callers: CallerInfo[] = [];
+
+//   let typeName = '';
+//   let firstName = '';
+//   let restName = '';
+
+//   const list = methodDecls.filter((v, i) => i >= posLCurly && i <= posRCurly);
+//   for (let i = 0; i < list.length; i++) {
+//     const { paths, image } = list[i];
+
+//     // 'primary', 'primarySuffix' can be array or not
+//     const includesPrimarySuffix = includes(paths, 'primary', 'primarySuffix');
+
+//     if (
+//       endsWith(
+//         paths,
+//         'primary',
+//         'primaryPrefix',
+//         'fqnOrRefType',
+//         'fqnOrRefTypePartFirst',
+//         'fqnOrRefTypePartCommon',
+//         'Identifier'
+//       ) &&
+//       step === STEP_00_NONE
+//     ) {
+//       const varByInstance = vars.find(({ instanceName }) => instanceName === image);
+//       if (varByInstance) {
+//         typeName = varByInstance.typeName;
+//       }
+
+//       if (callerOnlyInVars && varByInstance) {
+//         step = STEP_01_FIRST;
+//       } else {
+//         step = STEP_01_FIRST;
+//       }
+//     } else if (endsWith(paths, 'Dot') && step === STEP_01_FIRST) {
+//       step = STEP_02_DOT;
+//     } else if (includesPrimarySuffix && endsWith(paths, 'methodInvocationSuffix', 'LBrace')) {
+//       if (step === STEP_01_FIRST) {
+//         step = STEP_14_LBraceAfterFirst;
+//       } else if (step === STEP_03_REST) {
+//         step = STEP_04_LBraceAfterRest;
+//       }
+//     } else if (includes(paths, 'primary') && endsWith(paths, 'Identifier') && step === STEP_02_DOT) {
+//       step = STEP_03_REST;
+//     } else if (endsWith(paths, 'primary', 'primaryPrefix', 'literal', 'StringLiteral')) {
+//       if (step === STEP_04_LBraceAfterRest) {
+//         step = STEP_05_StringLiteral;
+//       } else if (step === STEP_14_LBraceAfterFirst) {
+//         step = STEP_15_StringLiteral;
+//       }
+//     } else {
+//       step = STEP_00_NONE;
+//     }
+
+//     if (step === STEP_01_FIRST) {
+//       firstName = image;
+//     } else if (step === STEP_03_REST) {
+//       restName = image;
+//     } else if (step === STEP_04_LBraceAfterRest) {
+//       callers.push({ typeName, instanceName: firstName, methodName: restName, stringLiteral: '' });
+//       typeName = '';
+//       firstName = '';
+//       restName = '';
+//     } else if (step === STEP_14_LBraceAfterFirst) {
+//       callers.push({ typeName: '', instanceName: '', methodName: firstName, stringLiteral: '' });
+//       typeName = '';
+//       firstName = '';
+//       restName = '';
+//     } else if (step === STEP_05_StringLiteral || step === STEP_15_StringLiteral) {
+//       // stringLiteral can be 1 more but only save not empy string because it is only needed for SQL id.
+//       const stringLiteral = trimSpecific(image, '"');
+//       if (stringLiteral) {
+//         callers[callers.length - 1].stringLiteral = stringLiteral;
+//       }
+//     }
+//   }
+
+//   return callers;
+// }
+
+function getParameterCount(cstSimple: any, rangeBrace: PathsAndImage[], isMethod: boolean): number {
+  const finds: Keyword[] = isMethod ? ['formalParameterList', 'formalParameter'] : ['argumentList', 'expression'];
+
+  let found = rangeBrace.find(({ paths }) => includes2(paths, finds));
+  if (!found) {
+    return 0;
+  }
+
+  const pathsNew = [...found.paths];
+  while (!endsWith2(pathsNew, finds)) {
+    pathsNew.pop();
+  }
+  const prop = getProperty(cstSimple, pathsNew);
+  if (!prop) {
+    return 0;
+  }
+
+  if (!Array.isArray(prop)) {
+    return 1;
+  }
+
+  return prop.length;
+}
+
+function getCallerInfos2(
+  cstSimple: any,
+  list: PathsAndImage[],
+  vars: VarInfo[],
+  callerOnlyInVars: boolean,
+  posStart: number,
+  posEnd: number,
+  callers: CallerInfo[] = []
+): CallerInfo[] {
+  const range = list.filter((v, i) => i >= posStart && i <= posEnd);
+
+  const posLBrace = range.findIndex(({ paths }) => endsWith(paths, 'LBrace'));
+  if (posLBrace === -1) {
+    return callers;
+  }
+
+  const posRBrace = getRBracePosition(range, posLBrace);
+  if (posRBrace === -1) {
+    return callers;
+  }
+
+  /*
+  fqnOrRefType.fqnOrRefTypePartFirst.fqnOrRefTypePartCommon.Identifier
+  fqnOrRefType.fqnOrRefTypePartRest .fqnOrRefTypePartCommon.Identifier
+  sessionInfo.getInteger("USER_ID");
+
+  fqnOrRefType.fqnOrRefTypePartFirst.fqnOrRefTypePartCommon.Identifier
+  selectMember(siteId, param);
+
+  unaryExpression.primary.primaryPrefix
+  unaryExpression.primary.primarySuffix.0.Identifier
+  this.selectMember(siteId, param);
+
+  unaryExpression.primary.primaryPrefix
+  unaryExpression.primary.primarySuffix.0.Identifier
+  unaryExpression.primary.primarySuffix.1.Identifier
+  this.memberInfoDAO.selectMember(siteId, param);
+  */
+
+  const rangeBeforeLBrace = range.filter((v, i) => i < posLBrace);
+
+  let first = '';
+  let rest = '';
+  let thisFound = false;
+  for (let i = 0; i < rangeBeforeLBrace.length; i++) {
+    const { paths, image } = rangeBeforeLBrace[i];
+    if (includes(paths, 'fqnOrRefType', 'fqnOrRefTypePartFirst', 'fqnOrRefTypePartCommon', 'Identifier')) {
+      first = image;
+    } else if (includes(paths, 'fqnOrRefType', 'fqnOrRefTypePartRest', 'fqnOrRefTypePartCommon', 'Identifier')) {
+      rest = image;
+    } else if (includes(paths, 'This')) {
+      thisFound = true;
+    } else if (thisFound) {
+      if (includes(paths, 'unaryExpression', 'primary', 'primarySuffix', '0', 'Identifier')) {
+        first = image;
+      } else if (includes(paths, 'unaryExpression', 'primary', 'primarySuffix', '1', 'Identifier')) {
+        rest = image;
+      }
+    }
+  }
+
+  let typeName = '';
+  let instanceName = '';
+  let methodName = '';
+  if (first) {
+    if (rest) {
+      instanceName = first;
+      methodName = rest;
+
+      const varByInstance = vars.find(({ instanceName: instanceNameVar }) => instanceNameVar === instanceName);
+      if (varByInstance) {
+        typeName = varByInstance.typeName;
+      }
+    } else {
+      methodName = first;
+    }
+  }
+
+  const rangeBrace = range.filter((v, i) => i > posLBrace && i < posRBrace);
+
+  let stringLiteral = '';
+  for (let i = 0; i < rangeBrace.length; i++) {
+    const { paths, image } = rangeBrace[i];
+    const lBraceInnerFound = endsWith(paths, 'LBrace');
+    if (lBraceInnerFound) {
+      const posLBraceInner = i;
+      const posRBraceInner = getRBracePosition(rangeBrace, posLBraceInner);
+      const callersInner = getCallerInfos2(cstSimple, rangeBrace, vars, callerOnlyInVars, 0, posRBraceInner);
+      callers = callers.concat(callersInner);
+      i = posRBraceInner;
+    }
+    if (endsWith(paths, 'StringLiteral') && image) {
+      stringLiteral = trimSpecific(image, '"');
+    }
+  }
+
+  const parameterCount = getParameterCount(cstSimple, rangeBrace, false);
+
+  const add = !!methodName && (callerOnlyInVars ? !!typeName : true);
+  if (add) {
+    callers.push({ typeName, instanceName, methodName, stringLiteral, parameterCount });
+  }
+
+  return callers;
+}
+
 function getCallerInfos(
+  cstSimple: any,
   methodDecls: PathsAndImage[],
   vars: VarInfo[],
   posLCurly: number,
   posRCurly: number,
   callerOnlyInVars: boolean
 ): CallerInfo[] {
-  let step = 0;
+  let callers: CallerInfo[] = [];
 
-  const STEP_00_NONE = 0;
-  const STEP_01_FIRST = 1;
-  const STEP_14_LBraceAfterFirst = 14;
-  const STEP_15_StringLiteral = 15;
-
-  const STEP_02_DOT = 2;
-  const STEP_03_REST = 3;
-  const STEP_04_LBraceAfterRest = 4;
-  const STEP_05_StringLiteral = 5;
-
-  const callers: CallerInfo[] = [];
-
-  let typeName = '';
-  let firstName = '';
-  let restName = '';
-
-  const list = methodDecls.filter((v, i) => i >= posLCurly && i <= posRCurly);
+  const list = methodDecls.filter((v, i) => i > posLCurly && i < posRCurly);
   for (let i = 0; i < list.length; i++) {
-    const { paths, image } = list[i];
+    const posLBrace = list.findIndex(({ paths }, idx) => idx >= i && endsWith(paths, 'LBrace'));
+    if (posLBrace === -1) break;
 
-    // 'primary', 'primarySuffix' can be array or not
-    const includesPrimarySuffix = includes(paths, 'primary', 'primarySuffix');
-
-    if (
-      (endsWith(
-        paths,
-        'primary',
-        'primaryPrefix',
-        'fqnOrRefType',
-        'fqnOrRefTypePartFirst',
-        'fqnOrRefTypePartCommon',
-        'Identifier'
-      ) ||
-        endsWith(paths, 'primary', 'primaryPrefix', 'This')) &&
-      step === STEP_00_NONE
-    ) {
-      const varByInstance = vars.find(({ instanceName }) => instanceName === image);
-      if (varByInstance) {
-        typeName = varByInstance.typeName;
-      }
-
-      if (callerOnlyInVars && varByInstance) {
-        step = STEP_01_FIRST;
-      } else {
-        step = STEP_01_FIRST;
-      }
-    } else if (endsWith(paths, 'Dot') && step === STEP_01_FIRST) {
-      step = STEP_02_DOT;
-    } else if (includesPrimarySuffix && endsWith(paths, 'methodInvocationSuffix', 'LBrace')) {
-      if (step === STEP_01_FIRST) {
-        step = STEP_14_LBraceAfterFirst;
-      } else if (step === STEP_03_REST) {
-        step = STEP_04_LBraceAfterRest;
-      }
-    } else if (includes(paths, 'primary') && endsWith(paths, 'Identifier') && step === STEP_02_DOT) {
-      step = STEP_03_REST;
-    } else if (endsWith(paths, 'primary', 'primaryPrefix', 'literal', 'StringLiteral')) {
-      if (step === STEP_04_LBraceAfterRest) {
-        step = STEP_05_StringLiteral;
-      } else if (step === STEP_14_LBraceAfterFirst) {
-        step = STEP_15_StringLiteral;
-      }
-    } else {
-      step = STEP_00_NONE;
+    const posRBrace = getRBracePosition(list, posLBrace);
+    const callersCur = getCallerInfos2(cstSimple, list, vars, callerOnlyInVars, i, posRBrace);
+    if (callersCur.length) {
+      callers = callers.concat(callersCur);
     }
 
-    if (step === STEP_01_FIRST) {
-      firstName = image;
-    } else if (step === STEP_03_REST) {
-      restName = image;
-    } else if (step === STEP_04_LBraceAfterRest) {
-      callers.push({ typeName, instanceName: firstName, methodName: restName, stringLiteral: '' });
-      typeName = '';
-      firstName = '';
-      restName = '';
-    } else if (step === STEP_14_LBraceAfterFirst) {
-      callers.push({ typeName: '', instanceName: '', methodName: firstName, stringLiteral: '' });
-      typeName = '';
-      firstName = '';
-      restName = '';
-    } else if (step === STEP_05_StringLiteral || step === STEP_15_StringLiteral) {
-      // stringLiteral can be 1 more but only save not empy string because it is only needed for SQL id.
-      const stringLiteral = trimSpecific(image, '"');
-      if (stringLiteral) {
-        callers[callers.length - 1].stringLiteral = stringLiteral;
-      }
-    }
+    i = posRBrace;
+
+    // const posSemi = list.findIndex(({ paths }, idx) => idx >= i && endsWith(paths, 'Semicolon'));
+    // if (posSemi === -1) break;
+
+    // const callersCur = getCallerInfos2(cstSimple, list, vars, callerOnlyInVars, i, posSemi - 1);
+    // if (callersCur.length) {
+    //   callers = callers.concat(callersCur);
+    // }
+
+    // i = posSemi;
   }
 
   return callers;
 }
 
-function getMethods(pathsAndImageList: PathsAndImage[], vars: VarInfo[], callerOnlyInVars: boolean): MethodInfo[] {
+function getMethods(
+  cstSimple: any,
+  pathsAndImageList: PathsAndImage[],
+  vars: VarInfo[],
+  callerOnlyInVars: boolean
+): MethodInfo[] {
   const methodDecls = pathsAndImageList.filter(({ paths, image }) => includes(paths, 'methodDeclaration'));
 
   const methods: MethodInfo[] = [];
   let annotations: Annotation[] = [];
   let methodName = '';
+  let parameterCount = 0;
   let callers: CallerInfo[] = [];
   for (let i = 0; i < methodDecls.length; i++) {
     const { paths, image } = methodDecls[i];
@@ -440,14 +651,19 @@ function getMethods(pathsAndImageList: PathsAndImage[], vars: VarInfo[], callerO
       } else if (endsWith(paths, 'StringLiteral')) {
         annotations[annotations.length - 1].values.push(trimSpecific(image, '"'));
       }
-    } else if (includes(paths, 'methodDeclarator', 'Identifier')) {
+    } else if (endsWith(paths, 'methodDeclarator', 'Identifier')) {
       methodName = image;
-    } else if (includes(paths, 'LCurly')) {
+    } else if (endsWith(paths, 'LBrace')) {
+      const posLBrace = i;
+      const posRBrace = getRBracePosition(methodDecls, posLBrace);
+      const rangeBrace = methodDecls.filter((v, i) => i > posLBrace && i < posRBrace);
+      parameterCount = getParameterCount(cstSimple, rangeBrace, true);
+    } else if (endsWith(paths, 'LCurly')) {
       const posLCurly = i;
       const posRCurly = getRCurlyPosition(methodDecls, posLCurly);
-      callers = getCallerInfos(methodDecls, vars, posLCurly, posRCurly, callerOnlyInVars);
+      callers = getCallerInfos(cstSimple, methodDecls, vars, posLCurly, posRCurly, callerOnlyInVars);
 
-      methods.push({ annotations, name: methodName, callers });
+      methods.push({ annotations, name: methodName, parameterCount, callers });
 
       annotations = [];
       methodName = '';
@@ -464,11 +680,11 @@ export function getClassInfo(content: string, callerOnlyInVars: boolean): ClassI
   const cst = parse(content);
 
   const pathsAndImageList = getPathsAndImageListFromCst(cst);
-  const cst2 = getSimplifiedCst(pathsAndImageList);
+  const cstSimple = getSimplifiedCst(pathsAndImageList);
 
-  const classHeader = getClassHeader(cst2);
+  const classHeader = getClassHeader(cstSimple);
   const vars = getVars(pathsAndImageList);
-  const methods = getMethods(pathsAndImageList, vars, callerOnlyInVars);
+  const methods = getMethods(cstSimple, pathsAndImageList, vars, callerOnlyInVars);
 
   return { classHeader, vars, methods };
 }

@@ -1,5 +1,8 @@
 import { Element, parseXml } from 'libxmljs2';
 import { removeCommentSql, trimSpecific } from './util';
+import { config } from '../config/config';
+import { readFileSync, readdirSync, existsSync, statSync } from 'fs';
+import { resolve } from 'path';
 
 export type XmlNodeInfo = {
   id: string;
@@ -17,6 +20,64 @@ export type XmlNodeInfoFind = XmlNodeInfo & {
 };
 
 export type ObjectAndTables = Map<string, Set<string>>;
+export type ObjectType = 'view' | 'function' | 'procedure';
+
+export function getObjectAndTablesByObjectType(
+  tables: Set<string>,
+  objectType: ObjectType,
+  objectAndTablesCache: Map<ObjectType, ObjectAndTables>
+): ObjectAndTables {
+  const objectAndTablesNew = objectAndTablesCache.get(objectType);
+  if (objectAndTablesNew) {
+    return objectAndTablesNew;
+  }
+
+  const objectAndTables: ObjectAndTables = new Map<string, Set<string>>();
+
+  let path = '';
+  switch (objectType) {
+    case 'view':
+      path = config.path.data.views;
+      break;
+    case 'function':
+      path = config.path.data.functions;
+      break;
+    case 'procedure':
+      path = config.path.data.procedures;
+      break;
+    default:
+      throw new Error(`Wrong objectType: ${objectType}`);
+  }
+
+  if (!existsSync(path)) {
+    objectAndTablesCache.set(objectType, objectAndTables);
+  } else {
+    if (statSync(path).isDirectory()) {
+      const files = readdirSync(path);
+      files.forEach((file) => {
+        const value = readFileSync(resolve(path, file), 'utf-8');
+        const objectAndTablesCur = getObjectAndTables(value, tables);
+        [...objectAndTablesCur].forEach(([view, tables]) => {
+          objectAndTables.set(view, tables);
+        });
+      });
+
+      objectAndTablesCache.set(objectType, objectAndTables);
+    } else {
+      const value = readFileSync(path, 'utf-8');
+      const objectAndTables = getObjectAndTables(value, tables);
+
+      objectAndTablesCache.set(objectType, objectAndTables);
+    }
+  }
+
+  const objectAndTablesNew2 = objectAndTablesCache.get(objectType);
+  if (!objectAndTablesNew2) {
+    throw new Error(`Wrong objectAndTablesNew2: ${objectAndTablesNew2}`);
+  }
+
+  return objectAndTablesNew2;
+}
 
 function getWords(sql: string): Map<string, number> {
   const words = new Map<string, number>();

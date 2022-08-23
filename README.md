@@ -21,7 +21,29 @@ Also shows all routes from API to SQL.
 - All file has following rule
   - Controller file name must ends with `Controller.java`
   - Implementation file name must ends with `Impl.java`
-- No overloaded function exists
+- Overloaded function supported by parameter count, so same parameter count with different type not supported.
+
+  ```java
+
+  // Not supported
+  public void doCall(int seq) {
+    return this.doCall(seq.toString());
+  }
+  public void doCall(String seq) {
+    System.out.println(seq);
+  }
+
+  // Supported
+  public void doCall(int seq, String name) {
+    return this.doCall(name);
+  }
+  public void doCall(String name) {
+    System.out.println(name);
+  }
+  ```
+
+- Get only first method when multiple methods exists in one semicolon.
+
 - refid in include tag only references sql id in current file (not outer file)
 
   ```xml

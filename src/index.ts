@@ -1,3 +1,8 @@
+// config에서 함수 빼기
+// csv 형식 추가
+// @RequestMapping(value="/coe/cs"+ACTION_NAME)
+// Overeloaded function, this.instance.method
+
 import { writeFileSync, readFileSync } from 'fs';
 import { config } from './config/config';
 import {
@@ -8,9 +13,17 @@ import {
   getTableNamesByMethod,
 } from './common/traceHelper';
 import { getObjectAndTables } from './common/sqlHelper';
+import { MethodInfoFind } from './common/classHelper';
 
 async function getMappingToTables(): Promise<MappingToObjects[]> {
-  const methodsInControllers = await getMethodInfoFinds(config.path.controller, '*Controller.java', 'controller');
+  let methodsInControllers: MethodInfoFind[] = [];
+
+  for (let i = 0; i < config.path.controllers.length; i++) {
+    const controller = config.path.controllers[i];
+    const findsCur = await getMethodInfoFinds(controller, '*Controller.java', 'controller');
+    methodsInControllers = methodsInControllers.concat(findsCur);
+  }
+
   const methodsInServiceImpls = await getMethodInfoFinds(
     config.path.service,
     /.+Impl\.java|.+DAO\.java/,
@@ -60,24 +73,61 @@ async function writeMappingToTables() {
   const mapToTables: string[] = [];
   const routeLogs: string[] = [];
   const mappingToTables = await getMappingToTables();
-  for (const { mappingValue, tables, objectAndTables, routes } of mappingToTables) {
-    const tablesComma = [...tables].sort().join(',');
+  let headerMapToTables = '';
+  let headerRoutes = '';
+  let lineSepRoutes = '';
+  let extension = '';
 
-    mapToTables.push(`${mappingValue}: ${tablesComma}`);
-    routeLogs.push(
-      routes
-        .map(({ routeType, value, depth }) => `${routeType.padStart(7, ' ')}: ${getBranch(depth)}${value}`)
-        .join('\n')
-    );
+  if (config.outputType === 'txt') {
+    lineSepRoutes = '\n\n';
+    extension = '.txt';
+
+    for (const { mappingValue, tables, routes } of mappingToTables) {
+      const tablesComma = [...tables].sort().join(',');
+
+      mapToTables.push(`${mappingValue}: ${tablesComma}`);
+      routeLogs.push(
+        routes
+          .map(({ routeType, value, depth }) => `${routeType.padStart(7, ' ')}: ${getBranch(depth)}${value}`)
+          .join('\n')
+      );
+    }
+  } else if (config.outputType === 'csv') {
+    headerMapToTables = 'Mapping,Table\n';
+    headerRoutes = 'Name,Depth,Value\n';
+    lineSepRoutes = '\n';
+    extension = '.csv';
+
+    for (const { mappingValue, tables, routes } of mappingToTables) {
+      const tablesComma = `"${[...tables].sort().join(',')}"`;
+
+      mapToTables.push(`${mappingValue},${tablesComma}`);
+      routeLogs.push(routes.map(({ routeType, value, depth }) => `${routeType},${depth},"${value}"`).join('\n'));
+    }
   }
 
-  writeFileSync(config.path.output.mapToTables, mapToTables.join('\n'), 'utf-8');
-  writeFileSync(config.path.output.routes, routeLogs.join('\n\n'), 'utf-8');
+  writeFileSync(
+    `${config.path.outputDirectory}\\mapToTables${extension}`,
+    `${headerMapToTables}${mapToTables.join('\n')}`,
+    'utf-8'
+  );
+  writeFileSync(
+    `${config.path.outputDirectory}\\routes${extension}`,
+    `${headerRoutes}${routeLogs.join(lineSepRoutes)}`,
+    'utf-8'
+  );
 }
 writeMappingToTables();
 
 async function doTest() {
   console.log(config.path.test);
+
+  const methodsInControllers = await getMethodInfoFinds(config.path.test, 'OverloadTestService.java', 'serviceImpl');
+  for (let nMethod = 0; nMethod < methodsInControllers.length; nMethod++) {
+    const methodInControllers = methodsInControllers[nMethod];
+    const { callers } = methodInControllers;
+    console.log(callers);
+  }
 
   // const methodsInControllers = await getMethodInfoFinds(
   //   config.path.test,

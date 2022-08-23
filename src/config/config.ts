@@ -1,12 +1,12 @@
 import { statSync, readdirSync, readFileSync, existsSync } from 'fs';
 import { resolve } from 'path';
-import { ObjectAndTables, getObjectAndTables } from '../common/sqlHelper';
+import { ObjectType, ObjectAndTables, getObjectAndTablesByObjectType } from '../common/sqlHelper';
 
-type ObjectType = 'view' | 'function' | 'procedure';
+type OutputType = 'txt' | 'csv';
 
 type Config = {
   path: {
-    controller: string;
+    controllers: string[];
     service: string;
     xml: string;
     data: {
@@ -15,12 +15,10 @@ type Config = {
       functions: string;
       procedures: string;
     };
-    output: {
-      mapToTables: string;
-      routes: string;
-    };
+    outputDirectory: string;
     test: string;
   };
+  outputType: OutputType;
   tables: () => Set<string>;
   tablesInObject: () => Set<string>;
   objectAndTables: (objectType: ObjectType) => ObjectAndTables;
@@ -30,81 +28,27 @@ type Config = {
 let tablesCache = new Set<string>();
 let objectAndTablesCache = new Map<ObjectType, ObjectAndTables>();
 
-function getObjectAndTablesByObjectType(tables: Set<string>, objectType: ObjectType): ObjectAndTables {
-  const objectAndTablesNew = objectAndTablesCache.get(objectType);
-  if (objectAndTablesNew) {
-    return objectAndTablesNew;
-  }
-
-  const objectAndTables: ObjectAndTables = new Map<string, Set<string>>();
-
-  let path = '';
-  switch (objectType) {
-    case 'view':
-      path = config.path.data.views;
-      break;
-    case 'function':
-      path = config.path.data.functions;
-      break;
-    case 'procedure':
-      path = config.path.data.procedures;
-      break;
-    default:
-      throw new Error(`Wrong objectType: ${objectType}`);
-  }
-
-  if (!existsSync(path)) {
-    objectAndTablesCache.set(objectType, objectAndTables);
-  } else {
-    if (statSync(path).isDirectory()) {
-      const files = readdirSync(path);
-      files.forEach((file) => {
-        const value = readFileSync(resolve(path, file), 'utf-8');
-        const objectAndTablesCur = getObjectAndTables(value, tables);
-        [...objectAndTablesCur].forEach(([view, tables]) => {
-          objectAndTables.set(view, tables);
-        });
-      });
-
-      objectAndTablesCache.set(objectType, objectAndTables);
-    } else {
-      const value = readFileSync(path, 'utf-8');
-      const objectAndTables = getObjectAndTables(value, tables);
-
-      objectAndTablesCache.set(objectType, objectAndTables);
-    }
-  }
-
-  const objectAndTablesNew2 = objectAndTablesCache.get(objectType);
-  if (!objectAndTablesNew2) {
-    throw new Error(`Wrong objectAndTablesNew2: ${objectAndTablesNew2}`);
-  }
-
-  return objectAndTablesNew2;
-}
-
 export const config: Config = {
   path: {
-    controller:
+    controllers: [
       'D:\\Temp\\kbbizmicro-sb\\bz-store-api-bizgroup\\src\\main\\java\\biz\\micro\\portal\\store\\api\\bizgroup\\controller',
-    //'D:\\Temp\\kbbizmicro-sb\\bz-manual-api-common\\src\\main\\java\\biz\\micro\\portal\\manual\\api\\common\\controller',
+      // 'D:\\Temp\\kbbizmicro-sb\\bz-manual-api-common\\src\\main\\java\\biz\\micro\\portal\\manual\\api\\common\\controller',
+    ],
     service:
       'D:\\Temp\\kbbizmicro-sb\\bz-store-api-bizgroup\\src\\main\\java\\biz\\micro\\portal\\store\\api\\bizgroup\\spring\\service',
-    //'D:\\Temp\\kbbizmicro-sb\\bz-manual-api-common\\src\\main\\java\\biz\\micro\\portal\\manual\\api\\common\\spring\\service',
+    // 'D:\\Temp\\kbbizmicro-sb\\bz-manual-api-common\\src\\main\\java\\biz\\micro\\portal\\manual\\api\\common\\spring\\service',
     xml: 'D:\\Temp\\kbbizmicro-sb\\bz-store-api-bizgroup\\src\\main\\resources\\sql\\oracle',
-    //'D:\\Temp\\kbbizmicro-sb\\bz-manual-api-common\\src\\main\\resources\\sql\\oracle',
+    // 'D:\\Temp\\kbbizmicro-sb\\bz-manual-api-common\\src\\main\\resources\\sql\\oracle',
     data: {
       tables: './data/tables.txt',
-      views: './data/views.sql',
-      functions: './data/functions.sql',
-      procedures: './data/procedures.sql',
+      views: './data/views',
+      functions: './data/functions',
+      procedures: './data/procedures',
     },
-    output: {
-      mapToTables: './output/mapToTables.txt',
-      routes: './output/routes.txt',
-    },
+    outputDirectory: './output',
     test: './test',
   },
+  outputType: 'txt',
   tables: () => {
     if (tablesCache.size) {
       return tablesCache;
@@ -134,7 +78,7 @@ export const config: Config = {
       throw new Error(`tablesCache.size: ${tablesCache.size} is 0.`);
     }
 
-    return getObjectAndTablesByObjectType(tablesCache, objectType);
+    return getObjectAndTablesByObjectType(tablesCache, objectType, objectAndTablesCache);
   },
   tablesInObject: () => {
     if (!tablesCache.size) {
@@ -143,15 +87,19 @@ export const config: Config = {
 
     const tablesNew = new Set(tablesCache);
 
-    [...getObjectAndTablesByObjectType(tablesCache, 'view')].forEach(([object, tablesCur]) => {
+    [...getObjectAndTablesByObjectType(tablesCache, 'view', objectAndTablesCache)].forEach(([object, tablesCur]) => {
       tablesCur.forEach((t) => tablesNew.add(t));
     });
-    [...getObjectAndTablesByObjectType(tablesCache, 'function')].forEach(([object, tablesCur]) => {
-      tablesCur.forEach((t) => tablesNew.add(t));
-    });
-    [...getObjectAndTablesByObjectType(tablesCache, 'procedure')].forEach(([object, tablesCur]) => {
-      tablesCur.forEach((t) => tablesNew.add(t));
-    });
+    [...getObjectAndTablesByObjectType(tablesCache, 'function', objectAndTablesCache)].forEach(
+      ([object, tablesCur]) => {
+        tablesCur.forEach((t) => tablesNew.add(t));
+      }
+    );
+    [...getObjectAndTablesByObjectType(tablesCache, 'procedure', objectAndTablesCache)].forEach(
+      ([object, tablesCur]) => {
+        tablesCur.forEach((t) => tablesNew.add(t));
+      }
+    );
 
     return tablesNew;
   },

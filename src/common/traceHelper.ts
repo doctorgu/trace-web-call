@@ -33,7 +33,7 @@ export async function getMethodInfoFinds(
     const classInfo = getClassInfo(content, callerOnlyInVars);
     const { classHeader, methods } = classInfo;
     const { name: className, implementsName, annotations: annotationsClass } = classHeader;
-    const findsCur = methods.map(({ annotations, name, callers }) => {
+    const findsCur = methods.map(({ annotations, name, parameterCount, callers }) => {
       const mappingClass = annotationsClass.find(({ name }) => name.endsWith('Mapping'));
       const root = mappingClass?.values?.[0] || '';
 
@@ -50,10 +50,26 @@ export async function getMethodInfoFinds(
         implementsName,
         mappingValues,
         name,
+        parameterCount,
         callers,
       };
     });
     finds = finds.concat(findsCur);
+  }
+
+  const nameAndCount = new Map<string, number>();
+  for (let i = 0; i < finds.length; i++) {
+    const { className, name, parameterCount } = finds[i];
+    const nameDot = `${className}.${name}.${parameterCount}`;
+    const count = nameAndCount.get(nameDot) || 0;
+    nameAndCount.set(nameDot, count + 1);
+  }
+  if (classType === 'serviceImpl') {
+    const foundDup = [...nameAndCount].find(([, count]) => count > 1);
+    if (foundDup) {
+      // throw new Error(`Founded duplicated method: ${foundDup[0]}`);
+      console.log(`Founded duplicated method: ${foundDup[0]}`);
+    }
   }
 
   return finds;
@@ -118,7 +134,7 @@ export function getTableNamesByMethod(
 
   const { className: classNameThis, name: nameThis, callers } = find;
   for (let i = 0; i < callers.length; i++) {
-    const { typeName, methodName, stringLiteral } = callers[i];
+    const { typeName, instanceName, methodName, parameterCount: callerParameterCount, stringLiteral } = callers[i];
     if (stringLiteral) {
       const ret = getObjectByStringLiteral(xmls, stringLiteral);
       if (ret) {
@@ -144,23 +160,35 @@ export function getTableNamesByMethod(
       }
     }
 
-    const found = methods.find(({ className, implementsName, name }) => {
+    const founds = methods.filter(({ className, implementsName, name, parameterCount }) => {
+      const methodFound = name === methodName && parameterCount === callerParameterCount;
+      if (!methodFound) return false;
+
       if (typeName) {
-        return (className === typeName || implementsName === typeName) && name === methodName;
+        return className === typeName || implementsName === typeName;
       } else {
-        return className === classNameThis && name === methodName;
+        return className === classNameThis;
       }
     });
-    if (found) {
-      const value = `${typeName ? `${typeName}.` : ''}${methodName}`;
-      routes.push({ routeType: 'method', value, depth });
+    const dupFound = founds.length > 1;
+    for (let nFound = 0; nFound < founds.length; nFound++) {
+      const found = founds[nFound];
+      if (found) {
+        const value = `${typeName ? `${typeName}.` : ''}${methodName}(${callerParameterCount})`;
+        routes.push({ routeType: 'method', value, depth });
 
-      const ret = getTableNamesByMethod(found, methods, xmls, routes, depth + 1);
-      if (ret) {
-        const { tables, objectAndTables } = ret;
-        tablesAll = tablesAll.concat([...tables]);
-        [...objectAndTables].forEach(([view, tables]) => objectAndTablesAll.set(view, tables));
-        continue;
+        const foundPrev =
+          dupFound &&
+          routes.some(({ value: valuePrev, depth: depthPrev }) => valuePrev === value && depthPrev === depth - 1);
+        if (foundPrev) continue;
+
+        const ret = getTableNamesByMethod(found, methods, xmls, routes, depth + 1);
+        if (ret) {
+          const { tables, objectAndTables } = ret;
+          tablesAll = tablesAll.concat([...tables]);
+          [...objectAndTables].forEach(([view, tables]) => objectAndTablesAll.set(view, tables));
+          continue;
+        }
       }
     }
   }
