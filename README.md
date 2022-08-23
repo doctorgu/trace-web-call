@@ -17,10 +17,8 @@ Also shows all routes from API to SQL.
 
 ## Rule
 
-- All table is UPPER CASE in both `tables.txt` and SQL statement in xml
 - All file has following rule
   - Controller file name must ends with `Controller.java`
-  - Implementation file name must ends with `Impl.java`
 - Overloaded function supported by parameter count, so same parameter count with different type not supported.
 
   ```java

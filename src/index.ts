@@ -25,8 +25,8 @@ async function getMappingToTables(): Promise<MappingToObjects[]> {
   }
 
   const methodsInServiceImpls = await getMethodInfoFinds(
-    config.path.service,
-    /.+Impl\.java|.+DAO\.java/,
+    config.path.service.directory,
+    config.path.service.file,
     'serviceImpl'
   );
   // const methodsInServiceImpls = await getMethodInfoFinds(
@@ -88,7 +88,7 @@ async function writeMappingToTables() {
       mapToTables.push(`${mappingValue}: ${tablesComma}`);
       routeLogs.push(
         routes
-          .map(({ routeType, value, depth }) => `${routeType.padStart(7, ' ')}: ${getBranch(depth)}${value}`)
+          .map(({ routeType, value, depth }) => `${routeType.padStart(9, ' ')}: ${getBranch(depth)}${value}`)
           .join('\n')
       );
     }

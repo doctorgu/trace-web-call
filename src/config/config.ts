@@ -7,7 +7,10 @@ type OutputType = 'txt' | 'csv';
 type Config = {
   path: {
     controllers: string[];
-    service: string;
+    service: {
+      directory: string;
+      file: string | RegExp;
+    };
     xml: string;
     data: {
       tables: string;
@@ -34,8 +37,12 @@ export const config: Config = {
       'D:\\Temp\\kbbizmicro-sb\\bz-store-api-bizgroup\\src\\main\\java\\biz\\micro\\portal\\store\\api\\bizgroup\\controller',
       // 'D:\\Temp\\kbbizmicro-sb\\bz-manual-api-common\\src\\main\\java\\biz\\micro\\portal\\manual\\api\\common\\controller',
     ],
-    service:
-      'D:\\Temp\\kbbizmicro-sb\\bz-store-api-bizgroup\\src\\main\\java\\biz\\micro\\portal\\store\\api\\bizgroup\\spring\\service',
+    service: {
+      directory:
+        'D:\\Temp\\kbbizmicro-sb\\bz-store-api-bizgroup\\src\\main\\java\\biz\\micro\\portal\\store\\api\\bizgroup\\spring\\service',
+      file: /.+Impl\.java|.+DAO\.java/,
+    },
+
     // 'D:\\Temp\\kbbizmicro-sb\\bz-manual-api-common\\src\\main\\java\\biz\\micro\\portal\\manual\\api\\common\\spring\\service',
     xml: 'D:\\Temp\\kbbizmicro-sb\\bz-store-api-bizgroup\\src\\main\\resources\\sql\\oracle',
     // 'D:\\Temp\\kbbizmicro-sb\\bz-manual-api-common\\src\\main\\resources\\sql\\oracle',
@@ -65,10 +72,15 @@ export const config: Config = {
         values = values.concat(value.split(/\r*\n/));
       });
 
-      tablesCache = new Set(values.filter((v) => !!v));
+      tablesCache = new Set(values.filter((v) => !!v).map((v) => v.toUpperCase()));
     } else {
       const value = readFileSync(path, 'utf-8');
-      tablesCache = new Set(value.split(/\r*\n/).filter((v) => !!v));
+      tablesCache = new Set(
+        value
+          .split(/\r*\n/)
+          .filter((v) => !!v)
+          .map((v) => v.toUpperCase())
+      );
     }
 
     return tablesCache;

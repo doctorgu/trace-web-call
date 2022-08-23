@@ -56,16 +56,16 @@ export function getObjectAndTablesByObjectType(
       const files = readdirSync(path);
       files.forEach((file) => {
         const value = readFileSync(resolve(path, file), 'utf-8');
-        const objectAndTablesCur = getObjectAndTables(value, tables);
-        [...objectAndTablesCur].forEach(([view, tables]) => {
-          objectAndTables.set(view, tables);
+        const objectAndTablesCur = getObjectAndTables(value, tables, objectType);
+        [...objectAndTablesCur].forEach(([object, tables]) => {
+          objectAndTables.set(object, tables);
         });
       });
 
       objectAndTablesCache.set(objectType, objectAndTables);
     } else {
       const value = readFileSync(path, 'utf-8');
-      const objectAndTables = getObjectAndTables(value, tables);
+      const objectAndTables = getObjectAndTables(value, tables, objectType);
 
       objectAndTablesCache.set(objectType, objectAndTables);
     }
@@ -79,13 +79,13 @@ export function getObjectAndTablesByObjectType(
   return objectAndTablesNew2;
 }
 
-function getWords(sql: string): Map<string, number> {
+function getWordsAsUpper(sql: string): Map<string, number> {
   const words = new Map<string, number>();
 
   let m: RegExpExecArray | null;
   const re = /\w+/g;
   while ((m = re.exec(sql)) !== null) {
-    const word = m[0];
+    const word = m[0].toUpperCase();
     const count = (words.has(word) ? (words.get(word) as number) : 0) + 1;
     words.set(word, count);
   }
@@ -117,7 +117,20 @@ function getObjects(
   return { tables, objectAndTables };
 }
 
-export function getObjectAndTables(sql: string, tablesAll: Set<string>): ObjectAndTables {
+export function getObjectAndTables(sql: string, tablesAll: Set<string>, objectType: ObjectType): ObjectAndTables {
+  switch (objectType) {
+    case 'view':
+      return getViewAndTables(sql, tablesAll);
+    case 'function':
+      return getFunctionAndTables(sql, tablesAll);
+    case 'procedure':
+      return getProcedureAndTables(sql, tablesAll);
+    default:
+      throw new Error(`Wrong objectType: ${objectType}`);
+  }
+}
+
+export function getViewAndTables(sql: string, tablesAll: Set<string>): ObjectAndTables {
   const sqlNoComment = removeCommentSql(sql);
 
   const objectAndTables: ObjectAndTables = new Map<string, Set<string>>();
@@ -129,7 +142,7 @@ export function getObjectAndTables(sql: string, tablesAll: Set<string>): ObjectA
     const view = trimSpecific(m.groups?.view || '', '"');
     const sql = m.groups?.sql || '';
 
-    const words = getWords(sql);
+    const words = getWordsAsUpper(sql);
     const { tables } = getObjects(words, tablesAll, new Map<string, Set<string>>());
     objectAndTables.set(`${view}`, tables);
   }
@@ -143,13 +156,13 @@ export function getFunctionAndTables(sql: string, tablesAll: Set<string>): Objec
   const objectAndTables: ObjectAndTables = new Map<string, Set<string>>();
   let m: RegExpExecArray | null;
   let re =
-    /create(\s+or\s+replace)*(\s+editionable|\s+noneditionable)*\s+function\s+(?<schemaDot>"?[\w$#]+"?\.)*(?<func>"?[\w$#]+"?)\s+.+?return(?<sql>.+?);/gis;
+    /create(\s+or\s+replace)*(\s+editionable|\s+noneditionable)*\s+function\s+(?<schemaDot>"?[\w$#]+"?\.)*(?<func>"?[\w$#]+"?)\s+.+?return(?<sql>.+?)end[\s\w]*;/gis;
   while ((m = re.exec(sqlNoComment)) !== null) {
     // const schemaDot = m.groups?.schemaDot || '';
     const func = trimSpecific(m.groups?.func || '', '"');
     const sql = m.groups?.sql || '';
 
-    const words = getWords(sql);
+    const words = getWordsAsUpper(sql);
     const { tables } = getObjects(words, tablesAll, new Map<string, Set<string>>());
     objectAndTables.set(`${func}`, tables);
   }
@@ -163,13 +176,13 @@ export function getProcedureAndTables(sql: string, tablesAll: Set<string>): Obje
   const objectAndTables: ObjectAndTables = new Map<string, Set<string>>();
   let m: RegExpExecArray | null;
   let re =
-    /create(\s+or\s+replace)*\s+procedure\s+(?<schemaDot>"?[\w$#]+"?\.)*(?<procedure>"?[\w$#]+"?)\s+.+?(is|as)(?<sql>.+?);/gis;
+    /create(\s+or\s+replace)*\s+procedure\s+(?<schemaDot>"?[\w$#]+"?\.)*(?<procedure>"?[\w$#]+"?)\s+.+?(is|as)(?<sql>.+?)end[\s\w]*;/gis;
   while ((m = re.exec(sqlNoComment)) !== null) {
     // const schemaDot = m.groups?.schemaDot || '';
     const procedure = trimSpecific(m.groups?.procedure || '', '"');
     const sql = m.groups?.sql || '';
 
-    const words = getWords(sql);
+    const words = getWordsAsUpper(sql);
     const { tables } = getObjects(words, tablesAll, new Map<string, Set<string>>());
     objectAndTables.set(`${procedure}`, tables);
   }
@@ -215,15 +228,6 @@ export function getXmlInfo(xml: string, tablesAll: Set<string>, objectAndTablesA
     const tagName = elem.name();
     if (tagName === 'sql') continue;
 
-    const textInclude = getTextInclude(elem, root);
-    const sqlInclude = removeCommentSql(textInclude);
-
-    const text = elem.text();
-    const sql = removeCommentSql(text);
-
-    const words = getWords(`${sqlInclude}\n${sql}`);
-    const { tables, objectAndTables } = getObjects(words, tablesAll, objectAndTablesAll);
-
     let id = '';
     const params = new Map<string, string>();
     const attrs = elem.attrs();
@@ -237,6 +241,15 @@ export function getXmlInfo(xml: string, tablesAll: Set<string>, objectAndTablesA
       }
     }
     if (!id) continue;
+
+    const textInclude = getTextInclude(elem, root);
+    const sqlInclude = removeCommentSql(textInclude);
+
+    const text = elem.text();
+    const sql = removeCommentSql(text);
+
+    const words = getWordsAsUpper(`${sqlInclude}\n${sql}`);
+    const { tables, objectAndTables } = getObjects(words, tablesAll, objectAndTablesAll);
 
     nodes.push({ id, tagName, params, tables, objectAndTables });
   }

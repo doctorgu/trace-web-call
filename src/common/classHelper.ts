@@ -36,7 +36,8 @@ type Keyword =
   | 'argumentList'
   | 'formalParameterList'
   | 'expression'
-  | 'formalParameter';
+  | 'formalParameter'
+  | 'unaryExpressionNotPlusMinus';
 
 type PathsAndImage = {
   paths: string[];
@@ -539,9 +540,15 @@ function getCallerInfos2(
     } else if (includes(paths, 'This')) {
       thisFound = true;
     } else if (thisFound) {
-      if (includes(paths, 'unaryExpression', 'primary', 'primarySuffix', '0', 'Identifier')) {
+      if (
+        includes(paths, 'unaryExpression', 'primary', 'primarySuffix', '0', 'Identifier') ||
+        includes(paths, 'unaryExpressionNotPlusMinus', 'primary', 'primarySuffix', '0', 'Identifier')
+      ) {
         first = image;
-      } else if (includes(paths, 'unaryExpression', 'primary', 'primarySuffix', '1', 'Identifier')) {
+      } else if (
+        includes(paths, 'unaryExpression', 'primary', 'primarySuffix', '1', 'Identifier') ||
+        includes(paths, 'unaryExpressionNotPlusMinus', 'primary', 'primarySuffix', '1', 'Identifier')
+      ) {
         rest = image;
       }
     }

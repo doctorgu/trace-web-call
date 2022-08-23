@@ -60,16 +60,14 @@ export async function getMethodInfoFinds(
   const nameAndCount = new Map<string, number>();
   for (let i = 0; i < finds.length; i++) {
     const { className, name, parameterCount } = finds[i];
-    const nameDot = `${className}.${name}.${parameterCount}`;
+    const nameDot = `${className}.${name}(${parameterCount})`;
     const count = nameAndCount.get(nameDot) || 0;
     nameAndCount.set(nameDot, count + 1);
   }
-  if (classType === 'serviceImpl') {
-    const foundDup = [...nameAndCount].find(([, count]) => count > 1);
-    if (foundDup) {
-      // throw new Error(`Founded duplicated method: ${foundDup[0]}`);
-      console.log(`Founded duplicated method: ${foundDup[0]}`);
-    }
+  const foundDup = [...nameAndCount].find(([, count]) => count > 1);
+  if (foundDup) {
+    // throw new Error(`Founded duplicated method: ${foundDup[0]}`);
+    console.log(`Founded duplicated method: ${foundDup[0]}`);
   }
 
   return finds;
@@ -148,7 +146,7 @@ export function getTableNamesByMethod(
             const objectType = config.objectType(object);
             routes.push({
               routeType: objectType,
-              value: [...tables].map((table) => `${object}(${[...tables].join(',')})`).join(','),
+              value: `${object}(${[...tables].join(',')})`,
               depth: depth + 1,
             });
           }
@@ -170,17 +168,18 @@ export function getTableNamesByMethod(
         return className === classNameThis;
       }
     });
-    const dupFound = founds.length > 1;
     for (let nFound = 0; nFound < founds.length; nFound++) {
       const found = founds[nFound];
       if (found) {
         const value = `${typeName ? `${typeName}.` : ''}${methodName}(${callerParameterCount})`;
-        routes.push({ routeType: 'method', value, depth });
-
-        const foundPrev =
-          dupFound &&
-          routes.some(({ value: valuePrev, depth: depthPrev }) => valuePrev === value && depthPrev === depth - 1);
+        // !!! to check: routeTypePrev === 'method' && valuePrev === value && depthPrev <= depth
+        const foundPrev = routes.some(
+          ({ routeType: routeTypePrev, value: valuePrev, depth: depthPrev }) =>
+            routeTypePrev === 'method' && valuePrev === value && depthPrev <= depth
+        );
         if (foundPrev) continue;
+
+        routes.push({ routeType: 'method', value, depth });
 
         const ret = getTableNamesByMethod(found, methods, xmls, routes, depth + 1);
         if (ret) {
