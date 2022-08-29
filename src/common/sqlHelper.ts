@@ -162,7 +162,7 @@ export function getFunctionAndTables(sql: string, tablesAll: Set<string>): Objec
   const objectAndTables: ObjectAndTables = new Map<string, Set<string>>();
   let m: RegExpExecArray | null;
   let re =
-    /create(\s+or\s+replace)*(\s+editionable|\s+noneditionable)*\s+function\s+(?<schemaDot>"?[\w$#]+"?\.)*(?<func>"?[\w$#]+"?)\s+.+?return(?<sql>.+?)end[\s\w]*;/gis;
+    /create(\s+or\s+replace)*(\s+editionable|\s+noneditionable)*\s+function\s+(?<schemaDot>"?[\w$#]+"?\.)*(?<func>"?[\w$#]+"?)\s+.+?return(?<sql>.+?)end(\s+\k<func>)?\s*;/gis;
   while ((m = re.exec(sqlNoComment)) !== null) {
     // const schemaDot = m.groups?.schemaDot || '';
     const func = trimSpecific(m.groups?.func || '', '"');
@@ -182,7 +182,7 @@ export function getProcedureAndTables(sql: string, tablesAll: Set<string>): Obje
   const objectAndTables: ObjectAndTables = new Map<string, Set<string>>();
   let m: RegExpExecArray | null;
   let re =
-    /create(\s+or\s+replace)*\s+procedure\s+(?<schemaDot>"?[\w$#]+"?\.)*(?<procedure>"?[\w$#]+"?)\s+.+?(is|as)(?<sql>.+?)end[\s\w]*;/gis;
+    /create(\s+or\s+replace)*\s+procedure\s+(?<schemaDot>"?[\w$#]+"?\.)*(?<procedure>"?[\w$#]+"?)\s+.+?(is|as)(?<sql>.+?)end(\s+\k<procedure>)?\s*;/gis;
   while ((m = re.exec(sqlNoComment)) !== null) {
     // const schemaDot = m.groups?.schemaDot || '';
     const procedure = trimSpecific(m.groups?.procedure || '', '"');
