@@ -1,5 +1,6 @@
-import { Element, parseXml } from 'libxmljs2';
-import { removeCommentSql, trimSpecific } from './util';
+// import { Element, parseXml } from 'libxmljs2';
+import { xml2js, Element, Attributes } from 'xml-js';
+import { removeCommentSql, trimSpecific, trimEndSpecific } from './util';
 import { config } from '../config/config';
 import { readFileSync, readdirSync, existsSync, statSync } from 'fs';
 import { resolve } from 'path';
@@ -79,37 +80,42 @@ export function getObjectAndTablesByObjectType(
   return objectAndTablesNew2;
 }
 
-function getWordsAsUpper(sql: string): Map<string, number> {
-  const words = new Map<string, number>();
+function getTablesAsUpper(sql: string): Map<string, string> {
+  const tableAndSchemaDotTable = new Map<string, string>();
 
   let m: RegExpExecArray | null;
-  const re = /\w+/g;
+  const re = /(?<schemaDot>\w+\.)*(?<table>\w+)/g;
   while ((m = re.exec(sql)) !== null) {
-    const word = m[0].toUpperCase();
-    const count = (words.has(word) ? (words.get(word) as number) : 0) + 1;
-    words.set(word, count);
+    const schemaDot = m.groups?.schemaDot?.toUpperCase() || '';
+    const table = m.groups?.table.toUpperCase() || '';
+
+    tableAndSchemaDotTable.set(table, `${schemaDot}${table}`);
   }
 
-  return words;
+  return tableAndSchemaDotTable;
 }
 
+/** Return tables, and objectAndTables also return if objectAndTablesAll has value  */
 function getObjects(
-  words: Map<string, number>,
+  tableAndSchemaDotTable: Map<string, string>,
   tablesAll: Set<string>,
   objectAndTablesAll: ObjectAndTables
 ): { tables: Set<string>; objectAndTables: ObjectAndTables } {
   const tables = new Set<string>();
   const objectAndTables: ObjectAndTables = new Map<string, Set<string>>();
 
-  for (const [word] of words) {
-    if (tablesAll.has(word)) {
-      tables.add(word);
+  for (const [table, schemaDotTable] of tableAndSchemaDotTable) {
+    const tableToAdd = (tablesAll.has(schemaDotTable) && schemaDotTable) || (tablesAll.has(table) && table);
+    if (tableToAdd) {
+      tables.add(tableToAdd);
     }
 
-    //const index = objectAndTablesAll.findIndex(({ view }) => view === word);
-    if (objectAndTablesAll.has(word)) {
-      const tablesInObject = objectAndTablesAll.get(word) || new Set<string>();
-      objectAndTables.set(word, tablesInObject);
+    const tableToAdd2 =
+      (objectAndTablesAll.has(schemaDotTable) && schemaDotTable) || (objectAndTablesAll.has(table) && table);
+    if (tableToAdd2) {
+      const tablesInObject = objectAndTablesAll.get(tableToAdd2) || new Set<string>();
+      objectAndTables.set(tableToAdd2, tablesInObject);
+
       [...tablesInObject].forEach((t) => tables.add(t));
     }
   }
@@ -142,8 +148,8 @@ export function getViewAndTables(sql: string, tablesAll: Set<string>): ObjectAnd
     const view = trimSpecific(m.groups?.view || '', '"');
     const sql = m.groups?.sql || '';
 
-    const words = getWordsAsUpper(sql);
-    const { tables } = getObjects(words, tablesAll, new Map<string, Set<string>>());
+    const tableAndSchemaDotTable = getTablesAsUpper(sql);
+    const { tables } = getObjects(tableAndSchemaDotTable, tablesAll, new Map<string, Set<string>>());
     objectAndTables.set(`${view}`, tables);
   }
 
@@ -162,8 +168,8 @@ export function getFunctionAndTables(sql: string, tablesAll: Set<string>): Objec
     const func = trimSpecific(m.groups?.func || '', '"');
     const sql = m.groups?.sql || '';
 
-    const words = getWordsAsUpper(sql);
-    const { tables } = getObjects(words, tablesAll, new Map<string, Set<string>>());
+    const tableAndSchemaDotTable = getTablesAsUpper(sql);
+    const { tables } = getObjects(tableAndSchemaDotTable, tablesAll, new Map<string, Set<string>>());
     objectAndTables.set(`${func}`, tables);
   }
 
@@ -182,74 +188,177 @@ export function getProcedureAndTables(sql: string, tablesAll: Set<string>): Obje
     const procedure = trimSpecific(m.groups?.procedure || '', '"');
     const sql = m.groups?.sql || '';
 
-    const words = getWordsAsUpper(sql);
-    const { tables } = getObjects(words, tablesAll, new Map<string, Set<string>>());
+    const tableAndSchemaDotTable = getTablesAsUpper(sql);
+    const { tables } = getObjects(tableAndSchemaDotTable, tablesAll, new Map<string, Set<string>>());
     objectAndTables.set(`${procedure}`, tables);
   }
 
   return objectAndTables;
 }
 
-function getTextInclude(parent: Element, root: Element) {
-  const childNodes = parent.childNodes();
+// function getTextInclude(parent: Element, root: Element) {
+//   const childNodes = parent.childNodes();
+//   const texts: string[] = [];
+//   for (const childNode of childNodes) {
+//     const elem = childNode as Element;
+//     if (!elem.attr) continue;
+
+//     const tagName = elem.name();
+//     if (tagName !== 'include') continue;
+
+//     const refid = elem.attr('refid')?.value();
+//     const nodeFound = root.get(`sql[@id='${refid}']`);
+//     if (!nodeFound) continue;
+
+//     const elemFound = nodeFound as Element;
+//     texts.push(elemFound.text());
+//   }
+//   return texts.join('\n');
+// }
+
+function getTextCdataFromElement(elem: Element): string {
   const texts: string[] = [];
-  for (const childNode of childNodes) {
-    const elem = childNode as Element;
-    if (!elem.attr) continue;
+  for (const elemChild of elem.elements || []) {
+    if (elemChild.type === 'text') {
+      texts.push((elemChild.text as string) || '');
+    } else if (elemChild.type === 'cdata') {
+      texts.push((elemChild.cdata as string) || '');
+    } else if (elemChild.type === 'element') {
+      const textChild = getTextCdataFromElement(elemChild);
+      texts.push(textChild);
+    }
+  }
 
-    const tagName = elem.name();
-    if (tagName !== 'include') continue;
+  return texts.join('\n');
+}
+function getTextInclude(parent: Element, elemRows: Element[]): string {
+  const children = parent.elements;
+  if (!children) return '';
 
-    const refid = elem.attr('refid')?.value();
-    const nodeFound = root.get(`sql[@id='${refid}']`);
-    if (!nodeFound) continue;
+  const texts: string[] = [];
+  const elemsInclude = children.filter((child) => child.name === 'include');
+  for (const item of elemsInclude) {
+    const refid = item.attributes?.refid;
+    const elemSql = elemRows.find((row) => row.name === 'sql' && row.attributes?.id === refid);
+    if (!elemSql) continue;
 
-    const elemFound = nodeFound as Element;
-    texts.push(elemFound.text());
+    const text = getTextCdataFromElement(elemSql);
+    texts.push(text);
   }
   return texts.join('\n');
 }
 
+// export function getXmlInfo(xml: string, tablesAll: Set<string>, objectAndTablesAll: ObjectAndTables): XmlInfo | null {
+//   const doc = parseXml(xml);
+//   const root = doc.root();
+//   if (!root) return null;
+
+//   const namespace = root.attr('namespace')?.value() || '';
+
+//   const nodes: XmlNodeInfo[] = [];
+
+//   const childNodes = root.childNodes();
+//   for (const childNode of childNodes) {
+//     const elem = childNode as Element;
+//     // Skip text node
+//     if (!elem.attr) continue;
+
+//     const tagName = elem.name();
+//     if (tagName === 'sql') continue;
+
+//     let id = '';
+//     const params = new Map<string, string>();
+//     const attrs = elem.attrs();
+//     for (const attr of attrs) {
+//       const attrName = attr.name();
+//       const attrValue = attr.value();
+//       if (attrName === 'id') {
+//         id = attrValue;
+//       } else {
+//         params.set(attrName, attrValue);
+//       }
+//     }
+//     if (!id) continue;
+
+//     const textInclude = getTextInclude(elem, root);
+//     const sqlInclude = removeCommentSql(textInclude);
+
+//     const text = elem.text();
+//     const sql = removeCommentSql(text);
+
+//     const tableAndSchemaDotTable = getTablesAsUpper(`${sqlInclude}\n${sql}`);
+//     const { tables, objectAndTables } = getObjects(tableAndSchemaDotTable, tablesAll, objectAndTablesAll);
+
+//     nodes.push({ id, tagName, params, tables, objectAndTables });
+//   }
+
+//   return { namespace, nodes };
+// }
+/*
+declaration: { attributes: { version: "1.0", encoding: "UTF-8" }, },
+elements: [
+  { type: "doctype", doctype: "mapper PUBLIC \"-//mybatis.org//DTD Mapper 3.0//EN\" \"http://mybatis.org/dtd/mybatis-3-mapper.dtd\"", },
+  {
+    type: "element",
+    name: "mapper",
+    attributes: { namespace: "OtherUserTable" },
+    elements: [
+      {
+        type: "element",
+        name: "select",
+        attributes: { id: "selectUser", parameterType: "map", resultType: "DBObject", },
+        elements: [
+          {
+            type: "text",
+            text: "\r\n\t\tSELECT\tC.CUST_NM\r\n\t\tFROM\t\tCU_CUST_MST C,\r\n\t\t\t\t\t\tHDHS_TMS.TMS_APP_DEVICE_LIST@INTRO J\r\n\t\tWHERE\t\tC.CUST_NO = J.CUST_ID\r\n\t\t\t\t\t\tAND J.APP_GRP_ID = '1'\r\n\t",
+          },
+        ],
+      },
+    ],
+  },
+]
+*/
 export function getXmlInfo(xml: string, tablesAll: Set<string>, objectAndTablesAll: ObjectAndTables): XmlInfo | null {
-  const doc = parseXml(xml);
-  const root = doc.root();
-  if (!root) return null;
-
-  const namespace = root.attr('namespace')?.value() || '';
-
   const nodes: XmlNodeInfo[] = [];
 
-  const childNodes = root.childNodes();
-  for (const childNode of childNodes) {
-    const elem = childNode as Element;
-    // Skip text node
-    if (!elem.attr) continue;
+  const obj = xml2js(xml) as Element;
+  if (!obj) return null;
 
-    const tagName = elem.name();
-    if (tagName === 'sql') continue;
+  const elements = obj.elements;
+  if (!elements) return null;
+
+  const elemBody = elements[1];
+
+  const attributes = elemBody.attributes;
+  const namespace = (attributes?.namespace as string) || '';
+
+  const elemRows = elemBody.elements?.filter((elem) => elem.name !== 'sql') as Element[];
+
+  for (const elemRow of elemRows) {
+    const attrRow = elemRow.attributes;
+    if (!attrRow) continue;
+
+    const tagName = elemRow.name || '';
 
     let id = '';
     const params = new Map<string, string>();
-    const attrs = elem.attrs();
-    for (const attr of attrs) {
-      const attrName = attr.name();
-      const attrValue = attr.value();
+    for (const [attrName, attrValue] of Object.entries(attrRow)) {
       if (attrName === 'id') {
-        id = attrValue;
+        id = attrValue as string;
       } else {
-        params.set(attrName, attrValue);
+        params.set(attrName, attrValue as string);
       }
     }
     if (!id) continue;
 
-    const textInclude = getTextInclude(elem, root);
+    const textInclude = getTextInclude(elemRow, elemRows);
     const sqlInclude = removeCommentSql(textInclude);
 
-    const text = elem.text();
+    const text = getTextCdataFromElement(elemRow);
     const sql = removeCommentSql(text);
 
-    const words = getWordsAsUpper(`${sqlInclude}\n${sql}`);
-    const { tables, objectAndTables } = getObjects(words, tablesAll, objectAndTablesAll);
+    const tableAndSchemaDotTable = getTablesAsUpper(`${sqlInclude}\n${sql}`);
+    const { tables, objectAndTables } = getObjects(tableAndSchemaDotTable, tablesAll, objectAndTablesAll);
 
     nodes.push({ id, tagName, params, tables, objectAndTables });
   }

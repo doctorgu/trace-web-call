@@ -55,7 +55,9 @@ Also shows all routes from API to SQL.
   </select>
   ```
 
-- Table names in function, procedure, package cannot extract
+- Only first public class treated in multiple class in one file and rest private class ignored.
+
+- Cannot extract object name(table, view, function, procedure) which has `#` or `$` or enclosed with quote(`"`) from SQL.
 
 ## Run
 

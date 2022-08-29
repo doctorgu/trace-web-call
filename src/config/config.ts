@@ -1,61 +1,18 @@
-import { statSync, readdirSync, readFileSync, existsSync } from 'fs';
+import { statSync, readdirSync, readFileSync } from 'fs';
 import { resolve } from 'path';
+import { Config } from './configTypes';
+import { configOtherUserTable } from './configOtherUserTable';
+import { configBzStoreApiBizgroup } from './configBzStoreApiBizgroup';
+import { configBzManualApiCommon } from './configBzManualApiCommon';
+import { configComposite } from './configComposite';
 import { ObjectType, ObjectAndTables, getObjectAndTablesByObjectType } from '../common/sqlHelper';
-
-type OutputType = 'txt' | 'csv';
-
-type Config = {
-  path: {
-    controllers: string[];
-    service: {
-      directory: string;
-      file: string | RegExp;
-    };
-    xml: string;
-    data: {
-      tables: string;
-      views: string;
-      functions: string;
-      procedures: string;
-    };
-    outputDirectory: string;
-    test: string;
-  };
-  outputType: OutputType;
-  tables: () => Set<string>;
-  tablesInObject: () => Set<string>;
-  objectAndTables: (objectType: ObjectType) => ObjectAndTables;
-  objectType: (objectName: string) => ObjectType;
-};
 
 let tablesCache = new Set<string>();
 let objectAndTablesCache = new Map<ObjectType, ObjectAndTables>();
 
-export const config: Config = {
-  path: {
-    controllers: [
-      'D:\\Temp\\kbbizmicro-sb\\bz-store-api-bizgroup\\src\\main\\java\\biz\\micro\\portal\\store\\api\\bizgroup\\controller',
-      // 'D:\\Temp\\kbbizmicro-sb\\bz-manual-api-common\\src\\main\\java\\biz\\micro\\portal\\manual\\api\\common\\controller',
-    ],
-    service: {
-      directory:
-        'D:\\Temp\\kbbizmicro-sb\\bz-store-api-bizgroup\\src\\main\\java\\biz\\micro\\portal\\store\\api\\bizgroup\\spring\\service',
-      file: /.+Impl\.java|.+DAO\.java/,
-    },
+export const config: Config = configComposite;
 
-    // 'D:\\Temp\\kbbizmicro-sb\\bz-manual-api-common\\src\\main\\java\\biz\\micro\\portal\\manual\\api\\common\\spring\\service',
-    xml: 'D:\\Temp\\kbbizmicro-sb\\bz-store-api-bizgroup\\src\\main\\resources\\sql\\oracle',
-    // 'D:\\Temp\\kbbizmicro-sb\\bz-manual-api-common\\src\\main\\resources\\sql\\oracle',
-    data: {
-      tables: './data/tables.txt',
-      views: './data/views',
-      functions: './data/functions',
-      procedures: './data/procedures',
-    },
-    outputDirectory: './output',
-    test: './test',
-  },
-  outputType: 'txt',
+export const configReader = {
   tables: () => {
     if (tablesCache.size) {
       return tablesCache;

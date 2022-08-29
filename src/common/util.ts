@@ -32,6 +32,10 @@ export function trimSpecific(value: string, find: string): string {
   const find2 = escapeRegexp(find);
   return value.replace(new RegExp(`^[${find2}]*(.*?)[${find2}]*$`), '$1');
 }
+export function trimEndSpecific(value: string, find: string): string {
+  const find2 = escapeRegexp(find);
+  return value.replace(new RegExp(`(.*?)[${find2}]*$`), '$1');
+}
 
 export function getCommentRange(value: string): [number, number][] {
   const range: [number, number][] = [];
@@ -217,7 +221,13 @@ export function testWildcardFileName(pattern: string, fileName: string, ignoreCa
   return ret;
 }
 
-// for await (const fullPath of findFiles(rootDir)) { }
+/**
+ *
+ * @param rootDir
+ * @param pattern
+ * for await (const fullPath of findFiles(rootDir)) { }
+ * for (const fullPath of [...findFiles(rootDir)]) { }
+ */
 export function* findFiles(rootDir: string, pattern: string | RegExp = ''): string | any | undefined {
   const files = readdirSync(rootDir);
 

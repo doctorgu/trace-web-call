@@ -1,6 +1,88 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="IncludeTest">
+	<select id="getBizMenuCategory" parameterType="map" resultType="String">
+		<![CDATA[
+		WITH connect_by_query as (
+			  SELECT 
+			     ROWNUM as rnum
+                , BM.MENU_ID
+                , BM.BIZGRP_ID
+                , BM.NAME_KOR
+                , BM.NAME_ENG
+                , BM.NAME_CHN
+                , BM.NAME_JPN
+                , BM.NAME_ETC 
+                , BM.LVL
+                , BM.NODE_TYPE
+                , BM.PRNT_ID
+                , BM.SORT_SQ
+                , BM.URL
+                , BM.REF_TYPE
+                , BM.REF_ID
+                , ltrim(SYS_CONNECT_BY_PATH(BM.MENU_ID, ',') , ',') as PATH
+                , NVL(P.SNGL_APP_YN, 'F') AS TYPE
+                , NVL(P.PAGE_ID, -1) AS PAGE_ID
+                , CASE WHEN P.SNGL_APP_YN = 'Y' THEN
+                    NVL((SELECT APP_ID FROM WK_WIDGET WG WHERE WG.PAGE_ID = P.PAGE_ID), -1)
+                  ELSE -1 END AS APP_ID
+                , NVL(AUTH.AUTH_TYPE,' ') AS AUTH_TYPE
+			  FROM WK_BIZMENU BM
+              LEFT OUTER JOIN WK_PAGE P ON BM.MENU_ID = P.MENU_ID    
+			  LEFT JOIN (
+				SELECT 
+					MENU_ID
+					, LISTAGG(AUTH_TYPE,',') WITHIN GROUP (ORDER BY AUTH_TYPE) AS AUTH_TYPE
+				FROM WK_BIZMENU_AUTH BMA 
+				WHERE BMA.AUTH_GRP = 'A'
+				AND EXISTS (
+								SELECT GRP_ID FROM V_GROUPUSER VU
+								WHERE BMA.ACNT_ID = VU.GRP_ID
+								AND VU.ACNT_ID = #{USER_ID}
+							)	
+				GROUP BY MENU_ID, AUTH_GRP				
+			  ) AUTH 
+			  ON BM.MENU_ID = AUTH.MENU_ID	              
+			  WHERE BM.BIZGRP_ID =  #{BIZGRP_ID}
+			  START WITH BM.PRNT_ID = -1
+			  CONNECT BY PRIOR BM.MENU_ID = BM.PRNT_ID
+                ORDER SIBLINGS BY BM.LVL, BM.SORT_SQ
+			)
+			select 
+			  CASE 
+			    WHEN LVL = 0 THEN '{'
+			    WHEN LVL - LAG(LVL) OVER (order by rnum) = 1 THEN ',"children" : [{' 
+			    ELSE ',{' 
+			  END 
+			  || ' "AUTH_TYPE" : "' || AUTH_TYPE || '", '
+              || ' "key" : ' || MENU_ID || ', '
+              || ' "title" : "' || NAME_KOR || '", '
+              || ' "MENU_ID" : ' || MENU_ID || ', '
+              || ' "BIZGRP_ID" : ' || BIZGRP_ID || ', '
+			  || ' "NAME_KOR" : "' || NAME_KOR || '", '
+              || ' "NAME_ENG" : "' || NAME_ENG || '", '
+              || ' "NAME_CHN" : "' || NAME_CHN || '", '
+              || ' "NAME_JPN" : "' || NAME_JPN || '", '
+              || ' "NAME_ETC" : "' || NAME_ETC || '", '
+              || ' "LVL" : ' || LVL || ', '
+              || ' "NODE_TYPE" : "' || NODE_TYPE || '", '
+              || ' "PRNT_ID" : ' || PRNT_ID || ', '
+              || ' "SORT_SQ" : ' || SORT_SQ || ', '
+              || ' "PAGE_ID" : ' || PAGE_ID || ', '
+              || ' "REF_TYPE" : "' || REF_TYPE || '", '
+			  || ' "REF_ID" : ' || REF_ID || ', '
+			  || ' "path" : [' || PATH || '], '
+              || ' "TYPE" : "' || TYPE || '", '
+              || ' "APP_ID" : ' || APP_ID
+			  || CASE WHEN LEAD(LVL, 1, -1) OVER (order by rnum) - LVL <= 0 
+			     THEN '}' || rpad( ' ', 1+ (-2 * (LEAD(LVL, 1, 0) OVER (order by rnum) - LVL)), ']}' )
+			     ELSE NULL 
+			  END as JSON_SNIPPET
+			from connect_by_query
+			order by rnum
+		]]>
+	</select>
+	
 	<select id="getTwo" parameterType="map" resultType="DBObject">
 		<include refid="selectMyMenu"/>
 		UNION ALL

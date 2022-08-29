@@ -12,11 +12,11 @@
     "discord.js": "^13.8.1",
     "java-parser": "^2.0.2",
     "libxmljs2": "^0.30.1",
-    "nodemon": "^1.19.1"
+    "nodemon": "^1.19.1",
+    "xml-js": "^1.6.11"
   },
   "scripts": {
     "start": "tsc && node dist/index.js",
     "dev": "nodemon --watch 'src/**/*.ts' --exec ts-node src/index.ts"
-  },
-  "dependencies": {}
+  }
 }

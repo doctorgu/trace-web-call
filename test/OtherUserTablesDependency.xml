@@ -1,0 +1,12 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="OtherUserTableDependency">
+	<select id="selectMualOrgIdxByMualIdx" parameterType="int" resultType="int">
+		SELECT
+		    MUAL_ORG_IDX
+		from
+		    WM_MANUALMASTER
+		WHERE
+		    MUAL_IDX = #{MUAL_IDX}
+	</select>
+</mapper>

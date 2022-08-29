@@ -73,6 +73,7 @@ type MethodInfo = {
 export type MethodInfoFind = {
   className: string;
   implementsName: string;
+  extendsName: string;
   mappingValues: string[];
   name: string;
   parameterCount: number;
@@ -254,12 +255,7 @@ function includes2(paths: string[], finds: Keyword[]): boolean {
   }
 }
 
-function getClassHeader(cstSimple: any): ClassHeader {
-  const classDeclaration = getProperty(
-    cstSimple,
-    'ordinaryCompilationUnit.typeDeclaration.classDeclaration'.split('.')
-  );
-
+function getClassHeader(classDeclaration: any): ClassHeader {
   const classModifier = getProperty(classDeclaration, 'classModifier'.split('.'));
   let annotations: Annotation[] = [];
   if (classModifier !== null) {
@@ -284,12 +280,6 @@ function getClassHeader(cstSimple: any): ClassHeader {
     'normalClassDeclaration.superinterfaces.interfaceTypeList.interfaceType.classType.Identifier'
   );
 
-  // const className = getImageValue(classDeclarations[0], 'normalClassDeclaration.typeIdentifier.Identifier');
-  // const extendsName = getImageValue(classDeclarations[0], 'normalClassDeclaration.superclass.classType.Identifier');
-  // const implementsName = getImageValue(
-  //   classDeclarations[0],
-  //   'normalClassDeclaration.superinterfaces.interfaceTypeList.interfaceType.classType.Identifier'
-  // );
   return { name, implementsName, extendsName, annotations };
 }
 
@@ -363,106 +353,6 @@ function getRBracePosition(pathsAndImages: PathsAndImage[], posLBrace: number): 
   throw new Error(`RBrace not found after ${posLBrace} index.`);
 }
 
-// function getCallerInfos(
-//   methodDecls: PathsAndImage[],
-//   vars: VarInfo[],
-//   posLCurly: number,
-//   posRCurly: number,
-//   callerOnlyInVars: boolean
-// ): CallerInfo[] {
-//   let step = 0;
-
-//   const STEP_00_NONE = 0;
-//   const STEP_01_FIRST = 1;
-//   const STEP_14_LBraceAfterFirst = 14;
-//   const STEP_15_StringLiteral = 15;
-
-//   const STEP_02_DOT = 2;
-//   const STEP_03_REST = 3;
-//   const STEP_04_LBraceAfterRest = 4;
-//   const STEP_05_StringLiteral = 5;
-
-//   const callers: CallerInfo[] = [];
-
-//   let typeName = '';
-//   let firstName = '';
-//   let restName = '';
-
-//   const list = methodDecls.filter((v, i) => i >= posLCurly && i <= posRCurly);
-//   for (let i = 0; i < list.length; i++) {
-//     const { paths, image } = list[i];
-
-//     // 'primary', 'primarySuffix' can be array or not
-//     const includesPrimarySuffix = includes(paths, 'primary', 'primarySuffix');
-
-//     if (
-//       endsWith(
-//         paths,
-//         'primary',
-//         'primaryPrefix',
-//         'fqnOrRefType',
-//         'fqnOrRefTypePartFirst',
-//         'fqnOrRefTypePartCommon',
-//         'Identifier'
-//       ) &&
-//       step === STEP_00_NONE
-//     ) {
-//       const varByInstance = vars.find(({ instanceName }) => instanceName === image);
-//       if (varByInstance) {
-//         typeName = varByInstance.typeName;
-//       }
-
-//       if (callerOnlyInVars && varByInstance) {
-//         step = STEP_01_FIRST;
-//       } else {
-//         step = STEP_01_FIRST;
-//       }
-//     } else if (endsWith(paths, 'Dot') && step === STEP_01_FIRST) {
-//       step = STEP_02_DOT;
-//     } else if (includesPrimarySuffix && endsWith(paths, 'methodInvocationSuffix', 'LBrace')) {
-//       if (step === STEP_01_FIRST) {
-//         step = STEP_14_LBraceAfterFirst;
-//       } else if (step === STEP_03_REST) {
-//         step = STEP_04_LBraceAfterRest;
-//       }
-//     } else if (includes(paths, 'primary') && endsWith(paths, 'Identifier') && step === STEP_02_DOT) {
-//       step = STEP_03_REST;
-//     } else if (endsWith(paths, 'primary', 'primaryPrefix', 'literal', 'StringLiteral')) {
-//       if (step === STEP_04_LBraceAfterRest) {
-//         step = STEP_05_StringLiteral;
-//       } else if (step === STEP_14_LBraceAfterFirst) {
-//         step = STEP_15_StringLiteral;
-//       }
-//     } else {
-//       step = STEP_00_NONE;
-//     }
-
-//     if (step === STEP_01_FIRST) {
-//       firstName = image;
-//     } else if (step === STEP_03_REST) {
-//       restName = image;
-//     } else if (step === STEP_04_LBraceAfterRest) {
-//       callers.push({ typeName, instanceName: firstName, methodName: restName, stringLiteral: '' });
-//       typeName = '';
-//       firstName = '';
-//       restName = '';
-//     } else if (step === STEP_14_LBraceAfterFirst) {
-//       callers.push({ typeName: '', instanceName: '', methodName: firstName, stringLiteral: '' });
-//       typeName = '';
-//       firstName = '';
-//       restName = '';
-//     } else if (step === STEP_05_StringLiteral || step === STEP_15_StringLiteral) {
-//       // stringLiteral can be 1 more but only save not empy string because it is only needed for SQL id.
-//       const stringLiteral = trimSpecific(image, '"');
-//       if (stringLiteral) {
-//         callers[callers.length - 1].stringLiteral = stringLiteral;
-//       }
-//     }
-//   }
-
-//   return callers;
-// }
-
 function getParameterCount(cstSimple: any, rangeBrace: PathsAndImage[], isMethod: boolean): number {
   const finds: Keyword[] = isMethod ? ['formalParameterList', 'formalParameter'] : ['argumentList', 'expression'];
 
@@ -491,7 +381,6 @@ function getCallerInfos2(
   cstSimple: any,
   list: PathsAndImage[],
   vars: VarInfo[],
-  callerOnlyInVars: boolean,
   posStart: number,
   posEnd: number,
   callers: CallerInfo[] = []
@@ -580,7 +469,7 @@ function getCallerInfos2(
     if (lBraceInnerFound) {
       const posLBraceInner = i;
       const posRBraceInner = getRBracePosition(rangeBrace, posLBraceInner);
-      const callersInner = getCallerInfos2(cstSimple, rangeBrace, vars, callerOnlyInVars, 0, posRBraceInner);
+      const callersInner = getCallerInfos2(cstSimple, rangeBrace, vars, 0, posRBraceInner);
       callers = callers.concat(callersInner);
       i = posRBraceInner;
     }
@@ -591,8 +480,7 @@ function getCallerInfos2(
 
   const parameterCount = getParameterCount(cstSimple, rangeBrace, false);
 
-  const add = !!methodName && (callerOnlyInVars ? !!typeName : true);
-  if (add) {
+  if (methodName) {
     callers.push({ typeName, instanceName, methodName, stringLiteral, parameterCount });
   }
 
@@ -604,8 +492,7 @@ function getCallerInfos(
   methodDecls: PathsAndImage[],
   vars: VarInfo[],
   posLCurly: number,
-  posRCurly: number,
-  callerOnlyInVars: boolean
+  posRCurly: number
 ): CallerInfo[] {
   let callers: CallerInfo[] = [];
 
@@ -615,33 +502,18 @@ function getCallerInfos(
     if (posLBrace === -1) break;
 
     const posRBrace = getRBracePosition(list, posLBrace);
-    const callersCur = getCallerInfos2(cstSimple, list, vars, callerOnlyInVars, i, posRBrace);
+    const callersCur = getCallerInfos2(cstSimple, list, vars, i, posRBrace);
     if (callersCur.length) {
       callers = callers.concat(callersCur);
     }
 
     i = posRBrace;
-
-    // const posSemi = list.findIndex(({ paths }, idx) => idx >= i && endsWith(paths, 'Semicolon'));
-    // if (posSemi === -1) break;
-
-    // const callersCur = getCallerInfos2(cstSimple, list, vars, callerOnlyInVars, i, posSemi - 1);
-    // if (callersCur.length) {
-    //   callers = callers.concat(callersCur);
-    // }
-
-    // i = posSemi;
   }
 
   return callers;
 }
 
-function getMethods(
-  cstSimple: any,
-  pathsAndImageList: PathsAndImage[],
-  vars: VarInfo[],
-  callerOnlyInVars: boolean
-): MethodInfo[] {
+function getMethods(cstSimple: any, pathsAndImageList: PathsAndImage[], vars: VarInfo[]): MethodInfo[] {
   const methodDecls = pathsAndImageList.filter(({ paths, image }) => includes(paths, 'methodDeclaration'));
 
   const methods: MethodInfo[] = [];
@@ -668,7 +540,7 @@ function getMethods(
     } else if (endsWith(paths, 'LCurly')) {
       const posLCurly = i;
       const posRCurly = getRCurlyPosition(methodDecls, posLCurly);
-      callers = getCallerInfos(cstSimple, methodDecls, vars, posLCurly, posRCurly, callerOnlyInVars);
+      callers = getCallerInfos(cstSimple, methodDecls, vars, posLCurly, posRCurly);
 
       methods.push({ annotations, name: methodName, parameterCount, callers });
 
@@ -683,15 +555,33 @@ function getMethods(
   return methods;
 }
 
-export function getClassInfo(content: string, callerOnlyInVars: boolean): ClassInfo {
+function getCstClassDeclaration(cstSimpleAll: any): any {
+  let classDeclaration = getProperty(
+    cstSimpleAll,
+    'ordinaryCompilationUnit.typeDeclaration.classDeclaration'.split('.')
+  );
+  if (!classDeclaration) {
+    // Get only first public class and ignore rest private classes if one file has multiple classes.
+    classDeclaration = getProperty(
+      cstSimpleAll,
+      'ordinaryCompilationUnit.typeDeclaration.0.classDeclaration'.split('.')
+    );
+  }
+
+  return classDeclaration;
+}
+
+export function getClassInfo(content: string): ClassInfo {
   const cst = parse(content);
 
-  const pathsAndImageList = getPathsAndImageListFromCst(cst);
-  const cstSimple = getSimplifiedCst(pathsAndImageList);
+  const pathsAndImageListAll = getPathsAndImageListFromCst(cst);
+  const cstSimpleAll = getSimplifiedCst(pathsAndImageListAll);
+  const classDeclaration = getCstClassDeclaration(cstSimpleAll);
+  const pathsAndImageList = getPathsAndImageListFromSimpleCst(classDeclaration);
 
-  const classHeader = getClassHeader(cstSimple);
+  const classHeader = getClassHeader(classDeclaration);
   const vars = getVars(pathsAndImageList);
-  const methods = getMethods(cstSimple, pathsAndImageList, vars, callerOnlyInVars);
+  const methods = getMethods(classDeclaration, pathsAndImageList, vars);
 
   return { classHeader, vars, methods };
 }

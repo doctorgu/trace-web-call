@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="OtherUserTable">
+	<select id="selectUser" parameterType="map" resultType="DBObject">
+		SELECT	C.CUST_NM
+		FROM		CU_CUST_MST C,
+						HDHS_TMS.TMS_APP_DEVICE_LIST@INTRO J
+		WHERE		C.CUST_NO = J.CUST_ID
+						AND J.APP_GRP_ID = '1'
+	</select>
+</mapper>

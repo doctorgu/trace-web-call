@@ -1,7 +1,11 @@
-// config에서 함수 빼기
-// csv 형식 추가
 // @RequestMapping(value="/coe/cs"+ACTION_NAME)
-// Overeloaded function, this.instance.method
+// * Two class case
+// * Add current className, methodName, parameterCount to routes !!! to check: routeTypePrev === 'method' && valuePrev === value && depthPrev <= depth
+// * Selecting user_name.tables support
+// * extends support
+// * dependency support
+// Starting point is not mapping
+// Remove quoted text from sql
 
 import { writeFileSync, readFileSync } from 'fs';
 import { config } from './config/config';
@@ -11,37 +15,27 @@ import {
   getMethodInfoFinds,
   getXmlNodeInfoFinds,
   getTableNamesByMethod,
+  getDependency,
 } from './common/traceHelper';
-import { getObjectAndTables } from './common/sqlHelper';
+import { getObjectAndTables, XmlInfo, XmlNodeInfoFind } from './common/sqlHelper';
 import { MethodInfoFind } from './common/classHelper';
+import { DirectoryAndFilePattern } from './config/configTypes';
 
-async function getMappingToTables(): Promise<MappingToObjects[]> {
-  let methodsInControllers: MethodInfoFind[] = [];
+function getMappingToTables(
+  findsController: MethodInfoFind[],
+  findsService: MethodInfoFind[],
+  xmls: XmlNodeInfoFind[],
+  findsDependency: MethodInfoFind[],
+  xmlsDependency: XmlNodeInfoFind[]
+): MappingToObjects[] {
+  const methodsAll = [...findsController, ...findsService, ...findsDependency];
 
-  for (let i = 0; i < config.path.controllers.length; i++) {
-    const controller = config.path.controllers[i];
-    const findsCur = await getMethodInfoFinds(controller, '*Controller.java', 'controller');
-    methodsInControllers = methodsInControllers.concat(findsCur);
-  }
-
-  const methodsInServiceImpls = await getMethodInfoFinds(
-    config.path.service.directory,
-    config.path.service.file,
-    'serviceImpl'
-  );
-  // const methodsInServiceImpls = await getMethodInfoFinds(
-  //   config.path.service,
-  //   'CSManualServiceImpl.java',
-  //   'serviceImpl'
-  // );
-  const methods = methodsInControllers.concat(methodsInServiceImpls);
-
-  const xmls = await getXmlNodeInfoFinds(config.path.xml, '*.xml');
+  const xmlsAll = xmls.concat(xmlsDependency);
 
   const mappingAndTables: MappingToObjects[] = [];
 
-  for (let nMethod = 0; nMethod < methodsInControllers.length; nMethod++) {
-    const methodInControllers = methodsInControllers[nMethod];
+  for (let nMethod = 0; nMethod < findsController.length; nMethod++) {
+    const methodInControllers = findsController[nMethod];
     const { className, mappingValues, name: methodName } = methodInControllers;
     if (!mappingValues.length) continue;
 
@@ -54,7 +48,13 @@ async function getMappingToTables(): Promise<MappingToObjects[]> {
       routes.push({ routeType: 'mapping', value: `${mappingValue}`, depth: ++depth });
       routes.push({ routeType: 'method', value: `${className}.${methodName}`, depth: ++depth });
 
-      const { tables, objectAndTables } = getTableNamesByMethod(methodInControllers, methods, xmls, routes, depth + 1);
+      const { tables, objectAndTables } = getTableNamesByMethod(
+        methodInControllers,
+        methodsAll,
+        xmlsAll,
+        routes,
+        depth + 1
+      );
       mappingAndTables.push({ mappingValue, tables, objectAndTables, routes });
       // console.log(routes);
     }
@@ -63,73 +63,83 @@ async function getMappingToTables(): Promise<MappingToObjects[]> {
   return mappingAndTables;
 }
 
-async function writeMappingToTables() {
+function writeMappingToTables() {
   function getBranch(depth: number) {
     if (depth === 0) return '';
     // return `|---${'-'.repeat((depth - 1) * 4)}`;
     return `${' '.repeat((depth - 1) * 4)}+-- `;
   }
 
-  const mapToTables: string[] = [];
-  const routeLogs: string[] = [];
-  const mappingToTables = await getMappingToTables();
-  let headerMapToTables = '';
-  let headerRoutes = '';
-  let lineSepRoutes = '';
-  let extension = '';
+  const { finds: findsDependency, xmls: xmlsDependency } = getDependency();
 
-  if (config.outputType === 'txt') {
-    lineSepRoutes = '\n\n';
-    extension = '.txt';
+  for (let i = 0; i < config.path.main.length; i++) {
+    const { controllers, service, xml, filePostfix } = config.path.main[i];
 
-    for (const { mappingValue, tables, routes } of mappingToTables) {
-      const tablesComma = [...tables].sort().join(',');
+    let findsController = controllers.map(({ directory, file }) => getMethodInfoFinds(directory, file)).flat();
+    const findsService = getMethodInfoFinds(service.directory, service.file);
 
-      mapToTables.push(`${mappingValue}: ${tablesComma}`);
-      routeLogs.push(
-        routes
-          .map(({ routeType, value, depth }) => `${routeType.padStart(9, ' ')}: ${getBranch(depth)}${value}`)
-          .join('\n')
-      );
+    const xmls = getXmlNodeInfoFinds(xml, '*.xml');
+
+    const mapToTables: string[] = [];
+    const routeLogs: string[] = [];
+
+    const mappingToTables = getMappingToTables(findsController, findsService, xmls, findsDependency, xmlsDependency);
+    let headerMapToTables = '';
+    let headerRoutes = '';
+    let lineSepRoutes = '';
+    let extension = '';
+
+    if (config.outputType === 'txt') {
+      lineSepRoutes = '\n\n';
+      extension = '.txt';
+
+      for (const { mappingValue, tables, routes } of mappingToTables) {
+        const tablesComma = [...tables].sort().join(',');
+
+        mapToTables.push(`${mappingValue}: ${tablesComma}`);
+        routeLogs.push(
+          routes
+            .map(({ routeType, value, depth }) => `${routeType.padStart(9, ' ')}: ${getBranch(depth)}${value}`)
+            .join('\n')
+        );
+      }
+    } else if (config.outputType === 'csv') {
+      headerMapToTables = 'Mapping,Table\n';
+      headerRoutes = 'Name,Depth,Value\n';
+      lineSepRoutes = '\n';
+      extension = '.csv';
+
+      for (const { mappingValue, tables, routes } of mappingToTables) {
+        const tablesComma = `"${[...tables].sort().join(',')}"`;
+
+        mapToTables.push(`${mappingValue},${tablesComma}`);
+        routeLogs.push(routes.map(({ routeType, value, depth }) => `${routeType},${depth},"${value}"`).join('\n'));
+      }
     }
-  } else if (config.outputType === 'csv') {
-    headerMapToTables = 'Mapping,Table\n';
-    headerRoutes = 'Name,Depth,Value\n';
-    lineSepRoutes = '\n';
-    extension = '.csv';
 
-    for (const { mappingValue, tables, routes } of mappingToTables) {
-      const tablesComma = `"${[...tables].sort().join(',')}"`;
-
-      mapToTables.push(`${mappingValue},${tablesComma}`);
-      routeLogs.push(routes.map(({ routeType, value, depth }) => `${routeType},${depth},"${value}"`).join('\n'));
-    }
+    writeFileSync(
+      `${config.path.outputDirectory}\\mapToTables${filePostfix}${extension}`,
+      `${headerMapToTables}${mapToTables.join('\n')}`,
+      'utf-8'
+    );
+    writeFileSync(
+      `${config.path.outputDirectory}\\routes${filePostfix}${extension}`,
+      `${headerRoutes}${routeLogs.join(lineSepRoutes)}`,
+      'utf-8'
+    );
   }
-
-  writeFileSync(
-    `${config.path.outputDirectory}\\mapToTables${extension}`,
-    `${headerMapToTables}${mapToTables.join('\n')}`,
-    'utf-8'
-  );
-  writeFileSync(
-    `${config.path.outputDirectory}\\routes${extension}`,
-    `${headerRoutes}${routeLogs.join(lineSepRoutes)}`,
-    'utf-8'
-  );
 }
 writeMappingToTables();
 
-async function doTest() {
-  console.log(config.path.test);
+function doTest() {
+  // const methodsInControllers = getMethodInfoFinds('./test', 'OverloadTestServiceImpl.java');
+  // for (let nMethod = 0; nMethod < methodsInControllers.length; nMethod++) {
+  //   const methodInControllers = methodsInControllers[nMethod];
+  //   const { callers } = methodInControllers;
+  //   console.log(callers);
+  // }
 
-  const methodsInControllers = await getMethodInfoFinds(config.path.test, 'OverloadTestService.java', 'serviceImpl');
-  for (let nMethod = 0; nMethod < methodsInControllers.length; nMethod++) {
-    const methodInControllers = methodsInControllers[nMethod];
-    const { callers } = methodInControllers;
-    console.log(callers);
-  }
-
-  // const methodsInControllers = await getMethodInfoFinds(
+  // const methodsInControllers = getMethodInfoFinds(
   //   config.path.test,
   //   'AnnotationTestController.java',
   //   'controller'
@@ -140,11 +150,11 @@ async function doTest() {
   //   console.log(mappingValues);
   // }
 
-  // const xmls = await getXmlNodeInfoFinds(config.path.test, 'IncludeTest.xml');
-  // for (let i = 0; i < xmls.length; i++) {
-  //   const { namespace, id, tagName, params, tables } = xmls[i];
-  //   console.log(namespace, id, tagName, params, tables);
-  // }
+  const xmls = getXmlNodeInfoFinds('./test', 'IncludeTest.xml');
+  for (let i = 0; i < xmls.length; i++) {
+    const { namespace, id, tagName, params, tables } = xmls[i];
+    console.log(namespace, id, tagName, params, tables);
+  }
 
   // const viewSql = readFileSync(`${config.path.test}/viewTest.sql`, 'utf-8');
   // const tables = new Set<string>(['TAB1', 'TAB2', 'TAB3', 'TAB4', 'TAB5', 'TAB6', 'TAB7', 'TAB8', 'TAB9']);
