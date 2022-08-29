@@ -327,12 +327,14 @@ export function getXmlInfo(xml: string, tablesAll: Set<string>, objectAndTablesA
   const elements = obj.elements;
   if (!elements) return null;
 
-  const elemBody = elements[1];
+  // sqlMap: iBatis, mapper: myBatis
+  const elemBody = elements.find((elem) => elem.name === 'sqlMap' || elem.name === 'mapper');
+  if (!elemBody) return null;
 
   const attributes = elemBody.attributes;
   const namespace = (attributes?.namespace as string) || '';
 
-  const elemRows = elemBody.elements?.filter((elem) => elem.name !== 'sql') as Element[];
+  const elemRows = (elemBody.elements?.filter((elem) => elem.name !== 'sql') as Element[]) || [];
 
   for (const elemRow of elemRows) {
     const attrRow = elemRow.attributes;

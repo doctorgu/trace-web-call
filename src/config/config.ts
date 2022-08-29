@@ -10,7 +10,7 @@ import { ObjectType, ObjectAndTables, getObjectAndTablesByObjectType } from '../
 let tablesCache = new Set<string>();
 let objectAndTablesCache = new Map<ObjectType, ObjectAndTables>();
 
-export const config: Config = configComposite;
+export const config: Config = configOtherUserTable;
 
 export const configReader = {
   tables: () => {

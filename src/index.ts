@@ -81,7 +81,7 @@ function writeMappingToTables() {
     const xmls = getXmlNodeInfoFinds(xml, '*.xml');
 
     const mapToTables: string[] = [];
-    const routeLogs: string[] = [];
+    const routesAll: string[] = [];
 
     const mappingToTables = getMappingToTables(findsController, findsService, xmls, findsDependency, xmlsDependency);
     let headerMapToTables = '';
@@ -97,7 +97,7 @@ function writeMappingToTables() {
         const tablesComma = [...tables].sort().join(',');
 
         mapToTables.push(`${mappingValue}: ${tablesComma}`);
-        routeLogs.push(
+        routesAll.push(
           routes
             .map(({ routeType, value, depth }) => `${routeType.padStart(9, ' ')}: ${getBranch(depth)}${value}`)
             .join('\n')
@@ -113,7 +113,7 @@ function writeMappingToTables() {
         const tablesComma = `"${[...tables].sort().join(',')}"`;
 
         mapToTables.push(`${mappingValue},${tablesComma}`);
-        routeLogs.push(routes.map(({ routeType, value, depth }) => `${routeType},${depth},"${value}"`).join('\n'));
+        routesAll.push(routes.map(({ routeType, value, depth }) => `${routeType},${depth},"${value}"`).join('\n'));
       }
     }
 
@@ -124,7 +124,7 @@ function writeMappingToTables() {
     );
     writeFileSync(
       `${config.path.outputDirectory}\\routes${filePostfix}${extension}`,
-      `${headerRoutes}${routeLogs.join(lineSepRoutes)}`,
+      `${headerRoutes}${routesAll.join(lineSepRoutes)}`,
       'utf-8'
     );
   }
