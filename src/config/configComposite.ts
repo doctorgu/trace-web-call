@@ -4,7 +4,7 @@ export const configComposite: Config = {
   path: {
     main: [
       {
-        controllers: [
+        startings: [
           {
             directory:
               'D:/Temp/kbbizmicro-sb/bz-manual-api-common/src/main/java/biz/micro/portal/manual/api/common/controller',
@@ -20,19 +20,19 @@ export const configComposite: Config = {
         filePostfix: '-bz-manual-api-common2',
       },
       {
-        controllers: [
+        startings: [
           {
             directory:
-              'D:\\Temp\\kbbizmicro-sb\\bz-store-api-bizgroup\\src\\main\\java\\biz\\micro\\portal\\store\\api\\bizgroup\\controller',
+              'D:/Temp/kbbizmicro-sb/bz-store-api-bizgroup/src/main/java/biz/micro/portal/store/api/bizgroup/controller',
             file: '*Controller.java',
           },
         ],
         service: {
           directory:
-            'D:\\Temp\\kbbizmicro-sb\\bz-store-api-bizgroup\\src\\main\\java\\biz\\micro\\portal\\store\\api\\bizgroup\\spring\\service',
+            'D:/Temp/kbbizmicro-sb/bz-store-api-bizgroup/src/main/java/biz/micro/portal/store/api/bizgroup/spring/service',
           file: /.+Impl\.java|.+DAO\.java/,
         },
-        xml: 'D:\\Temp\\kbbizmicro-sb\\bz-store-api-bizgroup\\src\\main\\resources\\sql\\oracle',
+        xml: 'D:/Temp/kbbizmicro-sb/bz-store-api-bizgroup/src/main/resources/sql/oracle',
         filePostfix: '-bz-store-api-bizgroup2',
       },
     ],
@@ -46,4 +46,5 @@ export const configComposite: Config = {
     outputDirectory: './output',
   },
   outputType: 'txt',
+  startingPoint: 'map',
 };

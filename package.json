@@ -17,6 +17,8 @@
   },
   "scripts": {
     "start": "tsc && node dist/index.js",
-    "dev": "nodemon --watch 'src/**/*.ts' --exec ts-node src/index.ts"
+    "dev": "nodemon --watch 'src/**/*.ts' --exec ts-node src/index.ts",
+    "compareAndReplace": "ts-node ./src/run/compareAndReplace.ts",
+    "gitModifiedUntracked": "git diff --name-only & git ls-files --others --exclude-standard"
   }
 }

@@ -1,6 +1,6 @@
 // import { Element, parseXml } from 'libxmljs2';
 import { xml2js, Element, Attributes } from 'xml-js';
-import { removeCommentSql, trimSpecific, trimEndSpecific } from './util';
+import { removeCommentSql, trimSpecific, trimEndSpecific, removeStringLiteralSql } from './util';
 import { config } from '../config/config';
 import { readFileSync, readdirSync, existsSync, statSync } from 'fs';
 import { resolve } from 'path';
@@ -354,10 +354,10 @@ export function getXmlInfo(xml: string, tablesAll: Set<string>, objectAndTablesA
     if (!id) continue;
 
     const textInclude = getTextInclude(elemRow, elemRows);
-    const sqlInclude = removeCommentSql(textInclude);
+    const sqlInclude = removeStringLiteralSql(removeCommentSql(textInclude));
 
     const text = getTextCdataFromElement(elemRow);
-    const sql = removeCommentSql(text);
+    const sql = removeStringLiteralSql(removeCommentSql(text));
 
     const tableAndSchemaDotTable = getTablesAsUpper(`${sqlInclude}\n${sql}`);
     const { tables, objectAndTables } = getObjects(tableAndSchemaDotTable, tablesAll, objectAndTablesAll);

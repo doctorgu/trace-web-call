@@ -1,13 +1,14 @@
 import { ObjectType, ObjectAndTables } from '../common/sqlHelper';
 
 export type OutputType = 'txt' | 'csv';
+export type StartingPoint = 'map' | 'publicMethod';
 
 export type DirectoryAndFilePattern = { directory: string; file: string | RegExp };
 
 export type Config = {
   path: {
     main: {
-      controllers: DirectoryAndFilePattern[];
+      startings: DirectoryAndFilePattern[];
       service: DirectoryAndFilePattern;
       xml: string;
       filePostfix: string;
@@ -25,4 +26,5 @@ export type Config = {
     outputDirectory: string;
   };
   outputType: OutputType;
+  startingPoint: StartingPoint;
 };

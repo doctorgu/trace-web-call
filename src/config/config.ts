@@ -5,12 +5,13 @@ import { configOtherUserTable } from './configOtherUserTable';
 import { configBzStoreApiBizgroup } from './configBzStoreApiBizgroup';
 import { configBzManualApiCommon } from './configBzManualApiCommon';
 import { configComposite } from './configComposite';
+import { configBzPortalApiAccount } from './configBzPortalApiAccount';
 import { ObjectType, ObjectAndTables, getObjectAndTablesByObjectType } from '../common/sqlHelper';
 
 let tablesCache = new Set<string>();
 let objectAndTablesCache = new Map<ObjectType, ObjectAndTables>();
 
-export const config: Config = configOtherUserTable;
+export const config: Config = configComposite;
 
 export const configReader = {
   tables: () => {

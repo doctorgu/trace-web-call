@@ -37,7 +37,9 @@ type Keyword =
   | 'formalParameterList'
   | 'expression'
   | 'formalParameter'
-  | 'unaryExpressionNotPlusMinus';
+  | 'unaryExpressionNotPlusMinus'
+  | 'methodModifier'
+  | 'Public';
 
 type PathsAndImage = {
   paths: string[];
@@ -65,6 +67,7 @@ export type CallerInfo = {
 
 type MethodInfo = {
   annotations: Annotation[];
+  isPublic: boolean;
   name: string;
   callers: CallerInfo[];
   parameterCount: number;
@@ -75,6 +78,7 @@ export type MethodInfoFind = {
   implementsName: string;
   extendsName: string;
   mappingValues: string[];
+  isPublic: boolean;
   name: string;
   parameterCount: number;
   callers: CallerInfo[];
@@ -518,6 +522,7 @@ function getMethods(cstSimple: any, pathsAndImageList: PathsAndImage[], vars: Va
 
   const methods: MethodInfo[] = [];
   let annotations: Annotation[] = [];
+  let isPublic = false;
   let methodName = '';
   let parameterCount = 0;
   let callers: CallerInfo[] = [];
@@ -530,25 +535,28 @@ function getMethods(cstSimple: any, pathsAndImageList: PathsAndImage[], vars: Va
       } else if (endsWith(paths, 'StringLiteral')) {
         annotations[annotations.length - 1].values.push(trimSpecific(image, '"'));
       }
+    } else if (includes(paths, 'methodDeclaration', 'methodModifier') && endsWith(paths, 'Public')) {
+      isPublic = true;
     } else if (endsWith(paths, 'methodDeclarator', 'Identifier')) {
       methodName = image;
-    } else if (endsWith(paths, 'LBrace')) {
-      const posLBrace = i;
-      const posRBrace = getRBracePosition(methodDecls, posLBrace);
-      const rangeBrace = methodDecls.filter((v, i) => i > posLBrace && i < posRBrace);
-      parameterCount = getParameterCount(cstSimple, rangeBrace, true);
     } else if (endsWith(paths, 'LCurly')) {
       const posLCurly = i;
       const posRCurly = getRCurlyPosition(methodDecls, posLCurly);
       callers = getCallerInfos(cstSimple, methodDecls, vars, posLCurly, posRCurly);
 
-      methods.push({ annotations, name: methodName, parameterCount, callers });
+      methods.push({ annotations, isPublic, name: methodName, parameterCount, callers });
 
       annotations = [];
+      isPublic = false;
       methodName = '';
       callers = [];
 
       i = posRCurly;
+    } else if (endsWith(paths, 'LBrace')) {
+      const posLBrace = i;
+      const posRBrace = getRBracePosition(methodDecls, posLBrace);
+      const rangeBrace = methodDecls.filter((v, i) => i > posLBrace && i < posRBrace);
+      parameterCount = getParameterCount(cstSimple, rangeBrace, true);
     }
   }
 

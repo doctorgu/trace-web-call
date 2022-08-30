@@ -4,7 +4,7 @@ export const configOtherUserTable: Config = {
   path: {
     main: [
       {
-        controllers: [{ directory: `./test/`, file: 'OtherUserTablesController.java' }],
+        startings: [{ directory: `./test/`, file: 'OtherUserTablesController.java' }],
         service: {
           directory: './test',
           file: 'OtherUserTablesBase.java',
@@ -28,4 +28,5 @@ export const configOtherUserTable: Config = {
     outputDirectory: './test/output',
   },
   outputType: 'txt',
+  startingPoint: 'map',
 };

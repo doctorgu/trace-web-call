@@ -4,7 +4,7 @@ export const configBzManualApiCommon: Config = {
   path: {
     main: [
       {
-        controllers: [
+        startings: [
           {
             directory:
               'D:/Temp/kbbizmicro-sb/bz-manual-api-common/src/main/java/biz/micro/portal/manual/api/common/controller',
@@ -30,4 +30,5 @@ export const configBzManualApiCommon: Config = {
     outputDirectory: './output',
   },
   outputType: 'txt',
+  startingPoint: 'map',
 };

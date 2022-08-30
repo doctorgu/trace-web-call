@@ -1,23 +1,23 @@
 import { Config } from './configTypes';
 
-export const configBzStoreApiBizgroup: Config = {
+export const configBzPortalApiAccount: Config = {
   path: {
     main: [
       {
         startings: [
           {
             directory:
-              'D:/Temp/kbbizmicro-sb/bz-store-api-bizgroup/src/main/java/biz/micro/portal/store/api/bizgroup/controller',
-            file: '*Controller.java',
+              'D:/Temp/kbbizmicro-sb/bz-portal-api-account/src/main/java/biz/micro/portal/common/api/account/service',
+            file: '*Impl.java',
           },
         ],
         service: {
           directory:
-            'D:/Temp/kbbizmicro-sb/bz-store-api-bizgroup/src/main/java/biz/micro/portal/store/api/bizgroup/spring/service',
+            'D:/Temp/kbbizmicro-sb/bz-portal-api-account/src/main/java/biz/micro/portal/common/api/account/service',
           file: /.+Impl\.java|.+DAO\.java/,
         },
-        xml: 'D:/Temp/kbbizmicro-sb/bz-store-api-bizgroup/src/main/resources/sql/oracle',
-        filePostfix: '-bz-store-api-bizgroup2',
+        xml: 'D:/Temp/kbbizmicro-sb/bz-portal-api-account/src/main/resources/sql/oracle',
+        filePostfix: '-bz-portal-api-account2',
       },
     ],
     dependency: [],
@@ -29,6 +29,6 @@ export const configBzStoreApiBizgroup: Config = {
     },
     outputDirectory: './output',
   },
+  startingPoint: 'publicMethod',
   outputType: 'txt',
-  startingPoint: 'map',
 };

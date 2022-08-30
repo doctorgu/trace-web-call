@@ -87,7 +87,7 @@ export function getClosingPosition(
   throw new Error(`Closing symbol not found after ${posOpen} index.`);
 }
 
-export function getClosingQuote(value: string, posOpen: number, quoteSymbol = '"', escapeChar = '\\'): number {
+export function getClosingQuoteJava(value: string, posOpen: number, quoteSymbol = '"', escapeChar = '\\'): number {
   for (let i = posOpen + 1; i < value.length; i += 1) {
     const c = value[i];
     if (c === escapeChar) {
@@ -105,6 +105,58 @@ export function getClosingQuote(value: string, posOpen: number, quoteSymbol = '"
   }
 
   throw new Error(`Closing quote not found after ${posOpen} index.`);
+}
+
+/**
+ * console.log(removeStringLiteralSql("''''") === '')
+ * console.log(removeStringLiteralSql("a''b") === 'ab')
+ * console.log(removeStringLiteralSql("a'x'b'y'c") === 'abc')
+ * console.log(removeStringLiteralSql("a'x''y'b") === 'ab')
+ * console.log(removeStringLiteralSql("a'x''y'b'z'''c") === 'abc')
+ * console.log(removeStringLiteralSql("'a''b'") === '')
+ * console.log(removeStringLiteralSql("a'\r'\nb") === 'a\nb')
+ * try { console.log(removeStringLiteralSql("a'") === 'a'); console.log(false); } catch (ex) { console.log(true); }
+ */
+export function removeStringLiteralSql(value: string): string {
+  let posOpen = -1;
+  let posClose = -1;
+  let values: string[] = [];
+
+  for (let i = 0; i < value.length; i += 1) {
+    const c = value[i];
+    if (c !== "'") continue;
+
+    // Openning quote found
+    if (posOpen === -1) {
+      posOpen = i;
+      continue;
+    }
+
+    // Skip two quote
+    const cNext = value[i + 1];
+    if (cNext === "'") {
+      i++;
+      continue;
+    }
+
+    // Closing quote found
+    values.push(value.substring(posClose + 1, posOpen));
+
+    // Change closing position, initialize opening position
+    posClose = i;
+    posOpen = -1;
+  }
+
+  if (posOpen !== -1) {
+    throw new Error(`Closing quote not found after: ${posOpen} index on ${value}`);
+  }
+
+  // Add right most value
+  if (posClose + 1 < value.length) {
+    values.push(value.substring(posClose + 1));
+  }
+
+  return values.join('');
 }
 
 export function matchOf(
@@ -195,14 +247,14 @@ export function matchOfSkipRange(
   return null;
 }
 
-export function getLiteralRange(value: string, rangeComment: [number, number][]): [number, number][] {
+export function getLiteralRangeJava(value: string, rangeComment: [number, number][]): [number, number][] {
   const quoteSymbol = '"';
   const escapeChar = '\\';
 
   const range: [number, number][] = [];
   let posOpen = indexOfSkipRange(value, quoteSymbol, 0, rangeComment);
   while (posOpen >= 0) {
-    const posClose = getClosingQuote(value, posOpen, quoteSymbol, escapeChar);
+    const posClose = getClosingQuoteJava(value, posOpen, quoteSymbol, escapeChar);
     range.push([posOpen, posClose]);
 
     posOpen = indexOfSkipRange(value, quoteSymbol, posClose + 1, rangeComment);
@@ -226,6 +278,7 @@ export function testWildcardFileName(pattern: string, fileName: string, ignoreCa
  * @param rootDir
  * @param pattern
  * for await (const fullPath of findFiles(rootDir)) { }
+ *
  * for (const fullPath of [...findFiles(rootDir)]) { }
  */
 export function* findFiles(rootDir: string, pattern: string | RegExp = ''): string | any | undefined {

@@ -3,6 +3,7 @@ import { findFiles } from './util';
 import { Annotation, MethodInfoFind, getClassInfo } from './classHelper';
 import { XmlNodeInfoFind, getXmlInfo, getObjectAndTables, ObjectAndTables } from './sqlHelper';
 import { config, configReader } from '../config/config';
+import { StartingPoint } from '../config/configTypes';
 
 export type RouteInfo = {
   routeType: 'mapping' | 'method' | 'xml' | 'table' | 'view' | 'function' | 'procedure';
@@ -10,8 +11,8 @@ export type RouteInfo = {
   depth: number;
 };
 
-export type MappingToObjects = {
-  mappingValue: string;
+type StartToObjects = {
+  mappingOrMethod: string;
   tables: Set<string>;
   objectAndTables: ObjectAndTables;
   routes: RouteInfo[];
@@ -40,7 +41,7 @@ export function getMethodInfoFinds(rootDir: string, filePattern: string | RegExp
     const classInfo = getClassInfo(content);
     const { classHeader, methods } = classInfo;
     const { name: className, implementsName, extendsName, annotations: annotationsClass } = classHeader;
-    const findsCur = methods.map(({ annotations, name, parameterCount, callers }) => {
+    const findsCur = methods.map(({ annotations, isPublic, name, parameterCount, callers }) => {
       const mappingClass = annotationsClass.find(({ name }) => name.endsWith('Mapping'));
       const root = mappingClass?.values?.[0] || '';
 
@@ -57,6 +58,7 @@ export function getMethodInfoFinds(rootDir: string, filePattern: string | RegExp
         implementsName,
         extendsName,
         mappingValues,
+        isPublic,
         name,
         parameterCount,
         callers,
@@ -244,4 +246,68 @@ export function getDependency(): { finds: MethodInfoFind[]; xmls: XmlNodeInfoFin
   }
 
   return { finds, xmls };
+}
+
+export function getStartToTables(
+  findsController: MethodInfoFind[],
+  findsService: MethodInfoFind[],
+  xmls: XmlNodeInfoFind[],
+  findsDependency: MethodInfoFind[],
+  xmlsDependency: XmlNodeInfoFind[],
+  startingPoint: StartingPoint
+): StartToObjects[] {
+  const methodsAll = [...findsController, ...findsService, ...findsDependency];
+
+  const xmlsAll = xmls.concat(xmlsDependency);
+
+  const startToObjects: StartToObjects[] = [];
+
+  for (let nMethod = 0; nMethod < findsController.length; nMethod++) {
+    const methodInStartings = findsController[nMethod];
+    const { className, mappingValues, isPublic: methodIsPublic, name: methodName } = methodInStartings;
+    if (startingPoint === 'map' && !mappingValues.length) continue;
+    if (startingPoint === 'publicMethod' && !methodIsPublic) continue;
+
+    const routes: RouteInfo[] = [];
+
+    if (startingPoint === 'map') {
+      for (let nValue = 0; nValue < mappingValues.length; nValue++) {
+        const mappingValue = mappingValues[nValue];
+
+        const classDotMethod = `${className}.${methodName}`;
+        let depth = -1;
+        routes.push({ routeType: 'mapping', value: `${mappingValue}`, depth: ++depth });
+        routes.push({ routeType: 'method', value: classDotMethod, depth: ++depth });
+
+        const { tables, objectAndTables } = getTableNamesByMethod(
+          methodInStartings,
+          methodsAll,
+          xmlsAll,
+          routes,
+          depth + 1
+        );
+        startToObjects.push({ mappingOrMethod: mappingValue, tables, objectAndTables, routes });
+      }
+    } else if (startingPoint === 'publicMethod') {
+      const classDotMethod = `${className}.${methodName}`;
+      let depth = -1;
+      routes.push({ routeType: 'method', value: classDotMethod, depth: ++depth });
+
+      const { tables, objectAndTables } = getTableNamesByMethod(
+        methodInStartings,
+        methodsAll,
+        xmlsAll,
+        routes,
+        depth + 1
+      );
+      startToObjects.push({
+        mappingOrMethod: classDotMethod,
+        tables,
+        objectAndTables,
+        routes,
+      });
+    }
+  }
+
+  return startToObjects;
 }
