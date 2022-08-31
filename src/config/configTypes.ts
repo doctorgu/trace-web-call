@@ -9,8 +9,10 @@ export type Config = {
   path: {
     main: {
       startings: DirectoryAndFilePattern[];
-      service: DirectoryAndFilePattern;
-      xml: string;
+      serviceAndXmls: {
+        service: DirectoryAndFilePattern;
+        xml: string;
+      }[];
       filePostfix: string;
     }[];
     dependency: {

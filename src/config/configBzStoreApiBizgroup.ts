@@ -11,12 +11,16 @@ export const configBzStoreApiBizgroup: Config = {
             file: '*Controller.java',
           },
         ],
-        service: {
-          directory:
-            'D:/Temp/kbbizmicro-sb/bz-store-api-bizgroup/src/main/java/biz/micro/portal/store/api/bizgroup/spring/service',
-          file: /.+Impl\.java|.+DAO\.java/,
-        },
-        xml: 'D:/Temp/kbbizmicro-sb/bz-store-api-bizgroup/src/main/resources/sql/oracle',
+        serviceAndXmls: [
+          {
+            service: {
+              directory:
+                'D:/Temp/kbbizmicro-sb/bz-store-api-bizgroup/src/main/java/biz/micro/portal/store/api/bizgroup/spring/service',
+              file: /.+Impl\.java|.+DAO\.java/,
+            },
+            xml: 'D:/Temp/kbbizmicro-sb/bz-store-api-bizgroup/src/main/resources/sql/oracle',
+          },
+        ],
         filePostfix: '-bz-store-api-bizgroup2',
       },
     ],

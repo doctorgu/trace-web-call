@@ -10,6 +10,7 @@
 import { writeFileSync } from 'fs';
 import { config } from './config/config';
 import { getMethodInfoFinds, getXmlNodeInfoFinds, getStartToTables, getDependency } from './common/traceHelper';
+import { readFileSyncUtf16le, removeCommentLiteralSql } from './common/util';
 
 function writeStartToTables() {
   function getBranch(depth: number) {
@@ -21,19 +22,23 @@ function writeStartToTables() {
   const { finds: findsDependency, xmls: xmlsDependency } = getDependency();
 
   for (let i = 0; i < config.path.main.length; i++) {
-    const { startings, service, xml, filePostfix } = config.path.main[i];
+    const { startings, serviceAndXmls, filePostfix } = config.path.main[i];
 
     console.log(`Parsing ${startings.map((c) => c.directory).join(',')}`);
-    let findsController = startings.map(({ directory, file }) => getMethodInfoFinds(directory, file)).flat();
-    console.log(`Parsing ${service.directory}`);
-    const findsService = getMethodInfoFinds(service.directory, service.file);
+    const findsController = startings.map(({ directory, file }) => getMethodInfoFinds(directory, file)).flat();
 
-    const xmls = getXmlNodeInfoFinds(xml, '*.xml');
+    console.log(`Parsing ${serviceAndXmls.map((s) => s.service.directory).join(',')}`);
+    const findsService = serviceAndXmls
+      .map(({ service: { directory, file } }) => getMethodInfoFinds(directory, file))
+      .flat();
+
+    console.log(`Parsing ${serviceAndXmls.map((s) => s.xml).join(',')}`);
+    const xmls = serviceAndXmls.map(({ xml }) => getXmlNodeInfoFinds(xml, '*.xml')).flat();
 
     const startToTablesAll: string[] = [];
     const routesAll: string[] = [];
 
-    console.log(`Get starting to table...`);
+    console.log(`Get starting to tables...`);
     const startToTables = getStartToTables(
       findsController,
       findsService,
@@ -105,7 +110,7 @@ function doTest() {
   //   const { namespace, id, tagName, params, tables } = xmls[i];
   //   console.log(namespace, id, tagName, params, tables);
   // }
-  // const viewSql = readFileSync(`${config.path.test}/viewTest.sql`, 'utf-8');
+  // const viewSql = readFileSyncUtf16le(`${config.path.test}/viewTest.sql`);
   // const tables = new Set<string>(['TAB1', 'TAB2', 'TAB3', 'TAB4', 'TAB5', 'TAB6', 'TAB7', 'TAB8', 'TAB9']);
   // const objectAndTables = getObjectAndTables(viewSql, tables);
   // const tablesUsed = objectAndTables.map(({ tables }) => [...tables]).flat();

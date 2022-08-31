@@ -1,8 +1,8 @@
 // import { Element, parseXml } from 'libxmljs2';
-import { xml2js, Element, Attributes } from 'xml-js';
-import { removeCommentSql, trimSpecific, trimEndSpecific, removeStringLiteralSql } from './util';
+import { xml2js, Element } from 'xml-js';
+import { removeCommentLiteralSql, trimSpecific, readFileSyncUtf16le } from './util';
 import { config } from '../config/config';
-import { readFileSync, readdirSync, existsSync, statSync } from 'fs';
+import { readdirSync, existsSync, statSync } from 'fs';
 import { resolve } from 'path';
 
 export type XmlNodeInfo = {
@@ -56,7 +56,7 @@ export function getObjectAndTablesByObjectType(
     if (statSync(path).isDirectory()) {
       const files = readdirSync(path);
       files.forEach((file) => {
-        const value = readFileSync(resolve(path, file), 'utf-8');
+        const value = readFileSyncUtf16le(resolve(path, file));
         const objectAndTablesCur = getObjectAndTables(value, tables, objectType);
         [...objectAndTablesCur].forEach(([object, tables]) => {
           objectAndTables.set(object, tables);
@@ -65,7 +65,7 @@ export function getObjectAndTablesByObjectType(
 
       objectAndTablesCache.set(objectType, objectAndTables);
     } else {
-      const value = readFileSync(path, 'utf-8');
+      const value = readFileSyncUtf16le(path);
       const objectAndTables = getObjectAndTables(value, tables, objectType);
 
       objectAndTablesCache.set(objectType, objectAndTables);
@@ -137,7 +137,7 @@ export function getObjectAndTables(sql: string, tablesAll: Set<string>, objectTy
 }
 
 export function getViewAndTables(sql: string, tablesAll: Set<string>): ObjectAndTables {
-  const sqlNoComment = removeCommentSql(sql);
+  const sqlNoComment = removeCommentLiteralSql(sql);
 
   const objectAndTables: ObjectAndTables = new Map<string, Set<string>>();
   let m: RegExpExecArray | null;
@@ -157,7 +157,7 @@ export function getViewAndTables(sql: string, tablesAll: Set<string>): ObjectAnd
 }
 
 export function getFunctionAndTables(sql: string, tablesAll: Set<string>): ObjectAndTables {
-  const sqlNoComment = removeCommentSql(sql);
+  const sqlNoComment = removeCommentLiteralSql(sql);
 
   const objectAndTables: ObjectAndTables = new Map<string, Set<string>>();
   let m: RegExpExecArray | null;
@@ -177,7 +177,7 @@ export function getFunctionAndTables(sql: string, tablesAll: Set<string>): Objec
 }
 
 export function getProcedureAndTables(sql: string, tablesAll: Set<string>): ObjectAndTables {
-  const sqlNoComment = removeCommentSql(sql);
+  const sqlNoComment = removeCommentLiteralSql(sql);
 
   const objectAndTables: ObjectAndTables = new Map<string, Set<string>>();
   let m: RegExpExecArray | null;
@@ -248,76 +248,6 @@ function getTextInclude(parent: Element, elemRows: Element[]): string {
   return texts.join('\n');
 }
 
-// export function getXmlInfo(xml: string, tablesAll: Set<string>, objectAndTablesAll: ObjectAndTables): XmlInfo | null {
-//   const doc = parseXml(xml);
-//   const root = doc.root();
-//   if (!root) return null;
-
-//   const namespace = root.attr('namespace')?.value() || '';
-
-//   const nodes: XmlNodeInfo[] = [];
-
-//   const childNodes = root.childNodes();
-//   for (const childNode of childNodes) {
-//     const elem = childNode as Element;
-//     // Skip text node
-//     if (!elem.attr) continue;
-
-//     const tagName = elem.name();
-//     if (tagName === 'sql') continue;
-
-//     let id = '';
-//     const params = new Map<string, string>();
-//     const attrs = elem.attrs();
-//     for (const attr of attrs) {
-//       const attrName = attr.name();
-//       const attrValue = attr.value();
-//       if (attrName === 'id') {
-//         id = attrValue;
-//       } else {
-//         params.set(attrName, attrValue);
-//       }
-//     }
-//     if (!id) continue;
-
-//     const textInclude = getTextInclude(elem, root);
-//     const sqlInclude = removeCommentSql(textInclude);
-
-//     const text = elem.text();
-//     const sql = removeCommentSql(text);
-
-//     const tableAndSchemaDotTable = getTablesAsUpper(`${sqlInclude}\n${sql}`);
-//     const { tables, objectAndTables } = getObjects(tableAndSchemaDotTable, tablesAll, objectAndTablesAll);
-
-//     nodes.push({ id, tagName, params, tables, objectAndTables });
-//   }
-
-//   return { namespace, nodes };
-// }
-/*
-declaration: { attributes: { version: "1.0", encoding: "UTF-8" }, },
-elements: [
-  { type: "doctype", doctype: "mapper PUBLIC \"-//mybatis.org//DTD Mapper 3.0//EN\" \"http://mybatis.org/dtd/mybatis-3-mapper.dtd\"", },
-  {
-    type: "element",
-    name: "mapper",
-    attributes: { namespace: "OtherUserTable" },
-    elements: [
-      {
-        type: "element",
-        name: "select",
-        attributes: { id: "selectUser", parameterType: "map", resultType: "DBObject", },
-        elements: [
-          {
-            type: "text",
-            text: "\r\n\t\tSELECT\tC.CUST_NM\r\n\t\tFROM\t\tCU_CUST_MST C,\r\n\t\t\t\t\t\tHDHS_TMS.TMS_APP_DEVICE_LIST@INTRO J\r\n\t\tWHERE\t\tC.CUST_NO = J.CUST_ID\r\n\t\t\t\t\t\tAND J.APP_GRP_ID = '1'\r\n\t",
-          },
-        ],
-      },
-    ],
-  },
-]
-*/
 export function getXmlInfo(xml: string, tablesAll: Set<string>, objectAndTablesAll: ObjectAndTables): XmlInfo | null {
   const nodes: XmlNodeInfo[] = [];
 
@@ -354,10 +284,10 @@ export function getXmlInfo(xml: string, tablesAll: Set<string>, objectAndTablesA
     if (!id) continue;
 
     const textInclude = getTextInclude(elemRow, elemRows);
-    const sqlInclude = removeStringLiteralSql(removeCommentSql(textInclude));
+    const sqlInclude = removeCommentLiteralSql(textInclude);
 
     const text = getTextCdataFromElement(elemRow);
-    const sql = removeStringLiteralSql(removeCommentSql(text));
+    const sql = removeCommentLiteralSql(text);
 
     const tableAndSchemaDotTable = getTablesAsUpper(`${sqlInclude}\n${sql}`);
     const { tables, objectAndTables } = getObjects(tableAndSchemaDotTable, tablesAll, objectAndTablesAll);

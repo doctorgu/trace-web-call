@@ -99,7 +99,7 @@ export type ClassInfo = {
 
 function getProperty(parent: any, paths: string[]): any {
   const kvList = Object.entries(parent);
-  for (let i = 0; i < kvList.length; i += 1) {
+  for (let i = 0; i < kvList.length; i++) {
     const [key] = kvList[i];
 
     if (paths[0] !== key) continue;
@@ -186,14 +186,14 @@ function getPathsAndImageListFromCst2(parent: any, paths: string[], pathsAndImag
   }
 
   const kvList = Object.entries(children);
-  for (let i = 0; i < kvList.length; i += 1) {
+  for (let i = 0; i < kvList.length; i++) {
     const [key, value] = kvList[i];
 
     const prop = children[key];
 
     if (Array.isArray(value) && value.length) {
       const useIndex = value.length > 1;
-      for (let i = 0; i < value.length; i += 1) {
+      for (let i = 0; i < value.length; i++) {
         const pathsNew = [...paths];
         pathsNew.push(key);
         if (useIndex) pathsNew.push(i.toString());
@@ -322,7 +322,7 @@ function getVars(pathsAndImageList: PathsAndImage[]): VarInfo[] {
 function getRCurlyPosition(methodDecls: PathsAndImage[], posLCurly: number): number {
   let counter = 1;
 
-  for (let i = posLCurly + 1; i < methodDecls.length; i += 1) {
+  for (let i = posLCurly + 1; i < methodDecls.length; i++) {
     const { paths } = methodDecls[i];
     if (endsWith(paths, 'LCurly')) {
       counter++;
@@ -341,7 +341,7 @@ function getRCurlyPosition(methodDecls: PathsAndImage[], posLCurly: number): num
 function getRBracePosition(pathsAndImages: PathsAndImage[], posLBrace: number): number {
   let counter = 1;
 
-  for (let i = posLBrace + 1; i < pathsAndImages.length; i += 1) {
+  for (let i = posLBrace + 1; i < pathsAndImages.length; i++) {
     const { paths } = pathsAndImages[i];
     if (endsWith(paths, 'LBrace')) {
       counter++;

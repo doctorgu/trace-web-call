@@ -5,11 +5,15 @@ export const configOtherUserTable: Config = {
     main: [
       {
         startings: [{ directory: `./test/`, file: 'OtherUserTablesController.java' }],
-        service: {
-          directory: './test',
-          file: 'OtherUserTablesBase.java',
-        },
-        xml: './test/OtherUserTables.xml',
+        serviceAndXmls: [
+          {
+            service: {
+              directory: './test',
+              file: 'OtherUserTablesBase.java',
+            },
+            xml: './test/OtherUserTables.xml',
+          },
+        ],
         filePostfix: 'OtherUserTables',
       },
     ],

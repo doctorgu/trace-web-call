@@ -1,5 +1,5 @@
-import { readFileSync, existsSync, statSync } from 'fs';
-import { findFiles } from './util';
+import { existsSync, statSync } from 'fs';
+import { findFiles, readFileSyncUtf16le } from './util';
 import { Annotation, MethodInfoFind, getClassInfo } from './classHelper';
 import { XmlNodeInfoFind, getXmlInfo, getObjectAndTables, ObjectAndTables } from './sqlHelper';
 import { config, configReader } from '../config/config';
@@ -37,7 +37,7 @@ export function getMethodInfoFinds(rootDir: string, filePattern: string | RegExp
   let finds: MethodInfoFind[] = [];
 
   for (const fullPath of [...findFiles(rootDir, filePattern)]) {
-    const content = readFileSync(fullPath, { encoding: 'utf-8' });
+    const content = readFileSyncUtf16le(fullPath);
     const classInfo = getClassInfo(content);
     const { classHeader, methods } = classInfo;
     const { name: className, implementsName, extendsName, annotations: annotationsClass } = classHeader;
@@ -67,8 +67,8 @@ export function getMethodInfoFinds(rootDir: string, filePattern: string | RegExp
 
     const dupMethod = getDupMethod(findsCur);
     if (dupMethod) {
-      // throw new Error(`Founded duplicated method: ${foundDup[0]}`);
-      console.log(`Founded duplicated method in ${fullPath}: ${dupMethod}`);
+      // throw new Error(`Found duplicated method: ${foundDup[0]}`);
+      console.log(`Found duplicated method in ${fullPath}: ${dupMethod}`);
     }
 
     finds = finds.concat(findsCur);
@@ -93,7 +93,7 @@ export function getXmlNodeInfoFinds(rootDir: string, filePattern: string | RegEx
 
   const fullPaths = statSync(rootDir).isDirectory() ? [...findFiles(rootDir, filePattern)] : [rootDir];
   for (const fullPath of fullPaths) {
-    const xml = readFileSync(fullPath, 'utf-8');
+    const xml = readFileSyncUtf16le(fullPath);
     const xmlInfo = getXmlInfo(xml, tablesAll, objectAndTables);
     if (!xmlInfo) continue;
 

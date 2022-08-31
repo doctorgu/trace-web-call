@@ -1,11 +1,12 @@
-import { renameSync, readFileSync } from 'fs';
-import { configComposite } from '../config/configComposite';
+import { renameSync } from 'fs';
 import { Config } from '../config/configTypes';
+import { readFileSyncUtf16le } from '../common/util';
+import { configComposite } from '../config/configComposite';
 
 export function compareAndReplace(config: Config) {
   function compareAndReplace2(pathNew: string, pathOld: string): boolean {
-    const contentNew = readFileSync(pathNew, 'utf-8');
-    const contentOld = readFileSync(pathOld, 'utf-8');
+    const contentNew = readFileSyncUtf16le(pathNew);
+    const contentOld = readFileSyncUtf16le(pathOld);
     if (contentOld !== contentNew) return false;
 
     renameSync(pathNew, pathOld);

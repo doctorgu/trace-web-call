@@ -1,6 +1,7 @@
-import { statSync, readdirSync, readFileSync } from 'fs';
+import { statSync, readdirSync } from 'fs';
 import { resolve } from 'path';
 import { Config } from './configTypes';
+import { readFileSyncUtf16le } from '../common/util';
 import { configOtherUserTable } from './configOtherUserTable';
 import { configBzStoreApiBizgroup } from './configBzStoreApiBizgroup';
 import { configBzManualApiCommon } from './configBzManualApiCommon';
@@ -26,13 +27,13 @@ export const configReader = {
 
       const files = readdirSync(path);
       files.forEach((file) => {
-        const value = readFileSync(resolve(path, file), 'utf-8');
+        const value = readFileSyncUtf16le(resolve(path, file));
         values = values.concat(value.split(/\r*\n/));
       });
 
       tablesCache = new Set(values.filter((v) => !!v).map((v) => v.toUpperCase()));
     } else {
-      const value = readFileSync(path, 'utf-8');
+      const value = readFileSyncUtf16le(path);
       tablesCache = new Set(
         value
           .split(/\r*\n/)

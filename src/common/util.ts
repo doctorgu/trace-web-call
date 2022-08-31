@@ -1,4 +1,4 @@
-import { readdirSync, statSync } from 'fs';
+import { closeSync, openSync, readSync, readFileSync, readdirSync, statSync } from 'fs';
 import { resolve } from 'path';
 
 /**
@@ -14,9 +14,9 @@ export function removeComment(value: string): string {
   return value.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, '');
 }
 
-export function removeCommentSql(value: string): string {
-  return value.replace(/\/\*[\s\S]*?\*\/|--.*/g, '');
-}
+// export function removeCommentSql(value: string): string {
+//   return value.replace(/\/\*[\s\S]*?\*\/|--.*/g, '');
+// }
 
 /*
 --Example
@@ -37,61 +37,11 @@ export function trimEndSpecific(value: string, find: string): string {
   return value.replace(new RegExp(`(.*?)[${find2}]*$`), '$1');
 }
 
-export function getCommentRange(value: string): [number, number][] {
-  const range: [number, number][] = [];
-
-  let m: RegExpExecArray | null;
-  const re = /\/\*[\s\S]*?\*\/|\/\/.*/g;
-  while ((m = re.exec(value)) !== null) {
-    const from = m.index as number;
-    const to = from + m[0].length - 1;
-    range.push([from, to]);
-  }
-  return range;
-}
-
-/*
-console.log(getClosingPosition('((a)(b(c)))', 0, '(', ')') === 10);
-console.log(getClosingPosition('((a)(b(c)))', 1, '(', ')') === 3);
-console.log(getClosingPosition('((a)(b(c)))', 4, '(', ')') === 9);
-console.log(getClosingPosition('((a)(b(c)))', 6, '(', ')') === 8);
-*/
-export function getClosingPosition(
-  value: string,
-  posOpen: number,
-  symbolOpen: string,
-  symbolClose: string,
-  range: [number, number][] = []
-): number {
-  let counter = 1;
-
-  for (let i = posOpen + 1; i < value.length; i += 1) {
-    const found = range.find(([start, end]) => i >= start && i <= end);
-    if (found) {
-      i = found[1];
-      continue;
-    }
-
+export function getClosingQuoteJava(value: string, posOpen: number): number {
+  for (let i = posOpen + 1; i < value.length; i++) {
     const c = value[i];
-    if (c === symbolOpen) {
-      counter += 1;
-    } else if (c === symbolClose) {
-      counter -= 1;
-    }
-
-    if (counter === 0) {
-      return i;
-    }
-  }
-
-  throw new Error(`Closing symbol not found after ${posOpen} index.`);
-}
-
-export function getClosingQuoteJava(value: string, posOpen: number, quoteSymbol = '"', escapeChar = '\\'): number {
-  for (let i = posOpen + 1; i < value.length; i += 1) {
-    const c = value[i];
-    if (c === escapeChar) {
-      i += 1;
+    if (c === '\\') {
+      i++;
       continue;
     }
 
@@ -99,7 +49,7 @@ export function getClosingQuoteJava(value: string, posOpen: number, quoteSymbol 
       throw new Error(`Found \\r or \\n character before finding closing quote after ${posOpen} index.`);
     }
 
-    if (c === quoteSymbol) {
+    if (c === '"') {
       return i;
     }
   }
@@ -107,48 +57,129 @@ export function getClosingQuoteJava(value: string, posOpen: number, quoteSymbol 
   throw new Error(`Closing quote not found after ${posOpen} index.`);
 }
 
-/**
- * console.log(removeStringLiteralSql("''''") === '')
- * console.log(removeStringLiteralSql("a''b") === 'ab')
- * console.log(removeStringLiteralSql("a'x'b'y'c") === 'abc')
- * console.log(removeStringLiteralSql("a'x''y'b") === 'ab')
- * console.log(removeStringLiteralSql("a'x''y'b'z'''c") === 'abc')
- * console.log(removeStringLiteralSql("'a''b'") === '')
- * console.log(removeStringLiteralSql("a'\r'\nb") === 'a\nb')
- * try { console.log(removeStringLiteralSql("a'") === 'a'); console.log(false); } catch (ex) { console.log(true); }
- */
-export function removeStringLiteralSql(value: string): string {
-  let posOpen = -1;
+export function getClosingQuoteSql(value: string, posOpen: number): number {
+  for (let i = posOpen + 1; i < value.length; i++) {
+    const c = value[i];
+    if (c === "'") {
+      const cNext = value[i + 1];
+      if (cNext === "'") {
+        i++;
+        continue;
+      }
+
+      return i;
+    }
+  }
+
+  throw new Error(`Closing quote not found after ${posOpen} index.`);
+}
+
+export function getClosingCommentDashSql(value: string, posOpen: number): number {
+  for (let i = posOpen + 1; i < value.length; i++) {
+    const c = value[i];
+    if (c === '\r') {
+      const isRn = value[i + 1] === '\n';
+      return i + (isRn ? 1 : 0);
+    } else if (c === '\n') {
+      return i;
+    }
+  }
+
+  return value.length - 1;
+}
+
+export function getClosingCommentSlash(value: string, posOpen: number): number {
+  for (let i = posOpen + 1; i < value.length; i++) {
+    const c = value[i];
+    if (c !== '*') continue;
+
+    const cNext = value[i + 1];
+    if (cNext !== '/') continue;
+
+    return i + 1;
+  }
+
+  throw new Error(`Closing slash not found after ${posOpen} index.`);
+}
+
+// console.log('Testing quote');
+// console.log(removeCommentLiteralSql("''''") === '');
+// console.log(removeCommentLiteralSql("a''b") === 'ab');
+// console.log(removeCommentLiteralSql("a'x'b'y'c") === 'abc');
+// console.log(removeCommentLiteralSql("a'x''y'b") === 'ab');
+// console.log(removeCommentLiteralSql("a'x''y'b'z'''c") === 'abc');
+// console.log(removeCommentLiteralSql("'a''b'") === '');
+// console.log(removeCommentLiteralSql("a'\r'\nb") === 'a\nb');
+// try {
+//   console.log(removeCommentLiteralSql("a'") === 'a');
+//   console.log(false);
+// } catch (ex) {
+//   console.log(true);
+// }
+
+// console.log('Testing dash');
+// console.log(removeCommentLiteralSql('---') === '');
+// console.log(removeCommentLiteralSql('a--\nb') === 'ab');
+// console.log(removeCommentLiteralSql('a--\r\nb') === 'ab');
+// console.log(removeCommentLiteralSql('a--x\nb--y\nc') === 'abc');
+// console.log(removeCommentLiteralSql('--a\n--b') === '');
+
+// console.log('Testing slash');
+// console.log(removeCommentLiteralSql('/**//**/') === '');
+// console.log(removeCommentLiteralSql('a/**/b') === 'ab');
+// console.log(removeCommentLiteralSql('a/*x*/b/*y*/c') === 'abc');
+// console.log(removeCommentLiteralSql('a/*x*//*y*/b') === 'ab');
+// console.log(removeCommentLiteralSql('a/*x*//*y*/b/*z*//**/c') === 'abc');
+// console.log(removeCommentLiteralSql('/*a*//*b*/') === '');
+// console.log(removeCommentLiteralSql('a/*\r*/\nb') === 'a\nb');
+// try {
+//   console.log(removeCommentLiteralSql('a/*') === 'a');
+//   console.log(false);
+// } catch (ex) {
+//   console.log(true);
+// }
+
+// console.log('Testing quote and dash');
+// console.log(removeCommentLiteralSql("a'--b'c") === 'ac');
+// console.log(removeCommentLiteralSql("'a--'b") === 'b');
+// console.log(removeCommentLiteralSql("a--'b'b") === 'a');
+// console.log(removeCommentLiteralSql("''--''--") === '');
+// console.log(removeCommentLiteralSql("a--\r\n'b'c") === 'ac');
+
+// console.log('Testing composite');
+// console.log(removeCommentLiteralSql("a'--b/*'c") === 'ac');
+// console.log(removeCommentLiteralSql("a'--b/*c*/d'c") === 'ac');
+// console.log(removeCommentLiteralSql("a--b\n/*c*/d'c'") === 'ad');
+// console.log(removeCommentLiteralSql('a/*b*/c') === 'ac');
+// console.log(removeCommentLiteralSql('--a/*\nb*/c') === 'b*/c');
+// console.log(removeCommentLiteralSql('/*a\r\nb*/c--d') === 'c');
+export function removeCommentLiteralSql(value: string): string {
+  let posCloseOld = -1;
   let posClose = -1;
   let values: string[] = [];
 
-  for (let i = 0; i < value.length; i += 1) {
+  for (let i = 0; i < value.length; i++) {
     const c = value[i];
-    if (c !== "'") continue;
 
-    // Openning quote found
-    if (posOpen === -1) {
-      posOpen = i;
+    if (c === "'") {
+      posClose = getClosingQuoteSql(value, i);
+    } else if (c === '-') {
+      const cNext = value[i + 1];
+      if (cNext !== '-') continue;
+
+      posClose = getClosingCommentDashSql(value, i);
+    } else if (c === '/') {
+      const cNext = value[i + 1];
+      if (cNext !== '*') continue;
+
+      posClose = getClosingCommentSlash(value, i);
+    } else {
       continue;
     }
 
-    // Skip two quote
-    const cNext = value[i + 1];
-    if (cNext === "'") {
-      i++;
-      continue;
-    }
-
-    // Closing quote found
-    values.push(value.substring(posClose + 1, posOpen));
-
-    // Change closing position, initialize opening position
-    posClose = i;
-    posOpen = -1;
-  }
-
-  if (posOpen !== -1) {
-    throw new Error(`Closing quote not found after: ${posOpen} index on ${value}`);
+    values.push(value.substring(posCloseOld + 1, i));
+    posCloseOld = posClose;
+    i = posClose;
   }
 
   // Add right most value
@@ -158,6 +189,58 @@ export function removeStringLiteralSql(value: string): string {
 
   return values.join('');
 }
+
+// /**
+//  * console.log(removeStringLiteralSql("''''") === '')
+//  * console.log(removeStringLiteralSql("a''b") === 'ab')
+//  * console.log(removeStringLiteralSql("a'x'b'y'c") === 'abc')
+//  * console.log(removeStringLiteralSql("a'x''y'b") === 'ab')
+//  * console.log(removeStringLiteralSql("a'x''y'b'z'''c") === 'abc')
+//  * console.log(removeStringLiteralSql("'a''b'") === '')
+//  * console.log(removeStringLiteralSql("a'\r'\nb") === 'a\nb')
+//  * try { console.log(removeStringLiteralSql("a'") === 'a'); console.log(false); } catch (ex) { console.log(true); }
+//  */
+// export function removeStringLiteralSql(value: string): string {
+//   let posOpen = -1;
+//   let posClose = -1;
+//   let values: string[] = [];
+
+//   for (let i = 0; i < value.length; i++) {
+//     const c = value[i];
+//     if (c !== "'") continue;
+
+//     // Openning quote found
+//     if (posOpen === -1) {
+//       posOpen = i;
+//       continue;
+//     }
+
+//     // Skip two quote
+//     const cNext = value[i + 1];
+//     if (cNext === "'") {
+//       i++;
+//       continue;
+//     }
+
+//     // Closing quote found
+//     values.push(value.substring(posClose + 1, posOpen));
+
+//     // Change closing position, initialize opening position
+//     posClose = i;
+//     posOpen = -1;
+//   }
+
+//   if (posOpen !== -1) {
+//     throw new Error(`Closing quote not found after: ${posOpen} index on ${value}`);
+//   }
+
+//   // Add right most value
+//   if (posClose + 1 < value.length) {
+//     values.push(value.substring(posClose + 1));
+//   }
+
+//   return values.join('');
+// }
 
 export function matchOf(
   value: string,
@@ -195,74 +278,6 @@ export function lastMatchOf(
   return { index: match.index, match };
 }
 
-export function indexOfSkipRange(
-  value: string,
-  find: string,
-  index: number,
-  range: [number, number][],
-  reverse: boolean = false
-): number {
-  let indexNew = index;
-
-  while (reverse ? indexNew >= 0 : indexNew < value.length) {
-    const pos = reverse ? value.lastIndexOf(find, indexNew) : value.indexOf(find, indexNew);
-    if (pos === -1) return -1;
-
-    const found = range.find(([start, end]) => pos >= start && pos <= end);
-    if (!found) {
-      return pos;
-    }
-
-    const [from, to] = found;
-    indexNew = reverse ? from - 1 : to + 1;
-  }
-
-  return -1;
-}
-
-export function matchOfSkipRange(
-  value: string,
-  find: RegExp,
-  index: number,
-  range: [number, number][],
-  reverse: boolean = false
-): { index: number; match: RegExpExecArray } | null {
-  let indexNew = index;
-
-  while (reverse ? indexNew >= 0 : indexNew < value.length) {
-    const ret = reverse ? lastMatchOf(value, find, indexNew) : matchOf(value, find, indexNew);
-    if (!ret) return null;
-
-    const pos = ret.index;
-
-    const found = range.find(([start, end]) => pos >= start && pos <= end);
-    if (!found) {
-      return ret;
-    }
-
-    const [from, to] = found;
-    indexNew = reverse ? from - 1 : to + 1;
-  }
-
-  return null;
-}
-
-export function getLiteralRangeJava(value: string, rangeComment: [number, number][]): [number, number][] {
-  const quoteSymbol = '"';
-  const escapeChar = '\\';
-
-  const range: [number, number][] = [];
-  let posOpen = indexOfSkipRange(value, quoteSymbol, 0, rangeComment);
-  while (posOpen >= 0) {
-    const posClose = getClosingQuoteJava(value, posOpen, quoteSymbol, escapeChar);
-    range.push([posOpen, posClose]);
-
-    posOpen = indexOfSkipRange(value, quoteSymbol, posClose + 1, rangeComment);
-  }
-
-  return range;
-}
-
 export function testWildcardFileName(pattern: string, fileName: string, ignoreCase: boolean = true): boolean {
   // escape except star(*) and question(?), * -> .*, ? -> .?
   const pattern2 = pattern
@@ -275,8 +290,6 @@ export function testWildcardFileName(pattern: string, fileName: string, ignoreCa
 
 /**
  *
- * @param rootDir
- * @param pattern
  * for await (const fullPath of findFiles(rootDir)) { }
  *
  * for (const fullPath of [...findFiles(rootDir)]) { }
@@ -284,7 +297,7 @@ export function testWildcardFileName(pattern: string, fileName: string, ignoreCa
 export function* findFiles(rootDir: string, pattern: string | RegExp = ''): string | any | undefined {
   const files = readdirSync(rootDir);
 
-  for (let i = 0; i < files.length; i += 1) {
+  for (let i = 0; i < files.length; i++) {
     const file = files[i];
     const fullPath = resolve(rootDir, file);
     if (statSync(fullPath).isDirectory()) {
@@ -318,4 +331,47 @@ export function findLastIndex<T>(array: Array<T>, predicate: (value: T, index: n
     if (predicate(array[l], l, array)) return l;
   }
   return -1;
+}
+
+/**
+ * Get the encoding of a file from an optional BOM character.
+ *
+ * This will only work if there is a BOM characters, and they are rarely used since they are optional.
+ *
+ * @see https://en.wikipedia.org/wiki/Byte_order_mark
+ *
+ * @param filePath - The path of a file on which to check encoding.
+ *
+ * @returns The file encoding if found, otherwise "unknown".
+ */
+function getFileEncoding(filePath: string): string {
+  const byteOrderMark = Buffer.alloc(5, 0); // Generate an empty BOM.
+  const fileDescriptor = openSync(filePath, 'r');
+  readSync(fileDescriptor, byteOrderMark, 0, 5, 0);
+  closeSync(fileDescriptor);
+
+  let encoding: string = '';
+
+  if (!encoding && byteOrderMark[0] === 0xef && byteOrderMark[1] === 0xbb && byteOrderMark[2] === 0xbf)
+    encoding = 'utf8';
+  if (!encoding && byteOrderMark[0] === 0xfe && byteOrderMark[1] === 0xff) encoding = 'utf16be';
+  if (!encoding && byteOrderMark[0] === 0xff && byteOrderMark[1] === 0xfe) encoding = 'utf16le';
+  if (!encoding) encoding = 'unknown';
+
+  return encoding;
+}
+
+export function readFileSyncUtf16le(path: string) {
+  const fileEncoding = getFileEncoding(path);
+
+  // BufferEncoding: ascii,base64,base64url,binary,hex,latin1,ucs-2,utf-8,utf16le,utf8
+  let encoding: BufferEncoding = 'utf8';
+
+  switch (fileEncoding) {
+    case 'utf16le':
+      encoding = 'utf16le';
+      break;
+  }
+
+  return readFileSync(path, encoding);
 }
