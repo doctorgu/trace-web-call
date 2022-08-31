@@ -14,9 +14,9 @@ export function removeComment(value: string): string {
   return value.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, '');
 }
 
-// export function removeCommentSql(value: string): string {
-//   return value.replace(/\/\*[\s\S]*?\*\/|--.*/g, '');
-// }
+export function removeCommentSql(value: string): string {
+  return value.replace(/\/\*[\s\S]*?\*\/|--.*/g, '');
+}
 
 /*
 --Example
@@ -46,7 +46,12 @@ export function getClosingQuoteJava(value: string, posOpen: number): number {
     }
 
     if (c === '\r' || c === '\n') {
-      throw new Error(`Found \\r or \\n character before finding closing quote after ${posOpen} index.`);
+      throw new Error(
+        `Found \\r or \\n character before finding closing quote after ${posOpen} index in ${value.substr(
+          posOpen,
+          500
+        )}`
+      );
     }
 
     if (c === '"') {
@@ -54,7 +59,7 @@ export function getClosingQuoteJava(value: string, posOpen: number): number {
     }
   }
 
-  throw new Error(`Closing quote not found after ${posOpen} index.`);
+  throw new Error(`Closing quote not found after ${posOpen} index in in ${value.substr(posOpen, 500)}`);
 }
 
 export function getClosingQuoteSql(value: string, posOpen: number): number {
@@ -71,7 +76,7 @@ export function getClosingQuoteSql(value: string, posOpen: number): number {
     }
   }
 
-  throw new Error(`Closing quote not found after ${posOpen} index.`);
+  throw new Error(`Closing quote not found after ${posOpen} index in ${value.substr(posOpen, 500)}`);
 }
 
 export function getClosingCommentDashSql(value: string, posOpen: number): number {
@@ -99,7 +104,7 @@ export function getClosingCommentSlash(value: string, posOpen: number): number {
     return i + 1;
   }
 
-  throw new Error(`Closing slash not found after ${posOpen} index.`);
+  throw new Error(`Closing slash not found after ${posOpen} index in ${value.substr(posOpen, 500)}`);
 }
 
 // console.log('Testing quote');
@@ -189,58 +194,6 @@ export function removeCommentLiteralSql(value: string): string {
 
   return values.join('');
 }
-
-// /**
-//  * console.log(removeStringLiteralSql("''''") === '')
-//  * console.log(removeStringLiteralSql("a''b") === 'ab')
-//  * console.log(removeStringLiteralSql("a'x'b'y'c") === 'abc')
-//  * console.log(removeStringLiteralSql("a'x''y'b") === 'ab')
-//  * console.log(removeStringLiteralSql("a'x''y'b'z'''c") === 'abc')
-//  * console.log(removeStringLiteralSql("'a''b'") === '')
-//  * console.log(removeStringLiteralSql("a'\r'\nb") === 'a\nb')
-//  * try { console.log(removeStringLiteralSql("a'") === 'a'); console.log(false); } catch (ex) { console.log(true); }
-//  */
-// export function removeStringLiteralSql(value: string): string {
-//   let posOpen = -1;
-//   let posClose = -1;
-//   let values: string[] = [];
-
-//   for (let i = 0; i < value.length; i++) {
-//     const c = value[i];
-//     if (c !== "'") continue;
-
-//     // Openning quote found
-//     if (posOpen === -1) {
-//       posOpen = i;
-//       continue;
-//     }
-
-//     // Skip two quote
-//     const cNext = value[i + 1];
-//     if (cNext === "'") {
-//       i++;
-//       continue;
-//     }
-
-//     // Closing quote found
-//     values.push(value.substring(posClose + 1, posOpen));
-
-//     // Change closing position, initialize opening position
-//     posClose = i;
-//     posOpen = -1;
-//   }
-
-//   if (posOpen !== -1) {
-//     throw new Error(`Closing quote not found after: ${posOpen} index on ${value}`);
-//   }
-
-//   // Add right most value
-//   if (posClose + 1 < value.length) {
-//     values.push(value.substring(posClose + 1));
-//   }
-
-//   return values.join('');
-// }
 
 export function matchOf(
   value: string,
