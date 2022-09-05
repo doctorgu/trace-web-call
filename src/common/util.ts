@@ -10,6 +10,17 @@ export function escapeRegexp(s: string): string {
   return s.replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&');
 }
 
+/**
+ * Replace '$' to '$$' to prevent referencing group in replace.
+ *
+ * '<tbl>'.replace(/<(tbl)>/, 'table$1') => 'tabletbl'
+ *
+ * '<tbl>'.replace(/<(tbl)>/, 'table$$1') => 'table$1'
+ */
+export function escapeDollar(s: string): string {
+  return s.replace(/\$/g, '$$$$');
+}
+
 export function removeComment(value: string): string {
   return value.replace(/\/\*[\s\S]*?\*\/|\/\/.*/g, '');
 }
@@ -355,7 +366,7 @@ export class SqlTemplate {
   replace(varName: string, value: any): SqlTemplate {
     const tmpReplaced = this._template.replace(
       new RegExp(escapeRegexp(varName), 'g'),
-      this.convertToSqliteParam(value)
+      escapeDollar(this.convertToSqliteParam(value))
     );
     return new SqlTemplate(tmpReplaced);
   }

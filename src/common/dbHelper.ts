@@ -8,36 +8,71 @@ insert into XmlNodeInfo (params)
 values ('[[\\"parameterType\\",\\"map\\"],[\\"useGeneratedKeys\\",\\"false\\"]]')
 */
 
-function getPrepare(db: betterSqlite3.Database, namespace: string, sql: string, params = {}) {
+function getPrepare(db: betterSqlite3.Database, namespace: string, sqlWithParams: string, params = {}) {
   mybatisMapper.createMapper([`./mybatis/${namespace}.xml`]);
-  const query = mybatisMapper.getStatement(namespace, sql, params);
-  return query;
+  const sql = mybatisMapper.getStatement(namespace, sqlWithParams, params);
+  return sql;
 }
 
-export function all(db: betterSqlite3.Database, namespace: string, sql: string, params = {}): any[] {
-  const query = getPrepare(db, namespace, sql, params);
-  return db.prepare(query).all();
+export function all(db: betterSqlite3.Database, namespace: string, sqlWithParams: string, params = {}): any[] {
+  const sql = getPrepare(db, namespace, sqlWithParams, params);
+
+  try {
+    return db.prepare(sql).all();
+  } catch (ex) {
+    const msg = `${sql} ${ex?.code} ${ex?.message}\n${ex?.stack}`;
+    throw new Error(msg);
+  }
 }
 
-export function get(db: betterSqlite3.Database, namespace: string, sql: string, params = {}): any {
-  const query = getPrepare(db, namespace, sql, params);
-  return db.prepare(query).get();
+export function get(db: betterSqlite3.Database, namespace: string, sqlWithParams: string, params = {}): any {
+  const sql = getPrepare(db, namespace, sqlWithParams, params);
+
+  try {
+    return db.prepare(sql).get();
+  } catch (ex) {
+    const msg = `${sql} ${ex?.code} ${ex?.message}\n${ex?.stack}`;
+    throw new Error(msg);
+  }
 }
 
-export function run(db: betterSqlite3.Database, namespace: string, sql: string, params = {}): betterSqlite3.RunResult {
-  const query = getPrepare(db, namespace, sql, params);
-  return db.prepare(query).run();
+export function run(
+  db: betterSqlite3.Database,
+  namespace: string,
+  sqlWithParams: string,
+  params = {}
+): betterSqlite3.RunResult {
+  const sql = getPrepare(db, namespace, sqlWithParams, params);
+
+  try {
+    return db.prepare(sql).run();
+  } catch (ex) {
+    const msg = `${sql} ${ex?.code} ${ex?.message}\n${ex?.stack}`;
+    throw new Error(msg);
+  }
 }
 
-export function exec(db: betterSqlite3.Database, namespace: string, sql: string, params = {}): betterSqlite3.Database {
-  const query = getPrepare(db, namespace, sql, params);
-  return db.exec(query);
+export function exec(
+  db: betterSqlite3.Database,
+  namespace: string,
+  sqlWithParams: string,
+  params = {}
+): betterSqlite3.Database {
+  const sql = getPrepare(db, namespace, sqlWithParams, params);
+
+  try {
+    return db.exec(sql);
+  } catch (ex) {
+    const msg = `${sql} ${ex?.code} ${ex?.message}\n${ex?.stack}`;
+    throw new Error(msg);
+  }
 }
 
 export function execSql(db: betterSqlite3.Database, sql: string): betterSqlite3.Database {
   try {
     return db.exec(sql);
   } catch (ex) {
-    throw new Error(ex);
+    const msg = `${sql} ${ex?.code} ${ex?.message}\n${ex?.stack}`;
+    throw new Error(msg);
   }
 }

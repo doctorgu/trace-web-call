@@ -6,6 +6,7 @@ import {
   trimSpecific,
   readFileSyncUtf16le,
   SqlTemplate,
+  escapeDollar,
 } from './util';
 import { config, configReader } from '../config/config';
 import { readdirSync, existsSync, statSync } from 'fs';
@@ -74,8 +75,8 @@ export function insertObjectAndTables(objectType: ObjectType, objectAndTables: O
     objectType,
     tables: JSON.stringify([...tables]),
   }));
-  const sqlValues = new SqlTemplate(sqlTmpValues).replaceAlls(params, ',');
-  const sql = sqlTmp.replace('{values}', sqlValues);
+  const sqlValues = new SqlTemplate(sqlTmpValues).replaceAlls(params, ',\n');
+  const sql = sqlTmp.replace('{values}', escapeDollar(sqlValues));
   execSql(db, sql);
 }
 
@@ -275,13 +276,16 @@ function getXmlInfoFromDb(xmlPath: string): XmlInfo | null {
 
   const nodes: XmlNodeInfo[] = [];
 
-  const rows = all(db, 'XmlInfo', 'selectXmlNodeInfo', { xmlPath });
-  if (!rows.length) {
+  const rowXml = get(db, 'XmlInfo', 'selectXmlInfo', { xmlPath });
+  if (!rowXml) {
     return null;
   }
 
-  const { namespace } = rows[0];
-  for (const row of rows) {
+  const rowsXmlNode = all(db, 'XmlInfo', 'selectXmlNodeInfo', { xmlPath });
+
+  const { namespace } = rowXml;
+
+  for (const row of rowsXmlNode) {
     const { id, tagName, params, tables, objectAndTables } = row;
     const params2 = new Map<string, string>(JSON.parse(params));
     const tables2 = new Set<string>(JSON.parse(tables));
@@ -315,18 +319,21 @@ function insertXmlNodeInfo(
   `;
   const sqlXml = new SqlTemplate(sqlTmpXml).replaceAll({ xmlPath, namespace });
 
-  const sqlTmpXmlNode = `
+  let sqlXmlNode = '';
+  if (nodes.length) {
+    const sqlTmpXmlNode = `
     insert into XmlNodeInfo
       (xmlPath, id, tagName, params, tables, objectAndTables)
     values      
       {values}
 `;
-  const sqlTmpValues = `({xmlPath}, {node.id}, {node.tagName}, {node.params}, {node.tables}, {node.objectAndTables})`;
-  const sqlValues = new SqlTemplate(sqlTmpValues).replaceAlls(
-    nodes.map((node) => ({ xmlPath, node })),
-    ','
-  );
-  const sqlXmlNode = sqlTmpXmlNode.replace('{values}', sqlValues);
+    const sqlTmpValues = `({xmlPath}, {node.id}, {node.tagName}, {node.params}, {node.tables}, {node.objectAndTables})`;
+    const sqlValues = new SqlTemplate(sqlTmpValues).replaceAlls(
+      nodes.map((node) => ({ xmlPath, node })),
+      ','
+    );
+    sqlXmlNode = sqlTmpXmlNode.replace('{values}', escapeDollar(sqlValues));
+  }
 
   const sqlAll = `
   ${sqlXml};

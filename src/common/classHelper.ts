@@ -1,7 +1,7 @@
 import { resolve } from 'path';
 import { parse } from 'java-parser';
 import betterSqlite3 from 'better-sqlite3';
-import { SqlTemplate, readFileSyncUtf16le, findLastIndex, trimSpecific, trimStartSpecific } from './util';
+import { SqlTemplate, readFileSyncUtf16le, findLastIndex, trimSpecific, trimStartSpecific, escapeDollar } from './util';
 import { all, get, run, exec, execSql } from './dbHelper';
 import { configReader } from '../config/config';
 import { getMethodInfoFinds } from './traceHelper';
@@ -592,9 +592,6 @@ function getClassInfoFromDb(classPath: string): ClassInfo | null {
   }
 
   const rowsMethod = all(db, 'ClassInfo', 'selectMethodInfo', { classPath });
-  if (!rowsMethod.length) {
-    return null;
-  }
 
   const { name, implementsName, extendsName, annotations } = rowHeader;
   const annoHeader: Annotation[] = JSON.parse(annotations);
@@ -643,17 +640,20 @@ function insertClassInfo(
       ({classPath}, {header.name}, {header.implementsName}, {header.extendsName}, {header.annotations})`;
   const sqlHeader = new SqlTemplate(sqlTmpHeader).replaceAll({ classPath, header });
 
-  const sqlTmpMethod = `
+  let sqlMethod = '';
+  if (methods.length) {
+    const sqlTmpMethod = `
     insert into MethodInfo
       (classPath, annotations, isPublic, name, callers, parameterCount)
     values
       {values}`;
-  const sqlTmpValues = `({classPath}, {method.annotations}, {method.isPublic}, {method.name}, {method.callers}, {method.parameterCount})`;
-  const sqlValues = new SqlTemplate(sqlTmpValues).replaceAlls(
-    methods.map((method) => ({ classPath, method })),
-    ','
-  );
-  const sqlMethod = sqlTmpMethod.replace('{values}', sqlValues);
+    const sqlTmpValues = `({classPath}, {method.annotations}, {method.isPublic}, {method.name}, {method.callers}, {method.parameterCount})`;
+    const sqlValues = new SqlTemplate(sqlTmpValues).replaceAlls(
+      methods.map((method) => ({ classPath, method })),
+      ',\n'
+    );
+    sqlMethod = sqlTmpMethod.replace('{values}', escapeDollar(sqlValues));
+  }
 
   const sqlAll = `
   ${sqlClass};
