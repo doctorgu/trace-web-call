@@ -389,6 +389,7 @@ export function getXmlInfo(
       }
     }
     if (!id) continue;
+    if (tagName !== 'select' && tagName !== 'insert' && tagName !== 'update' && tagName !== 'delete') continue;
 
     const textInclude = getTextInclude(elemRow, elemRows);
     let sqlInclude = '';
