@@ -1,0 +1,29 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="XmlInfo">  
+  <select id="selectXmlNodeInfo">
+    select  xi.xmlPath, xi.namespace,
+            xni.id, xni.tagName, xni.params, xni.tables, xni.objectAndTables
+    from    XmlInfo xi
+            inner join XmlNodeInfo xni
+            on xni.xmlPath = xi.xmlPath
+    where   xi.xmlPath = #{xmlPath}
+  </select>
+
+  <!-- <insert id="insertXmlNodeInfo">
+    insert into XmlInfo
+      (xmlPath, namespace)
+    values
+      (#{xmlPath}, #{namespace});
+
+    insert into XmlNodeInfo
+      (xmlPath, id, tagName, params, tables, objectAndTables)
+    values      
+    <foreach collection="nodes" item="node" separator=",">
+    (
+      #{xmlPath}, #{node.id}, #{node.tagName}, #{node.params}, #{node.tables}, #{node.objectAndTables}
+    )
+    </foreach>
+    ;
+  </insert> -->
+</mapper>

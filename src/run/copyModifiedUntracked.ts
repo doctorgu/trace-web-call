@@ -19,6 +19,7 @@ export async function copyModifiedUntracked() {
   }
 
   // diff --name-only: Modified
+  // (To supress 'warning: LF will be replaced by CRLF in yarn.lock.' -> git config--global core.safecrlf false)
   // ls-files --others --exclude-standard: Untracked
   const { stdout: stdoutGit, stderr: stderrGit } = await runExec(
     'git diff --name-only & git ls-files --others --exclude-standard'

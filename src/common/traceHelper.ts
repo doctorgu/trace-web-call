@@ -1,5 +1,6 @@
 import { existsSync, statSync } from 'fs';
-import { findFiles, readFileSyncUtf16le } from './util';
+import { resolve } from 'path';
+import { findFiles, readFileSyncUtf16le, trimEndSpecific } from './util';
 import { Annotation, MethodInfoFind, getClassInfo } from './classHelper';
 import { XmlNodeInfoFind, getXmlInfo, getObjectAndTables, ObjectAndTables } from './sqlHelper';
 import { config, configReader } from '../config/config';
@@ -18,7 +19,7 @@ type StartToObjects = {
   routes: RouteInfo[];
 };
 
-export function getMethodInfoFinds(rootDir: string, filePattern: string | RegExp): MethodInfoFind[] {
+export function getMethodInfoFinds(rootDir: string, directory: string, filePattern: string | RegExp): MethodInfoFind[] {
   function getDupMethod(finds: MethodInfoFind[]): string {
     const nameAndCount = new Map<string, number>();
     for (let i = 0; i < finds.length; i++) {
@@ -34,13 +35,14 @@ export function getMethodInfoFinds(rootDir: string, filePattern: string | RegExp
     return name;
   }
 
+  const initDir = resolve(rootDir, directory);
+
   let finds: MethodInfoFind[] = [];
 
-  for (const fullPath of [...findFiles(rootDir, filePattern)]) {
-    const content = readFileSyncUtf16le(fullPath);
-    const classInfo = getClassInfo(content);
-    const { classHeader, methods } = classInfo;
-    const { name: className, implementsName, extendsName, annotations: annotationsClass } = classHeader;
+  for (const fullPath of [...findFiles(initDir, filePattern)]) {
+    const classInfo = getClassInfo(rootDir, fullPath);
+    const { header, methods } = classInfo;
+    const { name: className, implementsName, extendsName, annotations: annotationsClass } = header;
     const findsCur = methods.map(({ annotations, isPublic, name, parameterCount, callers }) => {
       const mappingClass = annotationsClass.find(({ name }) => name.endsWith('Mapping'));
       const root = mappingClass?.values?.[0] || '';
@@ -77,8 +79,13 @@ export function getMethodInfoFinds(rootDir: string, filePattern: string | RegExp
   return finds;
 }
 
-export function getXmlNodeInfoFinds(rootDir: string, filePattern: string | RegExp): XmlNodeInfoFind[] {
-  if (!existsSync(rootDir)) {
+export function getXmlNodeInfoFinds(
+  rootDir: string,
+  directory: string,
+  filePattern: string | RegExp
+): XmlNodeInfoFind[] {
+  const fullDir = resolve(rootDir, directory);
+  if (!existsSync(fullDir)) {
     return [];
   }
 
@@ -91,10 +98,9 @@ export function getXmlNodeInfoFinds(rootDir: string, filePattern: string | RegEx
   [...configReader.objectAndTables('function')].forEach(([object, tables]) => objectAndTables.set(object, tables));
   [...configReader.objectAndTables('procedure')].forEach(([object, tables]) => objectAndTables.set(object, tables));
 
-  const fullPaths = statSync(rootDir).isDirectory() ? [...findFiles(rootDir, filePattern)] : [rootDir];
+  const fullPaths = statSync(fullDir).isDirectory() ? [...findFiles(fullDir, filePattern)] : [fullDir];
   for (const fullPath of fullPaths) {
-    const xml = readFileSyncUtf16le(fullPath);
-    const xmlInfo = getXmlInfo(xml, tablesAll, objectAndTables);
+    const xmlInfo = getXmlInfo(rootDir, fullPath, tablesAll, objectAndTables);
     if (!xmlInfo) continue;
 
     const { namespace, nodes } = xmlInfo;
@@ -163,8 +169,8 @@ export function getTableNamesByMethod(
   routes: RouteInfo[],
   depth: number
 ): { tables: Set<string>; objectAndTables: ObjectAndTables } {
-  let tablesAll: string[] = [];
-  let objectAndTablesAll: ObjectAndTables = new Map<string, Set<string>>();
+  let tablesRet: string[] = [];
+  let objectAndTablesRet: ObjectAndTables = new Map<string, Set<string>>();
 
   const { className: classNameThis, name: nameThis, callers } = find;
   for (let i = 0; i < callers.length; i++) {
@@ -188,8 +194,11 @@ export function getTableNamesByMethod(
           }
         }
 
-        tablesAll = tablesAll.concat([...tables]);
-        [...objectAndTables].forEach(([view, tables]) => objectAndTablesAll.set(view, tables));
+        tablesRet = tablesRet.concat([...tables]);
+        [...objectAndTables].forEach(([object, tables]) => {
+          objectAndTablesRet.set(object, tables);
+          tablesRet = tablesRet.concat([...tables]);
+        });
         continue;
       }
     }
@@ -219,29 +228,30 @@ export function getTableNamesByMethod(
         const ret = getTableNamesByMethod(found, methodsAll, xmlsAll, routes, depth + 1);
         if (ret) {
           const { tables, objectAndTables } = ret;
-          tablesAll = tablesAll.concat([...tables]);
-          [...objectAndTables].forEach(([view, tables]) => objectAndTablesAll.set(view, tables));
+          tablesRet = tablesRet.concat([...tables]);
+          [...objectAndTables].forEach(([object, tables]) => objectAndTablesRet.set(object, tables));
           continue;
         }
       }
     }
   }
 
-  return { tables: new Set(tablesAll), objectAndTables: objectAndTablesAll };
+  return { tables: new Set(tablesRet), objectAndTables: objectAndTablesRet };
 }
 
 export function getDependency(): { finds: MethodInfoFind[]; xmls: XmlNodeInfoFind[] } {
   let finds: MethodInfoFind[] = [];
   let xmls: XmlNodeInfoFind[] = [];
 
-  for (let i = 0; i < config.path.dependency.length; i++) {
-    const { service, xml } = config.path.dependency[i];
+  const { rootDir } = config.path.source;
+  for (let i = 0; i < config.path.source.dependency.length; i++) {
+    const { service, xml } = config.path.source.dependency[i];
 
     const { directory, file } = service;
-    const findsCur = getMethodInfoFinds(directory, file);
+    const findsCur = getMethodInfoFinds(rootDir, directory, file);
     finds = finds.concat(findsCur);
 
-    const xmlsCur = getXmlNodeInfoFinds(xml, '*.xml');
+    const xmlsCur = getXmlNodeInfoFinds(rootDir, xml, '*.xml');
     xmls = xmls.concat(xmlsCur);
   }
 

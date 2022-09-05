@@ -2,27 +2,30 @@ import { Config } from './configTypes';
 
 export const configOtherUserTable: Config = {
   path: {
-    main: [
-      {
-        startings: [{ directory: `./test/`, file: 'OtherUserTablesController.java' }],
-        serviceAndXmls: [
-          {
-            service: {
-              directory: './test',
-              file: 'OtherUserTablesBase.java',
+    source: {
+      rootDir: '.',
+      main: [
+        {
+          startings: [{ directory: `/test/`, file: 'OtherUserTablesController.java' }],
+          serviceAndXmls: [
+            {
+              service: {
+                directory: 'test',
+                file: 'OtherUserTablesBase.java',
+              },
+              xml: 'test/OtherUserTables.xml',
             },
-            xml: './test/OtherUserTables.xml',
-          },
-        ],
-        filePostfix: 'OtherUserTables',
-      },
-    ],
-    dependency: [
-      {
-        service: { directory: `./test/`, file: 'OtherUserTablesDependency.java' },
-        xml: './test/OtherUserTablesDependency.xml',
-      },
-    ],
+          ],
+          filePostfix: 'OtherUserTables',
+        },
+      ],
+      dependency: [
+        {
+          service: { directory: `/test/`, file: 'OtherUserTablesDependency.java' },
+          xml: 'test/OtherUserTablesDependency.xml',
+        },
+      ],
+    },
     data: {
       tables: './test/OtherUserTables.txt',
       views: '',
@@ -30,6 +33,7 @@ export const configOtherUserTable: Config = {
       procedures: '',
     },
     outputDirectory: './test/output',
+    database: './data/databases/traceWebCall.db',
   },
   outputType: 'txt',
   startingPoint: 'map',

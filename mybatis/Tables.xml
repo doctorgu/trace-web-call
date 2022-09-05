@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
+<mapper namespace="Tables">  
+  <select id="selectTables">
+    select  name
+    from    Tables
+    order by name
+  </select>
+
+  <insert id="insertTables">
+    insert into Tables
+      (name)
+    values      
+    <foreach collection="tables" item="table" separator=",">(#{table})</foreach>
+    ;
+  </insert>
+
+  <select id="selectObjectAndTables">
+    select  object, tables
+    from    ObjectAndTables
+    where   objectType = #{objectType}
+    order by object
+  </select>
+
+  <insert id="insertObjectAndTables">
+    insert into ObjectAndTables
+      (object, objectType, tables)
+    values      
+    <foreach collection="objectAndTables" item="item" separator=",">(#{item.object}, #{objectType}, #{item.tables})</foreach>
+    ;
+  </insert>
+</mapper>

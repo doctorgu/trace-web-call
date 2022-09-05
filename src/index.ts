@@ -8,6 +8,7 @@
 // * Starting point is not mapping
 
 import { writeFileSync } from 'fs';
+import { resolve } from 'path';
 import { config } from './config/config';
 import { getMethodInfoFinds, getXmlNodeInfoFinds, getStartToTables, getDependency } from './common/traceHelper';
 import { readFileSyncUtf16le, removeCommentLiteralSql } from './common/util';
@@ -21,19 +22,20 @@ function writeStartToTables() {
 
   const { finds: findsDependency, xmls: xmlsDependency } = getDependency();
 
-  for (let i = 0; i < config.path.main.length; i++) {
-    const { startings, serviceAndXmls, filePostfix } = config.path.main[i];
+  const { rootDir } = config.path.source;
+  for (let i = 0; i < config.path.source.main.length; i++) {
+    const { startings, serviceAndXmls, filePostfix } = config.path.source.main[i];
 
     console.log(`Parsing ${startings.map((c) => c.directory).join(',')}`);
-    const findsController = startings.map(({ directory, file }) => getMethodInfoFinds(directory, file)).flat();
+    const findsController = startings.map(({ directory, file }) => getMethodInfoFinds(rootDir, directory, file)).flat();
 
     console.log(`Parsing ${serviceAndXmls.map((s) => s.service.directory).join(',')}`);
     const findsService = serviceAndXmls
-      .map(({ service: { directory, file } }) => getMethodInfoFinds(directory, file))
+      .map(({ service: { directory, file } }) => getMethodInfoFinds(rootDir, directory, file))
       .flat();
 
     console.log(`Parsing ${serviceAndXmls.map((s) => s.xml).join(',')}`);
-    const xmls = serviceAndXmls.map(({ xml }) => getXmlNodeInfoFinds(xml, '*.xml')).flat();
+    const xmls = serviceAndXmls.map(({ xml }) => getXmlNodeInfoFinds(rootDir, xml, '*.xml')).flat();
 
     const startToTablesAll: string[] = [];
     const routesAll: string[] = [];

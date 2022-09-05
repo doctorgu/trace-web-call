@@ -13,8 +13,8 @@ export function compareAndReplace(config: Config) {
     return true;
   }
 
-  for (let i = 0; i < config.path.main.length; i++) {
-    const { filePostfix: filePostfixNew } = config.path.main[i];
+  for (let i = 0; i < config.path.source.main.length; i++) {
+    const { filePostfix: filePostfixNew } = config.path.source.main[i];
     if (!filePostfixNew.endsWith('2')) {
       throw new Error(`${filePostfixNew} not ends with '2'`);
     }

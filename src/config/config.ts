@@ -1,4 +1,5 @@
 import { statSync, readdirSync } from 'fs';
+import betterSqlite3 from 'better-sqlite3';
 import { resolve } from 'path';
 import { Config } from './configTypes';
 import { readFileSyncUtf16le } from '../common/util';
@@ -7,16 +8,43 @@ import { configBzStoreApiBizgroup } from './configBzStoreApiBizgroup';
 import { configBzManualApiCommon } from './configBzManualApiCommon';
 import { configComposite } from './configComposite';
 import { configBzPortalApiAccount } from './configBzPortalApiAccount';
-import { ObjectType, ObjectAndTables, getObjectAndTablesByObjectType } from '../common/sqlHelper';
+import {
+  insertTables,
+  getTablesFromDb,
+  ObjectType,
+  ObjectAndTables,
+  getObjectAndTablesByObjectType,
+  getObjectAndTablesFromDb,
+  insertObjectAndTables,
+} from '../common/sqlHelper';
 
 let tablesCache = new Set<string>();
-let objectAndTablesCache = new Map<ObjectType, ObjectAndTables>();
+let objectTypeAndObjectAndTablesCache = new Map<ObjectType, ObjectAndTables>();
 
 export const config: Config = configComposite;
 
+let dbCache: betterSqlite3.Database | null = null;
+
 export const configReader = {
-  tables: () => {
+  db: (): betterSqlite3.Database => {
+    if (dbCache) return dbCache;
+
+    const db = new betterSqlite3(config.path.database);
+    // enable on delete cascade on update cascade
+    db.exec('PRAGMA foreign_keys=ON');
+    dbCache = db;
+
+    return dbCache;
+  },
+  tables: (): Set<string> => {
     if (tablesCache.size) {
+      return tablesCache;
+    }
+
+    let tablesNew = new Set<string>();
+    const tablesDb = getTablesFromDb();
+    if (tablesDb.size) {
+      tablesCache = tablesDb;
       return tablesCache;
     }
 
@@ -31,10 +59,10 @@ export const configReader = {
         values = values.concat(value.split(/\r*\n/));
       });
 
-      tablesCache = new Set(values.filter((v) => !!v).map((v) => v.toUpperCase()));
+      tablesNew = new Set(values.filter((v) => !!v).map((v) => v.toUpperCase()));
     } else {
       const value = readFileSyncUtf16le(path);
-      tablesCache = new Set(
+      tablesNew = new Set(
         value
           .split(/\r*\n/)
           .filter((v) => !!v)
@@ -42,14 +70,31 @@ export const configReader = {
       );
     }
 
+    insertTables(tablesNew);
+    tablesCache = tablesNew;
     return tablesCache;
   },
-  objectAndTables: (objectType: ObjectType) => {
+  objectAndTables: (objectType: ObjectType): ObjectAndTables => {
     if (!tablesCache.size) {
       throw new Error(`tablesCache.size: ${tablesCache.size} is 0.`);
     }
 
-    return getObjectAndTablesByObjectType(tablesCache, objectType, objectAndTablesCache);
+    let objectAndTablesCache = objectTypeAndObjectAndTablesCache.get(objectType);
+    if (objectAndTablesCache) {
+      return objectAndTablesCache;
+    }
+
+    const objectAndTablesDb = getObjectAndTablesFromDb(objectType);
+    if (objectAndTablesDb.size) {
+      objectTypeAndObjectAndTablesCache.set(objectType, objectAndTablesDb);
+      return objectTypeAndObjectAndTablesCache.get(objectType) as ObjectAndTables;
+    }
+
+    const objectAndTablesRet = getObjectAndTablesByObjectType(objectType, tablesCache);
+
+    insertObjectAndTables(objectType, objectAndTablesRet);
+    objectTypeAndObjectAndTablesCache.set(objectType, objectAndTablesRet);
+    return objectTypeAndObjectAndTablesCache.get(objectType) as ObjectAndTables;
   },
   tablesInObject: () => {
     if (!tablesCache.size) {
@@ -58,19 +103,15 @@ export const configReader = {
 
     const tablesNew = new Set(tablesCache);
 
-    [...getObjectAndTablesByObjectType(tablesCache, 'view', objectAndTablesCache)].forEach(([object, tablesCur]) => {
+    [...configReader.objectAndTables('view')].forEach(([object, tablesCur]) => {
       tablesCur.forEach((t) => tablesNew.add(t));
     });
-    [...getObjectAndTablesByObjectType(tablesCache, 'function', objectAndTablesCache)].forEach(
-      ([object, tablesCur]) => {
-        tablesCur.forEach((t) => tablesNew.add(t));
-      }
-    );
-    [...getObjectAndTablesByObjectType(tablesCache, 'procedure', objectAndTablesCache)].forEach(
-      ([object, tablesCur]) => {
-        tablesCur.forEach((t) => tablesNew.add(t));
-      }
-    );
+    [...configReader.objectAndTables('function')].forEach(([object, tablesCur]) => {
+      tablesCur.forEach((t) => tablesNew.add(t));
+    });
+    [...configReader.objectAndTables('procedure')].forEach(([object, tablesCur]) => {
+      tablesCur.forEach((t) => tablesNew.add(t));
+    });
 
     return tablesNew;
   },
@@ -78,14 +119,14 @@ export const configReader = {
     if (!tablesCache.size) {
       throw new Error(`tablesCache.size: ${tablesCache.size} is 0`);
     }
-    if (!objectAndTablesCache.size) {
-      throw new Error(`objectAndTablesCache.size: ${objectAndTablesCache.size} is 0`);
+    if (!objectTypeAndObjectAndTablesCache.size) {
+      throw new Error(`objectTypeAndObjectAndTablesCache.size: ${objectTypeAndObjectAndTablesCache.size} is 0`);
     }
 
-    for (const [objectType, objectAndCache] of objectAndTablesCache) {
+    for (const [objectType, objectAndCache] of objectTypeAndObjectAndTablesCache) {
       if (objectAndCache.has(objectName)) return objectType;
     }
 
-    throw new Error(`No objectName: ${objectName} in objectAndTablesCache`);
+    throw new Error(`No objectName: ${objectName} in objectTypeAndObjectAndTablesCache`);
   },
 };

@@ -1,5 +1,10 @@
+import { resolve } from 'path';
 import { parse } from 'java-parser';
-import { findLastIndex, trimSpecific } from './util';
+import betterSqlite3 from 'better-sqlite3';
+import { SqlTemplate, readFileSyncUtf16le, findLastIndex, trimSpecific, trimStartSpecific } from './util';
+import { all, get, run, exec, execSql } from './dbHelper';
+import { configReader } from '../config/config';
+import { getMethodInfoFinds } from './traceHelper';
 
 type Keyword =
   | 'LCurly'
@@ -80,11 +85,11 @@ export type MethodInfoFind = {
   mappingValues: string[];
   isPublic: boolean;
   name: string;
-  parameterCount: number;
   callers: CallerInfo[];
+  parameterCount: number;
 };
 
-type ClassHeader = {
+type HeaderInfo = {
   name: string;
   implementsName: string;
   extendsName: string;
@@ -92,8 +97,8 @@ type ClassHeader = {
 };
 
 export type ClassInfo = {
-  classHeader: ClassHeader;
-  vars: VarInfo[];
+  header: HeaderInfo;
+  // vars: VarInfo[];
   methods: MethodInfo[];
 };
 
@@ -259,7 +264,7 @@ function includes2(paths: string[], finds: Keyword[]): boolean {
   }
 }
 
-function getClassHeader(classDeclaration: any): ClassHeader {
+function getHeaderInfo(classDeclaration: any): HeaderInfo {
   const classModifier = getProperty(classDeclaration, 'classModifier'.split('.'));
   let annotations: Annotation[] = [];
   if (classModifier !== null) {
@@ -579,7 +584,94 @@ function getCstClassDeclaration(cstSimpleAll: any): any {
   return classDeclaration;
 }
 
-export function getClassInfo(content: string): ClassInfo {
+function getClassInfoFromDb(classPath: string): ClassInfo | null {
+  const db = configReader.db();
+  const rowHeader = get(db, 'ClassInfo', 'selectHeaderInfo', { classPath });
+  if (!rowHeader) {
+    return null;
+  }
+
+  const rowsMethod = all(db, 'ClassInfo', 'selectMethodInfo', { classPath });
+  if (!rowsMethod.length) {
+    return null;
+  }
+
+  const { name, implementsName, extendsName, annotations } = rowHeader;
+  const annoHeader: Annotation[] = JSON.parse(annotations);
+  const header: HeaderInfo = { name, implementsName, extendsName, annotations: annoHeader };
+
+  const methods: MethodInfo[] = [];
+  for (const row of rowsMethod) {
+    const { annotations, isPublic, name, callers, parameterCount } = row;
+    const annoMethod: Annotation[] = JSON.parse(annotations);
+    const isPublic2 = isPublic === 1;
+    const callers2: CallerInfo[] = JSON.parse(callers);
+
+    methods.push({ annotations: annoMethod, isPublic: isPublic2, name, callers: callers2, parameterCount });
+  }
+
+  return { header, methods };
+}
+
+function insertClassInfo(
+  classPath: string,
+  header: {
+    name: string;
+    implementsName: string;
+    extendsName: string;
+    annotations: string;
+  },
+  methods: {
+    annotations: string;
+    isPublic: number;
+    name: string;
+    callers: string;
+    parameterCount: number;
+  }[]
+) {
+  const sqlTmpClass = `
+  insert into ClassInfo
+    (classPath)
+  values
+    ({classPath})`;
+  const sqlClass = new SqlTemplate(sqlTmpClass).replace('{classPath}', classPath).toString();
+
+  const sqlTmpHeader = `
+    insert into HeaderInfo
+      (classPath, name, implementsName, extendsName, annotations)
+    values
+      ({classPath}, {header.name}, {header.implementsName}, {header.extendsName}, {header.annotations})`;
+  const sqlHeader = new SqlTemplate(sqlTmpHeader).replaceAll({ classPath, header });
+
+  const sqlTmpMethod = `
+    insert into MethodInfo
+      (classPath, annotations, isPublic, name, callers, parameterCount)
+    values
+      {values}`;
+  const sqlTmpValues = `({classPath}, {method.annotations}, {method.isPublic}, {method.name}, {method.callers}, {method.parameterCount})`;
+  const sqlValues = new SqlTemplate(sqlTmpValues).replaceAlls(
+    methods.map((method) => ({ classPath, method })),
+    ','
+  );
+  const sqlMethod = sqlTmpMethod.replace('{values}', sqlValues);
+
+  const sqlAll = `
+  ${sqlClass};
+  ${sqlHeader};
+  ${sqlMethod};
+  `;
+  execSql(configReader.db(), sqlAll);
+}
+
+export function getClassInfo(rootDir: string, fullPath: string): ClassInfo {
+  const classPath = trimStartSpecific(fullPath.substring(rootDir.length), '\\/');
+
+  const classDb = getClassInfoFromDb(classPath);
+  if (classDb) {
+    return classDb;
+  }
+
+  const content = readFileSyncUtf16le(fullPath);
   const cst = parse(content);
 
   const pathsAndImageListAll = getPathsAndImageListFromCst(cst);
@@ -587,9 +679,24 @@ export function getClassInfo(content: string): ClassInfo {
   const classDeclaration = getCstClassDeclaration(cstSimpleAll);
   const pathsAndImageList = getPathsAndImageListFromSimpleCst(classDeclaration);
 
-  const classHeader = getClassHeader(classDeclaration);
+  const header = getHeaderInfo(classDeclaration);
   const vars = getVars(pathsAndImageList);
   const methods = getMethods(classDeclaration, pathsAndImageList, vars);
 
-  return { classHeader, vars, methods };
+  const headerJson = {
+    name: header.name,
+    implementsName: header.implementsName,
+    extendsName: header.extendsName,
+    annotations: JSON.stringify(header.annotations),
+  };
+  const methodsJson = methods.map((method) => ({
+    annotations: JSON.stringify(method.annotations),
+    isPublic: method.isPublic ? 1 : 0,
+    name: method.name,
+    callers: JSON.stringify(method.callers),
+    parameterCount: method.parameterCount,
+  }));
+  insertClassInfo(classPath, headerJson, methodsJson);
+
+  return { header, methods };
 }

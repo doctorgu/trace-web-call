@@ -32,6 +32,10 @@ export function trimSpecific(value: string, find: string): string {
   const find2 = escapeRegexp(find);
   return value.replace(new RegExp(`^[${find2}]*(.*?)[${find2}]*$`), '$1');
 }
+export function trimStartSpecific(value: string, find: string): string {
+  const find2 = escapeRegexp(find);
+  return value.replace(new RegExp(`^[${find2}]*(.*?)`), '$1');
+}
 export function trimEndSpecific(value: string, find: string): string {
   const find2 = escapeRegexp(find);
   return value.replace(new RegExp(`(.*?)[${find2}]*$`), '$1');
@@ -327,4 +331,51 @@ export function readFileSyncUtf16le(path: string) {
   }
 
   return readFileSync(path, encoding);
+}
+
+export class SqlTemplate {
+  private _template: string = '';
+
+  constructor(template: string) {
+    this._template = template;
+  }
+
+  private convertToSqliteParam(value: any): string {
+    if (typeof value === 'string') {
+      return `'${value}'`;
+    } else if (typeof value === 'number' || typeof value === 'bigint') {
+      return `${value}`;
+    } else if (typeof value === 'boolean') {
+      return value ? '1' : '0';
+    } else {
+      throw new Error(`Wrong typeof value: ${typeof value}`);
+    }
+  }
+
+  replace(varName: string, value: any): SqlTemplate {
+    const tmpReplaced = this._template.replace(
+      new RegExp(escapeRegexp(varName), 'g'),
+      this.convertToSqliteParam(value)
+    );
+    return new SqlTemplate(tmpReplaced);
+  }
+
+  replaceAll(params: any, parentName = ''): string {
+    return Object.entries(params).reduce((template, [name, value]) => {
+      if (typeof value === 'object') {
+        return new SqlTemplate(template).replaceAll(value, `${parentName ? `${parentName}.` : ''}${name}`);
+      }
+
+      const varName = `${parentName ? `${parentName}.` : ''}${name}`;
+      return new SqlTemplate(template).replace(`{${varName}}`, value as string).toString();
+    }, this._template);
+  }
+
+  replaceAlls(params: any[], separator: string): string {
+    return params.map((param) => new SqlTemplate(this._template).replaceAll(param)).join(separator);
+  }
+
+  toString() {
+    return this._template;
+  }
 }
