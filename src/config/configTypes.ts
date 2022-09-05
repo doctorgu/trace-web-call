@@ -30,6 +30,7 @@ export type Config = {
     };
     database: string;
     outputDirectory: string;
+    logDirectory: string;
   };
   outputType: OutputType;
   startingPoint: StartingPoint;

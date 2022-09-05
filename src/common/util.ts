@@ -353,7 +353,7 @@ export class SqlTemplate {
 
   private convertToSqliteParam(value: any): string {
     if (typeof value === 'string') {
-      return `'${value}'`;
+      return `'${value.replace(/'/g, "''")}'`;
     } else if (typeof value === 'number' || typeof value === 'bigint') {
       return `${value}`;
     } else if (typeof value === 'boolean') {
