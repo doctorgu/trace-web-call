@@ -352,9 +352,9 @@ export function getXmlInfo(
   const xmlPath = getDbPath(rootDir, fullPath);
 
   const xmlDb = getXmlInfoFromDb(xmlPath);
-  if (!xmlDb) {
-    throw new Error(runSaveToDbFirst);
-  }
+  // if (!xmlDb) {
+  //   throw new Error(runSaveToDbFirst);
+  // }
 
   return xmlDb;
 }

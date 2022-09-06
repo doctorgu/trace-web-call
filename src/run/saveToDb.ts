@@ -66,8 +66,8 @@ export function saveToDb() {
   console.log(`Inserting ObjectAndTables`);
   const objectAndTablesAll = saveObjectAndTables(tablesAll);
 
-  let classInfosAll: ClassInfo[] = [];
-  let xmlInfosAll: XmlInfo[] = [];
+  // let classInfosAll: ClassInfo[] = [];
+  // let xmlInfosAll: XmlInfo[] = [];
 
   const { classInfos: classInfosDep, xmlInfos: xmlInfosDep } = saveClassAndXmlToDb(
     rootDir,
@@ -75,22 +75,24 @@ export function saveToDb() {
     objectAndTablesAll,
     config.path.source.dependency
   );
-  classInfosAll = classInfosAll.concat(classInfosDep);
-  xmlInfosAll = xmlInfosAll.concat(xmlInfosDep);
+  // classInfosAll = classInfosAll.concat(classInfosDep);
+  // xmlInfosAll = xmlInfosAll.concat(xmlInfosDep);
 
   for (let i = 0; i < config.path.source.main.length; i++) {
     const {
       startings: { directory, file },
       serviceAndXmls,
+      filePostfix,
     } = config.path.source.main[i];
 
     console.log(`Inserting startings ClassInfo, HeaderInfo, MethodInfo ${directory}`);
     const initDir = resolve(rootDir, directory);
 
+    const classInfosStarting: ClassInfo[] = [];
     for (const fullPath of [...findFiles(initDir, file)]) {
       const classInfo = saveClassInfoToDb(rootDir, fullPath);
       if (classInfo) {
-        classInfosAll.push(classInfo);
+        classInfosStarting.push(classInfo);
       }
     }
 
@@ -100,12 +102,13 @@ export function saveToDb() {
       objectAndTablesAll,
       serviceAndXmls
     );
-    classInfosAll = classInfosAll.concat(classInfosMain);
-    xmlInfosAll = xmlInfosAll.concat(xmlInfosMain);
-  }
+    // classInfosAll = classInfosAll.concat(classInfosMain);
+    // xmlInfosAll = xmlInfosAll.concat(xmlInfosMain);
 
-  const classInfosMerged = mergeExtends(classInfosAll);
-  saveMethodInfoFindToDb(classInfosMerged);
+    const classInfosCur = [...classInfosDep, ...classInfosStarting, ...classInfosMain];
+    const classInfosMerged = mergeExtends(classInfosCur);
+    saveMethodInfoFindToDb(classInfosMerged, filePostfix);
+  }
 }
 
 saveToDb();

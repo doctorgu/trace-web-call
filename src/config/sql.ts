@@ -51,6 +51,7 @@ create table MethodInfo (
 ) strict;
 
 create table MethodInfoFind (
+    filePostfix text not null,
     classPath text not null,
     className text not null,
     implementsName text not null,
@@ -62,8 +63,8 @@ create table MethodInfoFind (
     callers text not null,
     foreign key (classPath) references ClassInfo (classPath) on update cascade on delete cascade
 ) strict;
-create index IxMethodInfoFind1 on MethodInfoFind (name, parameterCount, className, implementsName);
-create index IxMethodInfoFind2 on MethodInfoFind (classPath);
+create index IxMethodInfoFind1 on MethodInfoFind (filePostfix, name, parameterCount, className, implementsName);
+create index IxMethodInfoFind2 on MethodInfoFind (filePostfix, classPath);
 
 create table Tables (
     name text not null primary key

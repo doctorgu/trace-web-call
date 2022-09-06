@@ -750,6 +750,7 @@ export function saveClassInfoToDb(rootDir: string, fullPath: string): ClassInfo 
 
 function insertMethodInfoFind(
   finds: {
+    filePostfix: string;
     classPath: string;
     className: string;
     implementsName: string;
@@ -765,10 +766,10 @@ function insertMethodInfoFind(
 
   const sqlTmp = `
   insert into MethodInfoFind
-    (classPath, className, implementsName, extendsName, mappingValues, isPublic, name, parameterCount, callers)
+    (filePostfix, classPath, className, implementsName, extendsName, mappingValues, isPublic, name, parameterCount, callers)
   values
     {values}`;
-  const sqlTmpValues = `({classPath}, {className}, {implementsName}, {extendsName}, {mappingValues}, {isPublic}, {name}, {parameterCount}, {callers})`;
+  const sqlTmpValues = `({filePostfix}, {classPath}, {className}, {implementsName}, {extendsName}, {mappingValues}, {isPublic}, {name}, {parameterCount}, {callers})`;
   const sqlValues = new SqlTemplate(sqlTmpValues).replaceAlls(finds, ',\n');
   const sql = sqlTmp.replace('{values}', escapeDollar(sqlValues));
   execSql(configReader.db(), sql);
@@ -788,7 +789,7 @@ function getDupMethod(finds: MethodInfoFind[]): string {
   const [name] = foundDup;
   return name;
 }
-export function saveMethodInfoFindToDb(classInfosMerged: ClassInfo[]): MethodInfoFind[] {
+export function saveMethodInfoFindToDb(classInfosMerged: ClassInfo[], filePostfix: string): MethodInfoFind[] {
   let finds: MethodInfoFind[] = [];
 
   for (const classInfo of classInfosMerged) {
@@ -829,6 +830,7 @@ export function saveMethodInfoFindToDb(classInfosMerged: ClassInfo[]): MethodInf
   }
 
   const findsJson = finds.map((find) => ({
+    filePostfix,
     classPath: find.classPath,
     className: find.className,
     implementsName: find.implementsName,
@@ -844,7 +846,11 @@ export function saveMethodInfoFindToDb(classInfosMerged: ClassInfo[]): MethodInf
   return finds;
 }
 
-export function getMethodInfoFinds(directory: string, filePattern: string | RegExp): MethodInfoFind[] {
+export function getMethodInfoFinds(
+  filePostfix: string,
+  directory: string,
+  filePattern: string | RegExp
+): MethodInfoFind[] {
   const db = configReader.db();
 
   let fileNameWildcard = '';
@@ -856,6 +862,7 @@ export function getMethodInfoFinds(directory: string, filePattern: string | RegE
   }
 
   const rows = all(db, 'ClassInfo', 'selectMethodInfoFindByClassPathClassName', {
+    filePostfix,
     classPathLike: directory,
     fileNameWildcard,
     fileNamePattern,

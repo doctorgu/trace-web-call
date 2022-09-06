@@ -32,7 +32,7 @@ function writeStartToTables() {
       filePostfix,
     } = config.path.source.main[i];
 
-    const findsStarting = getMethodInfoFinds(directory, file);
+    const findsStarting = getMethodInfoFinds(filePostfix, directory, file);
 
     const directories = serviceAndXmls.map(({ service: { directory } }) => directory);
     const xmls = serviceAndXmls.map(({ xml }) => getXmlNodeInfoFinds(rootDir, xml, '*.xml')).flat();
@@ -42,6 +42,7 @@ function writeStartToTables() {
 
     console.log(`Get starting to tables...`);
     const startToTables = getStartingToTables(
+      filePostfix,
       findsStarting,
       directories.concat(directoriesDependency),
       xmls,

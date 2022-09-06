@@ -140,6 +140,7 @@ function getObjectByStringLiteral(
 //   return foundsMethod;
 // }
 function findByTypeMethod(
+  filePostfix: string,
   directories: string[],
   typeName: string,
   classNameThis: string,
@@ -148,6 +149,7 @@ function findByTypeMethod(
 ): MethodInfoFind[] {
   const db = configReader.db();
   const rows = all(db, 'ClassInfo', 'selectMethodInfoFindByNameParameterCount', {
+    filePostfix,
     classPathsLike: directories,
     typeName,
     classNameThis,
@@ -167,6 +169,7 @@ function findByTypeMethod(
 }
 
 export function getTableNamesByMethod(
+  filePostfix: string,
   find: MethodInfoFind,
   directories: string[],
   xmlsAll: XmlNodeInfoFind[],
@@ -207,7 +210,14 @@ export function getTableNamesByMethod(
       }
     }
 
-    const founds = findByTypeMethod(directories, typeName, classNameThis, methodName, callerParameterCount);
+    const founds = findByTypeMethod(
+      filePostfix,
+      directories,
+      typeName,
+      classNameThis,
+      methodName,
+      callerParameterCount
+    );
     // const founds = methodsAll.filter(({ className, implementsName, extendsName, name, parameterCount }) => {
     //   const classFound = typeName ? className === typeName || implementsName === typeName : className === classNameThis;
     //   if (!classFound) return false;
@@ -229,7 +239,7 @@ export function getTableNamesByMethod(
 
         routes.push({ routeType: 'method', value, depth });
 
-        const ret = getTableNamesByMethod(found, directories, xmlsAll, routes, depth + 1);
+        const ret = getTableNamesByMethod(filePostfix, found, directories, xmlsAll, routes, depth + 1);
         if (ret) {
           const { tables, objectAndTables } = ret;
           tablesRet = tablesRet.concat([...tables]);
@@ -264,6 +274,7 @@ export function getDependency(): { directories: string[]; xmls: XmlNodeInfoFind[
 }
 
 export function getStartingToTables(
+  filePostfix: string,
   findsStarting: MethodInfoFind[],
   directories: string[],
   xmls: XmlNodeInfoFind[],
@@ -292,6 +303,7 @@ export function getStartingToTables(
         routes.push({ routeType: 'method', value: classDotMethod, depth: ++depth });
 
         const { tables, objectAndTables } = getTableNamesByMethod(
+          filePostfix,
           methodInStartings,
           directories,
           xmlsAll,
@@ -306,6 +318,7 @@ export function getStartingToTables(
       routes.push({ routeType: 'method', value: classDotMethod, depth: ++depth });
 
       const { tables, objectAndTables } = getTableNamesByMethod(
+        filePostfix,
         methodInStartings,
         directories,
         xmlsAll,
