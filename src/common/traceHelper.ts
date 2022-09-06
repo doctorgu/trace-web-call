@@ -140,6 +140,7 @@ function getObjectByStringLiteral(
 //   return foundsMethod;
 // }
 function findByTypeMethod(
+  directories: string[],
   typeName: string,
   classNameThis: string,
   methodName: string,
@@ -147,6 +148,7 @@ function findByTypeMethod(
 ): MethodInfoFind[] {
   const db = configReader.db();
   const rows = all(db, 'ClassInfo', 'selectMethodInfoFindByNameParameterCount', {
+    classPathsLike: directories,
     typeName,
     classNameThis,
     methodName,
@@ -155,7 +157,7 @@ function findByTypeMethod(
   const finds = rowsToFinds(rows);
   return finds;
 
-  // const founds = methodsAll.filter(
+  // const founds = findsAll.filter(
   //   ({ className, implementsName, name, parameterCount }) =>
   //     (typeName ? className === typeName || implementsName === typeName : className === classNameThis) &&
   //     name === methodName &&
@@ -166,6 +168,7 @@ function findByTypeMethod(
 
 export function getTableNamesByMethod(
   find: MethodInfoFind,
+  directories: string[],
   xmlsAll: XmlNodeInfoFind[],
   routes: RouteInfo[],
   depth: number
@@ -204,7 +207,7 @@ export function getTableNamesByMethod(
       }
     }
 
-    const founds = findByTypeMethod(typeName, classNameThis, methodName, callerParameterCount);
+    const founds = findByTypeMethod(directories, typeName, classNameThis, methodName, callerParameterCount);
     // const founds = methodsAll.filter(({ className, implementsName, extendsName, name, parameterCount }) => {
     //   const classFound = typeName ? className === typeName || implementsName === typeName : className === classNameThis;
     //   if (!classFound) return false;
@@ -226,7 +229,7 @@ export function getTableNamesByMethod(
 
         routes.push({ routeType: 'method', value, depth });
 
-        const ret = getTableNamesByMethod(found, xmlsAll, routes, depth + 1);
+        const ret = getTableNamesByMethod(found, directories, xmlsAll, routes, depth + 1);
         if (ret) {
           const { tables, objectAndTables } = ret;
           tablesRet = tablesRet.concat([...tables]);
@@ -240,27 +243,29 @@ export function getTableNamesByMethod(
   return { tables: new Set(tablesRet), objectAndTables: objectAndTablesRet };
 }
 
-export function getDependency(): { finds: MethodInfoFind[]; xmls: XmlNodeInfoFind[] } {
-  let finds: MethodInfoFind[] = [];
+export function getDependency(): { directories: string[]; xmls: XmlNodeInfoFind[] } {
+  const directories: string[] = [];
   let xmls: XmlNodeInfoFind[] = [];
 
   const { rootDir } = config.path.source;
   for (let i = 0; i < config.path.source.dependency.length; i++) {
-    const { service, xml } = config.path.source.dependency[i];
+    const {
+      service: { directory },
+      xml,
+    } = config.path.source.dependency[i];
 
-    const { directory, file } = service;
-    const findsCur = getMethodInfoFinds(directory, file);
-    finds = finds.concat(findsCur);
+    directories.push(directory);
 
     const xmlsCur = getXmlNodeInfoFinds(rootDir, xml, '*.xml');
     xmls = xmls.concat(xmlsCur);
   }
 
-  return { finds, xmls };
+  return { directories, xmls };
 }
 
-export function getStartToTables(
-  findsController: MethodInfoFind[],
+export function getStartingToTables(
+  findsStarting: MethodInfoFind[],
+  directories: string[],
   xmls: XmlNodeInfoFind[],
   xmlsDependency: XmlNodeInfoFind[],
   startingPoint: StartingPoint
@@ -269,8 +274,8 @@ export function getStartToTables(
 
   const startToObjects: StartToObjects[] = [];
 
-  for (let nMethod = 0; nMethod < findsController.length; nMethod++) {
-    const methodInStartings = findsController[nMethod];
+  for (let nMethod = 0; nMethod < findsStarting.length; nMethod++) {
+    const methodInStartings = findsStarting[nMethod];
     const { className, mappingValues, isPublic: methodIsPublic, name: methodName } = methodInStartings;
     if (startingPoint === 'map' && !mappingValues.length) continue;
     if (startingPoint === 'publicMethod' && !methodIsPublic) continue;
@@ -286,7 +291,13 @@ export function getStartToTables(
         routes.push({ routeType: 'mapping', value: `${mappingValue}`, depth: ++depth });
         routes.push({ routeType: 'method', value: classDotMethod, depth: ++depth });
 
-        const { tables, objectAndTables } = getTableNamesByMethod(methodInStartings, xmlsAll, routes, depth + 1);
+        const { tables, objectAndTables } = getTableNamesByMethod(
+          methodInStartings,
+          directories,
+          xmlsAll,
+          routes,
+          depth + 1
+        );
         startToObjects.push({ mappingOrMethod: mappingValue, tables, objectAndTables, routes });
       }
     } else if (startingPoint === 'publicMethod') {
@@ -294,7 +305,13 @@ export function getStartToTables(
       let depth = -1;
       routes.push({ routeType: 'method', value: classDotMethod, depth: ++depth });
 
-      const { tables, objectAndTables } = getTableNamesByMethod(methodInStartings, xmlsAll, routes, depth + 1);
+      const { tables, objectAndTables } = getTableNamesByMethod(
+        methodInStartings,
+        directories,
+        xmlsAll,
+        routes,
+        depth + 1
+      );
       startToObjects.push({
         mappingOrMethod: classDotMethod,
         tables,

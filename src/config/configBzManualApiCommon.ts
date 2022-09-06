@@ -6,12 +6,10 @@ export const configBzManualApiCommon: Config = {
       rootDir: 'D:/Temp/kbbizmicro-sb',
       main: [
         {
-          startings: [
-            {
-              directory: 'bz-manual-api-common/src/main/java/biz/micro/portal/manual/api/common/controller',
-              file: '*Controller.java',
-            },
-          ],
+          startings: {
+            directory: 'bz-manual-api-common/src/main/java/biz/micro/portal/manual/api/common/controller',
+            file: '*Controller.java',
+          },
           serviceAndXmls: [
             {
               service: {

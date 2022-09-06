@@ -6,12 +6,10 @@ export const configBzStoreApiBizgroup: Config = {
       rootDir: 'D:/Temp/kbbizmicro-sb',
       main: [
         {
-          startings: [
-            {
-              directory: 'bz-store-api-bizgroup/src/main/java/biz/micro/portal/store/api/bizgroup/controller',
-              file: '*Controller.java',
-            },
-          ],
+          startings: {
+            directory: 'bz-store-api-bizgroup/src/main/java/biz/micro/portal/store/api/bizgroup/controller',
+            file: '*Controller.java',
+          },
           serviceAndXmls: [
             {
               service: {

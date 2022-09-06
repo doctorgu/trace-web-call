@@ -10,7 +10,7 @@ export type Config = {
     source: {
       rootDir: string;
       main: {
-        startings: DirectoryAndFilePattern[];
+        startings: DirectoryAndFilePattern;
         serviceAndXmls: {
           service: DirectoryAndFilePattern;
           xml: string;

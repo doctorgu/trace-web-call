@@ -6,7 +6,7 @@ export const configOtherUserTable: Config = {
       rootDir: 'C:/source/trace-web-call',
       main: [
         {
-          startings: [{ directory: `test/`, file: 'OtherUserTablesController.java' }],
+          startings: { directory: `test/`, file: 'OtherUserTablesController.java' },
           serviceAndXmls: [
             {
               service: {

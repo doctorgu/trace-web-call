@@ -6,12 +6,10 @@ export const configComposite: Config = {
       rootDir: 'D:/Temp/kbbizmicro-sb',
       main: [
         {
-          startings: [
-            {
-              directory: 'bz-manual-api-common/src/main/java/biz/micro/portal/manual/api/common/controller',
-              file: '*Controller.java',
-            },
-          ],
+          startings: {
+            directory: 'bz-manual-api-common/src/main/java/biz/micro/portal/manual/api/common/controller',
+            file: '*Controller.java',
+          },
           serviceAndXmls: [
             {
               service: {
@@ -24,12 +22,10 @@ export const configComposite: Config = {
           filePostfix: '-bz-manual-api-common2',
         },
         {
-          startings: [
-            {
-              directory: 'bz-store-api-bizgroup/src/main/java/biz/micro/portal/store/api/bizgroup/controller',
-              file: '*Controller.java',
-            },
-          ],
+          startings: {
+            directory: 'bz-store-api-bizgroup/src/main/java/biz/micro/portal/store/api/bizgroup/controller',
+            file: '*Controller.java',
+          },
           serviceAndXmls: [
             {
               service: {

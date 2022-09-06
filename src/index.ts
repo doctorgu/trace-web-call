@@ -11,7 +11,7 @@ import { writeFileSync } from 'fs';
 import { resolve } from 'path';
 import { config } from './config/config';
 import { getMethodInfoFinds } from './common/classHelper';
-import { getXmlNodeInfoFinds, getStartToTables, getDependency } from './common/traceHelper';
+import { getXmlNodeInfoFinds, getStartingToTables, getDependency } from './common/traceHelper';
 import { readFileSyncUtf16le, removeCommentLiteralSql } from './common/util';
 import { saveToDb } from './run/saveToDb';
 
@@ -22,20 +22,32 @@ function writeStartToTables() {
     return `${' '.repeat((depth - 1) * 4)}+-- `;
   }
 
-  const { xmls: xmlsDependency } = getDependency();
+  const { xmls: xmlsDependency, directories: directoriesDependency } = getDependency();
 
   const { rootDir } = config.path.source;
   for (let i = 0; i < config.path.source.main.length; i++) {
-    const { startings, serviceAndXmls, filePostfix } = config.path.source.main[i];
+    const {
+      startings: { directory, file },
+      serviceAndXmls,
+      filePostfix,
+    } = config.path.source.main[i];
 
-    const findsController = startings.map(({ directory, file }) => getMethodInfoFinds(directory, file)).flat();
+    const findsStarting = getMethodInfoFinds(directory, file);
+
+    const directories = serviceAndXmls.map(({ service: { directory } }) => directory);
     const xmls = serviceAndXmls.map(({ xml }) => getXmlNodeInfoFinds(rootDir, xml, '*.xml')).flat();
 
     const startToTablesAll: string[] = [];
     const routesAll: string[] = [];
 
     console.log(`Get starting to tables...`);
-    const startToTables = getStartToTables(findsController, xmls, xmlsDependency, config.startingPoint);
+    const startToTables = getStartingToTables(
+      findsStarting,
+      directories.concat(directoriesDependency),
+      xmls,
+      xmlsDependency,
+      config.startingPoint
+    );
     let headerStartToTables = '';
     let headerRoutes = '';
     let lineSepRoutes = '';

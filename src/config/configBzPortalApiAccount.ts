@@ -6,12 +6,10 @@ export const configBzPortalApiAccount: Config = {
       rootDir: 'D:/Temp/kbbizmicro-sb',
       main: [
         {
-          startings: [
-            {
-              directory: 'bz-portal-api-account/src/main/java/biz/micro/portal/common/api/account/service',
-              file: '*Impl.java',
-            },
-          ],
+          startings: {
+            directory: 'bz-portal-api-account/src/main/java/biz/micro/portal/common/api/account/service',
+            file: '*Impl.java',
+          },
           serviceAndXmls: [
             {
               service: {

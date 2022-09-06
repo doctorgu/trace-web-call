@@ -36,6 +36,10 @@
     from    MethodInfoFind
     where   name = #{methodName}
             and parameterCount = #{callerParameterCount}
+            and
+            <foreach collection="classPathsLike" item="classPathLike" separator="or" open="(" close=")">
+            classPath like #{classPathLike} || '%'
+            </foreach>
     <if test="typeName != null and typeName != ''">
             and (className = #{typeName} or implementsName = #{typeName})
     </if>

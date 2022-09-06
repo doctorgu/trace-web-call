@@ -79,19 +79,20 @@ export function saveToDb() {
   xmlInfosAll = xmlInfosAll.concat(xmlInfosDep);
 
   for (let i = 0; i < config.path.source.main.length; i++) {
-    const { startings, serviceAndXmls } = config.path.source.main[i];
+    const {
+      startings: { directory, file },
+      serviceAndXmls,
+    } = config.path.source.main[i];
 
-    console.log(`Inserting startings ClassInfo, HeaderInfo, MethodInfo ${startings.map((c) => c.directory).join(',')}`);
-    startings.forEach(({ directory, file }) => {
-      const initDir = resolve(rootDir, directory);
+    console.log(`Inserting startings ClassInfo, HeaderInfo, MethodInfo ${directory}`);
+    const initDir = resolve(rootDir, directory);
 
-      for (const fullPath of [...findFiles(initDir, file)]) {
-        const classInfo = saveClassInfoToDb(rootDir, fullPath);
-        if (classInfo) {
-          classInfosAll.push(classInfo);
-        }
+    for (const fullPath of [...findFiles(initDir, file)]) {
+      const classInfo = saveClassInfoToDb(rootDir, fullPath);
+      if (classInfo) {
+        classInfosAll.push(classInfo);
       }
-    });
+    }
 
     const { classInfos: classInfosMain, xmlInfos: xmlInfosMain } = saveClassAndXmlToDb(
       rootDir,

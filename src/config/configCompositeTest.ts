@@ -6,12 +6,10 @@ export const configCompositeTest: Config = {
       rootDir: 'D:/Temp/kbbizmicro-sb',
       main: [
         {
-          startings: [
-            {
-              directory: 'bz-store-api-bizgroup/src/main/java/biz/micro/portal/store/api/bizgroup/controller',
-              file: 'BizBuilderController.java',
-            },
-          ],
+          startings: {
+            directory: 'bz-store-api-bizgroup/src/main/java/biz/micro/portal/store/api/bizgroup/controller',
+            file: 'BizBuilderController.java',
+          },
           serviceAndXmls: [
             {
               service: {
