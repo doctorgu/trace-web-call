@@ -20,23 +20,25 @@ type StartToObjects = {
   routes: RouteInfo[];
 };
 
-function getBaseMethods(classInfos: ClassInfo[], classNameSub: string, extendsNameSub: string): MethodInfo[] {
+function getBaseMethods(classInfos: ClassInfo[], extendsNameSub: string): MethodInfo[] {
   let methodsBaseAll: MethodInfo[] = [];
 
-  const classBase = classInfos.find(({ header: { name: className } }) => className === extendsNameSub);
-  if (!classBase) {
+  const classBases = classInfos.filter(({ header: { name: className } }) => className === extendsNameSub);
+  if (!classBases.length) {
     console.error(`Base class: ${extendsNameSub} not exists.`);
     return [];
   }
 
-  const { name: className, extendsName } = classBase.header;
+  for (const classBase of classBases) {
+    const { extendsName } = classBase.header;
 
-  if (extendsName) {
-    const methodsBaseCur = getBaseMethods(classInfos, className, extendsName);
-    methodsBaseAll = methodsBaseAll.concat(methodsBaseCur);
+    if (extendsName) {
+      const methodsBaseCur = getBaseMethods(classInfos, extendsName);
+      methodsBaseAll = methodsBaseAll.concat(methodsBaseCur);
+    }
+
+    methodsBaseAll = methodsBaseAll.concat(classBase.methods);
   }
-
-  methodsBaseAll = methodsBaseAll.concat(classBase.methods);
 
   return methodsBaseAll;
 }
@@ -45,10 +47,10 @@ export function mergeExtends(classInfos: ClassInfo[]): ClassInfo[] {
 
   const classInfosExtends = classInfosNew.filter(({ header: { extendsName } }) => !!extendsName);
   for (const {
-    header: { name: classNameSub, extendsName: extendsNameSub },
+    header: { extendsName: extendsNameSub },
     methods,
   } of classInfosExtends) {
-    const methodsBase = getBaseMethods(classInfos, classNameSub, extendsNameSub);
+    const methodsBase = getBaseMethods(classInfos, extendsNameSub);
     methodsBase.forEach((method) => methods.push(method));
   }
 

@@ -1,4 +1,4 @@
-import { existsSync, statSync } from 'fs';
+import { existsSync, statSync, unlinkSync } from 'fs';
 import { resolve } from 'path';
 import { findFiles } from '../common/util';
 import { ClassInfo, saveClassInfoToDb, saveMethodInfoFindToDb } from '../common/classHelper';
@@ -50,26 +50,10 @@ function saveClassAndXmlToDb(
 }
 
 export function saveToDb() {
+  console.log(`Deleting ${config.path.database}`);
+  unlinkSync(config.path.database);
+
   const db = configReader.db();
-
-  // Delete foreign table first for speed.
-  const tables = [
-    'XmlNodeInfo',
-    'XmlInfo',
-    'MethodInfo',
-    'MethodInfoFind',
-    'HeaderInfo',
-    'ClassInfo',
-    'ObjectAndTables',
-    'Tables',
-  ];
-  for (const tableName of tables) {
-    const row = get(db, 'Common', 'selectTable', { tableName });
-    if (!row) continue;
-
-    console.log(`Truncating ${tableName}`);
-    exec(db, 'Common', 'truncateTable', { tableName });
-  }
 
   console.log(`Initializing all tables`);
   execSql(db, sqlInit);
