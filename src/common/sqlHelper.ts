@@ -13,6 +13,8 @@ import { readdirSync, existsSync, statSync } from 'fs';
 import { resolve } from 'path';
 import { all, get, run, exec, execSql } from './dbHelper';
 import betterSqlite3 from 'better-sqlite3';
+import { runSaveToDbFirst } from './message';
+import { getDbPath } from './common';
 
 export type XmlNodeInfo = {
   id: string;
@@ -347,12 +349,65 @@ export function getXmlInfo(
   tablesAll: Set<string>,
   objectAndTablesAll: ObjectAndTables
 ): XmlInfo | null {
-  const xmlPath = trimStartSpecific(fullPath.substring(rootDir.length), '\\/');
+  const xmlPath = getDbPath(rootDir, fullPath);
 
   const xmlDb = getXmlInfoFromDb(xmlPath);
-  if (xmlDb) {
-    return xmlDb;
+  if (!xmlDb) {
+    throw new Error(runSaveToDbFirst);
   }
+
+  return xmlDb;
+}
+
+export function saveTablesToDb(): Set<string> {
+  let tablesNew = new Set<string>();
+
+  const path = config.path.data.tables;
+
+  if (statSync(path).isDirectory()) {
+    let values: string[] = [];
+
+    const files = readdirSync(path);
+    files.forEach((file) => {
+      const value = readFileSyncUtf16le(resolve(path, file));
+      values = values.concat(value.split(/\r*\n/));
+    });
+
+    tablesNew = new Set(values.filter((v) => !!v).map((v) => v.toUpperCase()));
+  } else {
+    const value = readFileSyncUtf16le(path);
+    tablesNew = new Set(
+      value
+        .split(/\r*\n/)
+        .filter((v) => !!v)
+        .map((v) => v.toUpperCase())
+    );
+  }
+
+  insertTables(tablesNew);
+  return tablesNew;
+}
+
+export function saveObjectAndTables(tables: Set<string>): ObjectAndTables {
+  const objectAndTablesAll = new Map<string, Set<string>>();
+
+  const objectTypes: ObjectType[] = ['view', 'function', 'procedure'];
+  for (const objectType of objectTypes) {
+    const objectAndTables = getObjectAndTablesByObjectType(objectType, tables);
+    [...objectAndTables].forEach(([object, tables]) => objectAndTablesAll.set(object, tables));
+    insertObjectAndTables(objectType, objectAndTables);
+  }
+
+  return objectAndTablesAll;
+}
+
+export function saveXmlInfoToDb(
+  rootDir: string,
+  fullPath: string,
+  tablesAll: Set<string>,
+  objectAndTablesAll: ObjectAndTables
+): XmlInfo | null {
+  const xmlPath = getDbPath(rootDir, fullPath);
 
   const xml = readFileSyncUtf16le(fullPath);
 
@@ -389,7 +444,15 @@ export function getXmlInfo(
       }
     }
     if (!id) continue;
-    if (tagName !== 'select' && tagName !== 'insert' && tagName !== 'update' && tagName !== 'delete') continue;
+    // procedure tag only exists in iBatis
+    if (
+      tagName !== 'select' &&
+      tagName !== 'insert' &&
+      tagName !== 'update' &&
+      tagName !== 'delete' &&
+      tagName !== 'procedure'
+    )
+      continue;
 
     const textInclude = getTextInclude(elemRow, elemRows);
     let sqlInclude = '';

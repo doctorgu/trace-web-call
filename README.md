@@ -61,6 +61,8 @@ Also shows all routes from API to SQL.
 
 - Quoted literal string removed when getting table name, but escaping quote only supports double quoute(`''`). Backslash(`\`) and literal quoting(`q'[I'm a boy]'`) not supported.
 
+- `protected` modifier ignored.
+
 ## Run
 
 Results will be like following after running `yarn dev` command.

@@ -12,4 +12,34 @@
     from    MethodInfo
     where   classPath = #{classPath}
   </select>
+
+  <select id="selectMethodInfoFind">
+    select  classPath, className, implementsName, extendsName, mappingValues, isPublic, name, parameterCount, callers
+    from    MethodInfoFind
+  </select>
+
+  <select id="selectMethodInfoFindByClassPathClassName">
+    select  classPath, className, implementsName, extendsName, mappingValues, isPublic, name, parameterCount, callers
+    from    MethodInfoFind
+    where   classPath like #{classPathLike} || '%'
+    <if test="fileNameWildcard != null and fileNameWildcard != ''">
+            and testWildcardFileName(#{fileNameWildcard}, className || '.java', 1) = 1
+    </if>
+    <if test="fileNamePattern != null and fileNamePattern != ''">
+            and className || '.java' regexp #{fileNamePattern}
+    </if>
+  </select>
+
+  <select id="selectMethodInfoFindByNameParameterCount">
+    select  classPath, className, implementsName, extendsName, mappingValues, isPublic, name, parameterCount, callers
+    from    MethodInfoFind
+    where   name = #{methodName}
+            and parameterCount = #{callerParameterCount}
+    <if test="typeName != null and typeName != ''">
+            and (className = #{typeName} or implementsName = #{typeName})
+    </if>
+    <if test="typeName == null or typeName == ''">
+            and className = #{classNameThis}
+    </if>
+  </select>
 </mapper>

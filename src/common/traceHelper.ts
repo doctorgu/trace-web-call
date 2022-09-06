@@ -1,10 +1,11 @@
 import { existsSync, statSync } from 'fs';
 import { resolve } from 'path';
-import { findFiles, readFileSyncUtf16le, trimEndSpecific } from './util';
-import { Annotation, MethodInfoFind, getClassInfo } from './classHelper';
-import { XmlNodeInfoFind, getXmlInfo, getObjectAndTables, ObjectAndTables } from './sqlHelper';
+import { findFiles } from './util';
+import { MethodInfo, MethodInfoFind, getMethodInfoFinds, ClassInfo, CallerInfo, rowsToFinds } from './classHelper';
+import { XmlNodeInfoFind, getXmlInfo, ObjectAndTables } from './sqlHelper';
 import { config, configReader } from '../config/config';
 import { StartingPoint } from '../config/configTypes';
+import { all } from './dbHelper';
 
 export type RouteInfo = {
   routeType: 'mapping' | 'method' | 'xml' | 'table' | 'view' | 'function' | 'procedure';
@@ -19,64 +20,39 @@ type StartToObjects = {
   routes: RouteInfo[];
 };
 
-export function getMethodInfoFinds(rootDir: string, directory: string, filePattern: string | RegExp): MethodInfoFind[] {
-  function getDupMethod(finds: MethodInfoFind[]): string {
-    const nameAndCount = new Map<string, number>();
-    for (let i = 0; i < finds.length; i++) {
-      const { className, name, parameterCount } = finds[i];
-      const classDotNameCount = `${className}.${name}(${parameterCount})`;
-      const count = nameAndCount.get(classDotNameCount) || 0;
-      nameAndCount.set(classDotNameCount, count + 1);
-    }
-    const foundDup = [...nameAndCount].find(([, count]) => count > 1);
-    if (!foundDup) return '';
+function getBaseMethods(classInfos: ClassInfo[], classNameSub: string, extendsNameSub: string): MethodInfo[] {
+  let methodsBaseAll: MethodInfo[] = [];
 
-    const [name] = foundDup;
-    return name;
+  const classBase = classInfos.find(({ header: { name: className } }) => className === extendsNameSub);
+  if (!classBase) {
+    console.error(`Base class: ${extendsNameSub} not exists.`);
+    return [];
   }
 
-  const initDir = resolve(rootDir, directory);
+  const { name: className, extendsName } = classBase.header;
 
-  let finds: MethodInfoFind[] = [];
-
-  for (const fullPath of [...findFiles(initDir, filePattern)]) {
-    const classInfo = getClassInfo(rootDir, fullPath);
-    const { header, methods } = classInfo;
-    const { name: className, implementsName, extendsName, annotations: annotationsClass } = header;
-    const findsCur = methods.map(({ annotations, isPublic, name, parameterCount, callers }) => {
-      const mappingClass = annotationsClass.find(({ name }) => name.endsWith('Mapping'));
-      const root = mappingClass?.values?.[0] || '';
-
-      const mappingValues: string[] = [];
-      const mappingCur = annotations.find(({ name }) => name.endsWith('Mapping'));
-      if (mappingCur) {
-        for (let i = 0; i < mappingCur.values.length; i++) {
-          mappingValues.push(`${root}${mappingCur.values[i]}`);
-        }
-      }
-
-      return {
-        className,
-        implementsName,
-        extendsName,
-        mappingValues,
-        isPublic,
-        name,
-        parameterCount,
-        callers,
-      };
-    });
-
-    const dupMethod = getDupMethod(findsCur);
-    if (dupMethod) {
-      // throw new Error(`Found duplicated method: ${foundDup[0]}`);
-      console.log(`Found duplicated method in ${fullPath}: ${dupMethod}`);
-    }
-
-    finds = finds.concat(findsCur);
+  if (extendsName) {
+    const methodsBaseCur = getBaseMethods(classInfos, className, extendsName);
+    methodsBaseAll = methodsBaseAll.concat(methodsBaseCur);
   }
 
-  return finds;
+  methodsBaseAll = methodsBaseAll.concat(classBase.methods);
+
+  return methodsBaseAll;
+}
+export function mergeExtends(classInfos: ClassInfo[]): ClassInfo[] {
+  let classInfosNew = [...classInfos];
+
+  const classInfosExtends = classInfosNew.filter(({ header: { extendsName } }) => !!extendsName);
+  for (const {
+    header: { name: classNameSub, extendsName: extendsNameSub },
+    methods,
+  } of classInfosExtends) {
+    const methodsBase = getBaseMethods(classInfos, classNameSub, extendsNameSub);
+    methodsBase.forEach((method) => methods.push(method));
+  }
+
+  return classInfosNew;
 }
 
 export function getXmlNodeInfoFinds(
@@ -93,14 +69,14 @@ export function getXmlNodeInfoFinds(
 
   const tablesAll = configReader.tables();
 
-  const objectAndTables = new Map<string, Set<string>>();
-  [...configReader.objectAndTables('view')].forEach(([object, tables]) => objectAndTables.set(object, tables));
-  [...configReader.objectAndTables('function')].forEach(([object, tables]) => objectAndTables.set(object, tables));
-  [...configReader.objectAndTables('procedure')].forEach(([object, tables]) => objectAndTables.set(object, tables));
+  const objectAndTablesAll = new Map<string, Set<string>>();
+  [...configReader.objectAndTables('view')].forEach(([object, tables]) => objectAndTablesAll.set(object, tables));
+  [...configReader.objectAndTables('function')].forEach(([object, tables]) => objectAndTablesAll.set(object, tables));
+  [...configReader.objectAndTables('procedure')].forEach(([object, tables]) => objectAndTablesAll.set(object, tables));
 
   const fullPaths = statSync(fullDir).isDirectory() ? [...findFiles(fullDir, filePattern)] : [fullDir];
   for (const fullPath of fullPaths) {
-    const xmlInfo = getXmlInfo(rootDir, fullPath, tablesAll, objectAndTables);
+    const xmlInfo = getXmlInfo(rootDir, fullPath, tablesAll, objectAndTablesAll);
     if (!xmlInfo) continue;
 
     const { namespace, nodes } = xmlInfo;
@@ -137,34 +113,57 @@ function getObjectByStringLiteral(
   return { tables, objectAndTables };
 }
 
+// function findByTypeMethod(
+//   methodsAll: MethodInfoFind[],
+//   typeName: string,
+//   classNameThis: string,
+//   methodName: string,
+//   callerParameterCount: number
+// ): MethodInfoFind[] {
+//   const foundsClass = methodsAll.filter(({ className, implementsName }) =>
+//     typeName ? className === typeName || implementsName === typeName : className === classNameThis
+//   );
+//   if (!foundsClass.length) {
+//     return [];
+//   }
+
+//   const foundsMethod = foundsClass.filter(
+//     ({ name, parameterCount }) => name === methodName && parameterCount === callerParameterCount
+//   );
+//   if (!foundsMethod.length) {
+//     const { extendsName } = foundsClass[0];
+//     return findByTypeMethod(methodsAll, extendsName, '', methodName, callerParameterCount);
+//   }
+
+//   return foundsMethod;
+// }
 function findByTypeMethod(
-  methodsAll: MethodInfoFind[],
   typeName: string,
   classNameThis: string,
   methodName: string,
   callerParameterCount: number
 ): MethodInfoFind[] {
-  const foundsClass = methodsAll.filter(({ className, implementsName }) =>
-    typeName ? className === typeName || implementsName === typeName : className === classNameThis
-  );
-  if (!foundsClass.length) {
-    return [];
-  }
+  const db = configReader.db();
+  const rows = all(db, 'ClassInfo', 'selectMethodInfoFindByNameParameterCount', {
+    typeName,
+    classNameThis,
+    methodName,
+    callerParameterCount,
+  });
+  const finds = rowsToFinds(rows);
+  return finds;
 
-  const foundsMethod = foundsClass.filter(
-    ({ name, parameterCount }) => name === methodName && parameterCount === callerParameterCount
-  );
-  if (!foundsMethod.length) {
-    const { extendsName } = foundsClass[0];
-    return findByTypeMethod(methodsAll, extendsName, '', methodName, callerParameterCount);
-  }
-
-  return foundsMethod;
+  // const founds = methodsAll.filter(
+  //   ({ className, implementsName, name, parameterCount }) =>
+  //     (typeName ? className === typeName || implementsName === typeName : className === classNameThis) &&
+  //     name === methodName &&
+  //     parameterCount === callerParameterCount
+  // );
+  // return founds;
 }
 
 export function getTableNamesByMethod(
   find: MethodInfoFind,
-  methodsAll: MethodInfoFind[],
   xmlsAll: XmlNodeInfoFind[],
   routes: RouteInfo[],
   depth: number
@@ -203,7 +202,7 @@ export function getTableNamesByMethod(
       }
     }
 
-    const founds = findByTypeMethod(methodsAll, typeName, classNameThis, methodName, callerParameterCount);
+    const founds = findByTypeMethod(typeName, classNameThis, methodName, callerParameterCount);
     // const founds = methodsAll.filter(({ className, implementsName, extendsName, name, parameterCount }) => {
     //   const classFound = typeName ? className === typeName || implementsName === typeName : className === classNameThis;
     //   if (!classFound) return false;
@@ -216,7 +215,7 @@ export function getTableNamesByMethod(
       const found = founds[nFound];
       if (found) {
         const value = `${typeName ? `${typeName}.` : ''}${methodName}(${callerParameterCount})`;
-        // !!! to check: routeTypePrev === 'method' && valuePrev === value && depthPrev <= depth
+        // to prevent duplicated search
         const foundPrev = routes.some(
           ({ routeType: routeTypePrev, value: valuePrev, depth: depthPrev }) =>
             routeTypePrev === 'method' && valuePrev === value && depthPrev <= depth
@@ -225,7 +224,7 @@ export function getTableNamesByMethod(
 
         routes.push({ routeType: 'method', value, depth });
 
-        const ret = getTableNamesByMethod(found, methodsAll, xmlsAll, routes, depth + 1);
+        const ret = getTableNamesByMethod(found, xmlsAll, routes, depth + 1);
         if (ret) {
           const { tables, objectAndTables } = ret;
           tablesRet = tablesRet.concat([...tables]);
@@ -248,7 +247,7 @@ export function getDependency(): { finds: MethodInfoFind[]; xmls: XmlNodeInfoFin
     const { service, xml } = config.path.source.dependency[i];
 
     const { directory, file } = service;
-    const findsCur = getMethodInfoFinds(rootDir, directory, file);
+    const findsCur = getMethodInfoFinds(directory, file);
     finds = finds.concat(findsCur);
 
     const xmlsCur = getXmlNodeInfoFinds(rootDir, xml, '*.xml');
@@ -260,14 +259,10 @@ export function getDependency(): { finds: MethodInfoFind[]; xmls: XmlNodeInfoFin
 
 export function getStartToTables(
   findsController: MethodInfoFind[],
-  findsService: MethodInfoFind[],
   xmls: XmlNodeInfoFind[],
-  findsDependency: MethodInfoFind[],
   xmlsDependency: XmlNodeInfoFind[],
   startingPoint: StartingPoint
 ): StartToObjects[] {
-  const methodsAll = [...findsController, ...findsService, ...findsDependency];
-
   const xmlsAll = xmls.concat(xmlsDependency);
 
   const startToObjects: StartToObjects[] = [];
@@ -289,13 +284,7 @@ export function getStartToTables(
         routes.push({ routeType: 'mapping', value: `${mappingValue}`, depth: ++depth });
         routes.push({ routeType: 'method', value: classDotMethod, depth: ++depth });
 
-        const { tables, objectAndTables } = getTableNamesByMethod(
-          methodInStartings,
-          methodsAll,
-          xmlsAll,
-          routes,
-          depth + 1
-        );
+        const { tables, objectAndTables } = getTableNamesByMethod(methodInStartings, xmlsAll, routes, depth + 1);
         startToObjects.push({ mappingOrMethod: mappingValue, tables, objectAndTables, routes });
       }
     } else if (startingPoint === 'publicMethod') {
@@ -303,13 +292,7 @@ export function getStartToTables(
       let depth = -1;
       routes.push({ routeType: 'method', value: classDotMethod, depth: ++depth });
 
-      const { tables, objectAndTables } = getTableNamesByMethod(
-        methodInStartings,
-        methodsAll,
-        xmlsAll,
-        routes,
-        depth + 1
-      );
+      const { tables, objectAndTables } = getTableNamesByMethod(methodInStartings, xmlsAll, routes, depth + 1);
       startToObjects.push({
         mappingOrMethod: classDotMethod,
         tables,

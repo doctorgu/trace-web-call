@@ -2,7 +2,7 @@ import { statSync, readdirSync } from 'fs';
 import betterSqlite3 from 'better-sqlite3';
 import { resolve } from 'path';
 import { Config } from './configTypes';
-import { readFileSyncUtf16le } from '../common/util';
+import { readFileSyncUtf16le, regexpSqlite, testWildcardFileName, testWildcardFileNameSqlite } from '../common/util';
 import { configOtherUserTable } from './configOtherUserTable';
 import { configBzStoreApiBizgroup } from './configBzStoreApiBizgroup';
 import { configBzManualApiCommon } from './configBzManualApiCommon';
@@ -17,6 +17,8 @@ import {
   getObjectAndTablesFromDb,
   insertObjectAndTables,
 } from '../common/sqlHelper';
+import { runSaveToDbFirst } from '../common/message';
+import { execSql, get } from '../common/dbHelper';
 
 let tablesCache = new Set<string>();
 let objectTypeAndObjectAndTablesCache = new Map<ObjectType, ObjectAndTables>();
@@ -29,9 +31,19 @@ export const configReader = {
   db: (): betterSqlite3.Database => {
     if (dbCache) return dbCache;
 
-    const db = new betterSqlite3(config.path.database);
+    const db = new betterSqlite3(config.path.database, { readonly: false });
     // enable on delete cascade on update cascade
     db.exec('PRAGMA foreign_keys=ON');
+    db.function('testWildcardFileName', testWildcardFileNameSqlite);
+    db.function('regexp', regexpSqlite);
+    // const ret = db.prepare("select f from (select 'aaa' f union all select 'bbb') t where f = ?").pluck().get('aaa');
+    // const ret2 = db
+    //   .prepare("select f from (select 'aaa' f union all select 'bbb') t where f regexp ?")
+    //   .pluck()
+    //   .get('b.+');
+    // const ret = db.prepare('select testWildcardFileName(?, ?, ?)').pluck().get('*a.txt', 'aaa.txt', 1);
+    // const ret2 = db.prepare('select testWildcardFileName(?, ?, ?)').pluck().get('*a.txt', 'bbb.txt', 1);
+
     dbCache = db;
 
     return dbCache;
@@ -41,37 +53,12 @@ export const configReader = {
       return tablesCache;
     }
 
-    let tablesNew = new Set<string>();
     const tablesDb = getTablesFromDb();
-    if (tablesDb.size) {
-      tablesCache = tablesDb;
-      return tablesCache;
+    if (!tablesDb.size) {
+      throw new Error(runSaveToDbFirst);
     }
 
-    const path = config.path.data.tables;
-
-    if (statSync(path).isDirectory()) {
-      let values: string[] = [];
-
-      const files = readdirSync(path);
-      files.forEach((file) => {
-        const value = readFileSyncUtf16le(resolve(path, file));
-        values = values.concat(value.split(/\r*\n/));
-      });
-
-      tablesNew = new Set(values.filter((v) => !!v).map((v) => v.toUpperCase()));
-    } else {
-      const value = readFileSyncUtf16le(path);
-      tablesNew = new Set(
-        value
-          .split(/\r*\n/)
-          .filter((v) => !!v)
-          .map((v) => v.toUpperCase())
-      );
-    }
-
-    insertTables(tablesNew);
-    tablesCache = tablesNew;
+    tablesCache = tablesDb;
     return tablesCache;
   },
   objectAndTables: (objectType: ObjectType): ObjectAndTables => {
@@ -85,15 +72,11 @@ export const configReader = {
     }
 
     const objectAndTablesDb = getObjectAndTablesFromDb(objectType);
-    if (objectAndTablesDb.size) {
-      objectTypeAndObjectAndTablesCache.set(objectType, objectAndTablesDb);
-      return objectTypeAndObjectAndTablesCache.get(objectType) as ObjectAndTables;
-    }
+    // if (!objectAndTablesDb.size) {
+    //   throw new Error(runSaveToDbFirst);
+    // }
 
-    const objectAndTablesRet = getObjectAndTablesByObjectType(objectType, tablesCache);
-
-    insertObjectAndTables(objectType, objectAndTablesRet);
-    objectTypeAndObjectAndTablesCache.set(objectType, objectAndTablesRet);
+    objectTypeAndObjectAndTablesCache.set(objectType, objectAndTablesDb);
     return objectTypeAndObjectAndTablesCache.get(objectType) as ObjectAndTables;
   },
   tablesInObject: () => {

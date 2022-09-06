@@ -1,11 +1,11 @@
 import { promisify } from 'util';
 import { exec } from 'child_process';
-import { readdirSync, copyFileSync, unlinkSync, constants } from 'fs';
+import { readdirSync, copyFileSync, unlinkSync, existsSync } from 'fs';
 import { basename } from 'path';
 
 const runExec = promisify(exec);
 
-export async function copyModifiedUntracked() {
+async function copyModifiedUntracked() {
   const destPath = `D:/Temp/trace-web-call`;
   const path7Z = `"C:/Program Files/7-Zip/7Z"`;
   const destZipFile = `trace-web-call.pdf`;
@@ -33,6 +33,11 @@ export async function copyModifiedUntracked() {
   for (let i = 0; i < paths.length; i++) {
     const path = paths[i];
 
+    const exists = existsSync(path);
+    if (!exists) {
+      console.log(`*** deleted: ${path}`);
+      continue;
+    }
     // const cmd = `copy ${path.replace(/\//g, '\\')} ${destPath}\\${basename(path)}`;
     // const ret = await runExec(cmd);
 
@@ -45,7 +50,7 @@ export async function copyModifiedUntracked() {
   if (stderrZip) {
     throw new Error(`${stderrZip}`);
   }
-  console.log(stdoutZip);
+  // console.log(stdoutZip);
 
   console.log('Completed');
 }

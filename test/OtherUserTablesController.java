@@ -13,7 +13,7 @@ public class OtherUserTablesController extends OtherUserTablesBase {
 	}
 
 	@RequestMapping("/select/selectMualOrgIdxByMualIdx")
-	public ModelAndView selectMember(Model model) throws Exception {
+	public ModelAndView selectMember(ModelMual model) throws Exception {
 		return otherUserTablesDependency.selectMualOrgIdxByMualIdx(model);
 	}
 }

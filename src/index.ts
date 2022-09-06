@@ -10,8 +10,10 @@
 import { writeFileSync } from 'fs';
 import { resolve } from 'path';
 import { config } from './config/config';
-import { getMethodInfoFinds, getXmlNodeInfoFinds, getStartToTables, getDependency } from './common/traceHelper';
+import { getMethodInfoFinds } from './common/classHelper';
+import { getXmlNodeInfoFinds, getStartToTables, getDependency } from './common/traceHelper';
 import { readFileSyncUtf16le, removeCommentLiteralSql } from './common/util';
+import { saveToDb } from './run/saveToDb';
 
 function writeStartToTables() {
   function getBranch(depth: number) {
@@ -20,35 +22,20 @@ function writeStartToTables() {
     return `${' '.repeat((depth - 1) * 4)}+-- `;
   }
 
-  const { finds: findsDependency, xmls: xmlsDependency } = getDependency();
+  const { xmls: xmlsDependency } = getDependency();
 
   const { rootDir } = config.path.source;
   for (let i = 0; i < config.path.source.main.length; i++) {
     const { startings, serviceAndXmls, filePostfix } = config.path.source.main[i];
 
-    console.log(`Parsing ${startings.map((c) => c.directory).join(',')}`);
-    const findsController = startings.map(({ directory, file }) => getMethodInfoFinds(rootDir, directory, file)).flat();
-
-    console.log(`Parsing ${serviceAndXmls.map((s) => s.service.directory).join(',')}`);
-    const findsService = serviceAndXmls
-      .map(({ service: { directory, file } }) => getMethodInfoFinds(rootDir, directory, file))
-      .flat();
-
-    console.log(`Parsing ${serviceAndXmls.map((s) => s.xml).join(',')}`);
+    const findsController = startings.map(({ directory, file }) => getMethodInfoFinds(directory, file)).flat();
     const xmls = serviceAndXmls.map(({ xml }) => getXmlNodeInfoFinds(rootDir, xml, '*.xml')).flat();
 
     const startToTablesAll: string[] = [];
     const routesAll: string[] = [];
 
     console.log(`Get starting to tables...`);
-    const startToTables = getStartToTables(
-      findsController,
-      findsService,
-      xmls,
-      findsDependency,
-      xmlsDependency,
-      config.startingPoint
-    );
+    const startToTables = getStartToTables(findsController, xmls, xmlsDependency, config.startingPoint);
     let headerStartToTables = '';
     let headerRoutes = '';
     let lineSepRoutes = '';
@@ -91,7 +78,7 @@ function writeStartToTables() {
 writeStartToTables();
 
 function doTest() {
-  // const methodsInStartings = getMethodInfoFinds('./test', 'OverloadTestServiceImpl.java');
+  // const methodsInStartings = getMethodInfoFinds('./test', 'OverloadTestServiceImpl');
   // for (let nMethod = 0; nMethod < methodsInStartings.length; nMethod++) {
   //   const methodInStartings = methodsInStartings[nMethod];
   //   const { callers } = methodInStartings;
@@ -99,7 +86,7 @@ function doTest() {
   // }
   // const methodsInStartings = getMethodInfoFinds(
   //   config.path.test,
-  //   'AnnotationTestController.java',
+  //   'AnnotationTestController',
   //   'controller'
   // );
   // for (let nMethod = 0; nMethod < methodsInStartings.length; nMethod++) {
@@ -118,5 +105,6 @@ function doTest() {
   // const tablesUsed = objectAndTables.map(({ tables }) => [...tables]).flat();
   // // ['TAB1', 'TAB2', 'TAB3', 'TAB4', 'TAB6', 'TAB7', 'TAB8']
   // console.log(tablesUsed);
+  // saveToDb();
 }
 // doTest();

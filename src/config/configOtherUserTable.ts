@@ -3,10 +3,10 @@ import { Config } from './configTypes';
 export const configOtherUserTable: Config = {
   path: {
     source: {
-      rootDir: '.',
+      rootDir: 'C:/source/trace-web-call',
       main: [
         {
-          startings: [{ directory: `/test/`, file: 'OtherUserTablesController.java' }],
+          startings: [{ directory: `test/`, file: 'OtherUserTablesController.java' }],
           serviceAndXmls: [
             {
               service: {
@@ -16,12 +16,12 @@ export const configOtherUserTable: Config = {
               xml: 'test/OtherUserTables.xml',
             },
           ],
-          filePostfix: 'OtherUserTables',
+          filePostfix: 'OtherUserTables2',
         },
       ],
       dependency: [
         {
-          service: { directory: `/test/`, file: 'OtherUserTablesDependency.java' },
+          service: { directory: `test/`, file: 'OtherUserTablesDependency.java' },
           xml: 'test/OtherUserTablesDependency.xml',
         },
       ],

@@ -1,9 +1,11 @@
+export const sqlInit = `
 drop table if exists XmlInfo;
 drop table if exists XmlNodeInfo;
 
 drop table if exists ClassInfo;
 drop table if exists HeaderInfo;
 drop table if exists MethodInfo;
+drop table if exists MethodInfoFind;
 drop table if exists Tables;
 drop table if exists ObjectAndTables;
 
@@ -43,11 +45,25 @@ create table MethodInfo (
     annotations text not null,
     isPublic int not null check (isPublic in (0, 1)),
     name text not null,
-    callers text not null,
     parameterCount int not null,
+    callers text not null,
     foreign key (classPath) references ClassInfo (classPath) on update cascade on delete cascade
 ) strict;
 
+create table MethodInfoFind (
+    classPath text not null,
+    className text not null,
+    implementsName text not null,
+    extendsName text not null,
+    mappingValues text not null,
+    isPublic int not null check (isPublic in (0, 1)),
+    name text not null,
+    parameterCount int not null,
+    callers text not null,
+    foreign key (classPath) references ClassInfo (classPath) on update cascade on delete cascade
+) strict;
+create index IxMethodInfoFind1 on MethodInfoFind (name, parameterCount, className, implementsName);
+create index IxMethodInfoFind2 on MethodInfoFind (classPath);
 
 create table Tables (
     name text not null primary key
@@ -58,3 +74,4 @@ create table ObjectAndTables (
     objectType text not null,
     tables text not null
 ) strict;
+`;
