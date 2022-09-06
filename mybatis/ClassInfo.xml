@@ -1,6 +1,12 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <!DOCTYPE mapper PUBLIC "-//mybatis.org//DTD Mapper 3.0//EN" "http://mybatis.org/dtd/mybatis-3-mapper.dtd">
 <mapper namespace="ClassInfo">
+  <select id="selectClassInfo">
+    select  classPath
+    from    ClassInfo
+    where   classPath = #{classPath}
+  </select>
+
   <select id="selectHeaderInfo">
     select  name, implementsName, extendsName, annotations
     from    HeaderInfo
@@ -11,11 +17,6 @@
     select  annotations, isPublic, name, callers, parameterCount
     from    MethodInfo
     where   classPath = #{classPath}
-  </select>
-
-  <select id="selectMethodInfoFind">
-    select  classPath, className, implementsName, extendsName, mappingValues, isPublic, name, parameterCount, callers
-    from    MethodInfoFind
   </select>
 
   <select id="selectMethodInfoFindByClassPathClassName">

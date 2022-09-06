@@ -90,7 +90,6 @@ export type MethodInfoFind = {
 };
 
 type HeaderInfo = {
-  classPath: string;
   name: string;
   implementsName: string;
   extendsName: string;
@@ -98,6 +97,7 @@ type HeaderInfo = {
 };
 
 export type ClassInfo = {
+  classPath: string;
   header: HeaderInfo;
   // vars: VarInfo[];
   methods: MethodInfo[];
@@ -265,7 +265,7 @@ function includes2(paths: string[], finds: Keyword[]): boolean {
   }
 }
 
-function getHeaderInfo(classPath: string, classDeclaration: any): HeaderInfo {
+function getHeaderInfo(classDeclaration: any): HeaderInfo {
   const classModifier = getProperty(classDeclaration, 'classModifier'.split('.'));
   let annotations: Annotation[] = [];
   if (classModifier !== null) {
@@ -290,7 +290,7 @@ function getHeaderInfo(classPath: string, classDeclaration: any): HeaderInfo {
     'normalClassDeclaration.superinterfaces.interfaceTypeList.interfaceType.classType.Identifier'
   );
 
-  return { name, implementsName, extendsName, annotations, classPath };
+  return { name, implementsName, extendsName, annotations };
 }
 
 function getVars(pathsAndImageList: PathsAndImage[]): VarInfo[] {
@@ -630,7 +630,7 @@ function getClassInfoFromDb(classPath: string): ClassInfo | null {
 
   const { name, implementsName, extendsName, annotations } = rowHeader;
   const annoHeader: Annotation[] = JSON.parse(annotations);
-  const header: HeaderInfo = { classPath, name, implementsName, extendsName, annotations: annoHeader };
+  const header: HeaderInfo = { name, implementsName, extendsName, annotations: annoHeader };
 
   const methods: MethodInfo[] = [];
   for (const row of rowsMethod) {
@@ -642,7 +642,7 @@ function getClassInfoFromDb(classPath: string): ClassInfo | null {
     methods.push({ annotations: annoMethod, isPublic: isPublic2, name, callers: callers2, parameterCount });
   }
 
-  return { header, methods };
+  return { classPath, header, methods };
 }
 
 function insertClassInfo(
@@ -709,8 +709,14 @@ export function getClassInfo(rootDir: string, fullPath: string): ClassInfo {
   return classDb;
 }
 
-export function saveClassInfoToDb(rootDir: string, fullPath: string): ClassInfo {
+export function saveClassInfoToDb(rootDir: string, fullPath: string): ClassInfo | null {
   const classPath = getDbPath(rootDir, fullPath);
+
+  const db = configReader.db();
+  const rowClass = get(db, 'ClassInfo', 'selectClassInfo', { classPath });
+  if (rowClass) {
+    return null;
+  }
 
   const content = readFileSyncUtf16le(fullPath);
   const cst = parse(content);
@@ -720,7 +726,7 @@ export function saveClassInfoToDb(rootDir: string, fullPath: string): ClassInfo 
   const classDeclaration = getCstClassDeclaration(cstSimpleAll);
   const pathsAndImageList = getPathsAndImageListFromSimpleCst(classDeclaration);
 
-  const header = getHeaderInfo(classPath, classDeclaration);
+  const header = getHeaderInfo(classDeclaration);
   const vars = getVars(pathsAndImageList);
   const methods = getMethods(classDeclaration, pathsAndImageList, vars);
 
@@ -739,7 +745,7 @@ export function saveClassInfoToDb(rootDir: string, fullPath: string): ClassInfo 
   }));
   insertClassInfo(classPath, headerJson, methodsJson);
 
-  return { header, methods };
+  return { classPath, header, methods };
 }
 
 function insertMethodInfoFind(
@@ -786,8 +792,8 @@ export function saveMethodInfoFindToDb(classInfosMerged: ClassInfo[]): MethodInf
   let finds: MethodInfoFind[] = [];
 
   for (const classInfo of classInfosMerged) {
-    const { header, methods } = classInfo;
-    const { classPath, name: className, implementsName, extendsName, annotations: annotationsClass } = header;
+    const { classPath, header, methods } = classInfo;
+    const { name: className, implementsName, extendsName, annotations: annotationsClass } = header;
     const findsCur = methods.map(({ annotations, isPublic, name, parameterCount, callers }) => {
       const mappingClass = annotationsClass.find(({ name }) => name.endsWith('Mapping'));
       const root = mappingClass?.values?.[0] || '';

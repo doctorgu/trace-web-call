@@ -5,7 +5,7 @@ import { ClassInfo, saveClassInfoToDb, saveMethodInfoFindToDb } from '../common/
 import { ObjectAndTables, saveTablesToDb, saveObjectAndTables, saveXmlInfoToDb, XmlInfo } from '../common/sqlHelper';
 import { config, configReader } from '../config/config';
 import { DirectoryAndFilePattern } from '../config/configTypes';
-import { execSql } from '../common/dbHelper';
+import { all, exec, execSql, get } from '../common/dbHelper';
 import { mergeExtends } from '../common/traceHelper';
 import { sqlInit } from '../config/sql';
 
@@ -26,7 +26,9 @@ function saveClassAndXmlToDb(
 
     for (const fullPath of [...findFiles(initDir, file)]) {
       const classInfo = saveClassInfoToDb(rootDir, fullPath);
-      classInfos.push(classInfo);
+      if (classInfo) {
+        classInfos.push(classInfo);
+      }
     }
   });
 
@@ -48,8 +50,28 @@ function saveClassAndXmlToDb(
 }
 
 export function saveToDb() {
-  console.log(`Initializing all tables`);
   const db = configReader.db();
+
+  // Delete foreign table first for speed.
+  const tables = [
+    'XmlNodeInfo',
+    'XmlInfo',
+    'MethodInfo',
+    'MethodInfoFind',
+    'HeaderInfo',
+    'ClassInfo',
+    'ObjectAndTables',
+    'Tables',
+  ];
+  for (const tableName of tables) {
+    const row = get(db, 'Common', 'selectTable', { tableName });
+    if (!row) continue;
+
+    console.log(`Truncating ${tableName}`);
+    exec(db, 'Common', 'truncateTable', { tableName });
+  }
+
+  console.log(`Initializing all tables`);
   execSql(db, sqlInit);
 
   const { rootDir } = config.path.source;
@@ -75,13 +97,15 @@ export function saveToDb() {
   for (let i = 0; i < config.path.source.main.length; i++) {
     const { startings, serviceAndXmls } = config.path.source.main[i];
 
-    console.log(`Inserting ClassInfo, HeaderInfo, MethodInfo ${startings.map((c) => c.directory).join(',')}`);
+    console.log(`Inserting startings ClassInfo, HeaderInfo, MethodInfo ${startings.map((c) => c.directory).join(',')}`);
     startings.forEach(({ directory, file }) => {
       const initDir = resolve(rootDir, directory);
 
       for (const fullPath of [...findFiles(initDir, file)]) {
         const classInfo = saveClassInfoToDb(rootDir, fullPath);
-        classInfosAll.push(classInfo);
+        if (classInfo) {
+          classInfosAll.push(classInfo);
+        }
       }
     });
 
