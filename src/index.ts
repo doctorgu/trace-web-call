@@ -88,7 +88,7 @@ function writeStartToTables() {
     writeFileSync(pathRoute, `${headerRoutes}${routesAll.join(lineSepRoutes)}`, 'utf-8');
   }
 }
-writeStartToTables();
+// writeStartToTables();
 
 function doTest() {
   // const methodsInStartings = getMethodInfoFinds('./test', 'OverloadTestServiceImpl');
@@ -120,4 +120,4 @@ function doTest() {
   // console.log(tablesUsed);
   // saveToDb();
 }
-// doTest();
+doTest();

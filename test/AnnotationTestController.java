@@ -33,8 +33,13 @@ public class AnnotationTestController extends AbstractBaseController {
 		return new ModelAndView("output/abc7", model);
 	}
 
-	@RequestMapping(value="/abc/abc9"+ACTION_NAME)
+	@RequestMapping(value="/abc/abc9", produces="application/json; charset=utf8")
 	public ModelAndView getAbc9(Model model) throws Exception {
 		return new ModelAndView("output/abc9", model);
+	}
+
+	@RequestMapping(value="/abc/abc10"+ACTION_NAME)
+	public ModelAndView getAbc9(Model model) throws Exception {
+		return new ModelAndView("output/abc10", model);
 	}
 }
