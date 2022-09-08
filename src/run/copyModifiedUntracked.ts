@@ -5,7 +5,7 @@ import { basename } from 'path';
 
 const runExec = promisify(exec);
 
-async function copyModifiedUntracked() {
+export async function copyModifiedUntracked() {
   const destPath = `D:/Temp/trace-web-call`;
   const path7Z = `"C:/Program Files/7-Zip/7Z"`;
   const destZipFile = `trace-web-call.pdf`;
@@ -54,4 +54,3 @@ async function copyModifiedUntracked() {
 
   console.log('Completed');
 }
-copyModifiedUntracked();

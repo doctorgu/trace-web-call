@@ -8,13 +8,13 @@
   </select>
 
   <select id="selectHeaderInfo">
-    select  name, implementsName, extendsName, annotations
+    select  name, implementsName, extendsName, mapping
     from    HeaderInfo
     where   classPath = #{classPath}
   </select>
 
   <select id="selectMethodInfo">
-    select  annotations, isPublic, name, callers, parameterCount
+    select  mapping, isPublic, name, callers, parameterCount
     from    MethodInfo
     where   classPath = #{classPath}
   </select>

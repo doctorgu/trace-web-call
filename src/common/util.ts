@@ -31,25 +31,33 @@ export function removeCommentSql(value: string): string {
 
 /*
 --Example
-console.log(trimSpecific('"a"b"', '"') === 'a"b');
-console.log(trimSpecific('""ab"""', '"') === 'ab');
-console.log(trimSpecific('"', '"') === '');
-console.log(trimSpecific('"a', '"') === 'a');
-console.log(trimSpecific('a"', '"') === 'a');
-console.log(trimSpecific('[a]', '[]') === 'a');
-console.log(trimSpecific('{[a]}', '[{}]') === 'a');
+console.log(trimList('"a"b"', '"') === 'a"b');
+console.log(trimList('""ab"""', '"') === 'ab');
+console.log(trimList('"', '"') === '');
+console.log(trimList('"a', '"') === 'a');
+console.log(trimList('a"', '"') === 'a');
+console.log(trimList('[a]', '[]') === 'a');
+console.log(trimList('{[a]}', '[{}]') === 'a');
 */
-export function trimSpecific(value: string, find: string): string {
+export function trimList(value: string, find: string): string {
   const find2 = escapeRegexp(find);
   return value.replace(new RegExp(`^[${find2}]*(.*?)[${find2}]*$`), '$1');
 }
-export function trimStartSpecific(value: string, find: string): string {
+export function trimStartList(value: string, find: string): string {
   const find2 = escapeRegexp(find);
-  return value.replace(new RegExp(`^[${find2}]*(.*?)`), '$1');
+  return value.replace(new RegExp(`^[${find2}]*(.*)`), '$1');
 }
-export function trimEndSpecific(value: string, find: string): string {
+export function trimEndList(value: string, find: string): string {
   const find2 = escapeRegexp(find);
   return value.replace(new RegExp(`(.*?)[${find2}]*$`), '$1');
+}
+export function trimStart(value: string, find: string): string {
+  const find2 = escapeRegexp(find);
+  return value.replace(new RegExp(`^(?:${find2})*(.*)`), '$1');
+}
+export function trimEnd(value: string, find: string): string {
+  const find2 = escapeRegexp(find);
+  return value.replace(new RegExp(`(.*?)(?:${find2})*$`), '$1');
 }
 
 export function getClosingQuoteJava(value: string, posOpen: number): number {

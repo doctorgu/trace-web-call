@@ -10,7 +10,7 @@
 import { writeFileSync } from 'fs';
 import { resolve } from 'path';
 import { config } from './config/config';
-import { getMethodInfoFinds } from './common/classHelper';
+import { getClassInfo, getMethodInfoFindsFromDb } from './common/classHelper';
 import { getXmlNodeInfoFinds, getStartingToTables, getDependency } from './common/traceHelper';
 import { readFileSyncUtf16le, removeCommentLiteralSql } from './common/util';
 import { saveToDb } from './run/saveToDb';
@@ -32,7 +32,7 @@ function writeStartToTables() {
       filePostfix,
     } = config.path.source.main[i];
 
-    const findsStarting = getMethodInfoFinds(filePostfix, directory, file);
+    const findsStarting = getMethodInfoFindsFromDb(filePostfix, directory, file);
 
     const directories = serviceAndXmls.map(({ service: { directory } }) => directory);
     const xmls = serviceAndXmls.map(({ xml }) => getXmlNodeInfoFinds(rootDir, xml, '*.xml')).flat();
@@ -91,6 +91,8 @@ function writeStartToTables() {
 // writeStartToTables();
 
 function doTest() {
+  // const ret = getClassInfo('C:/source/trace-web-call/test/AnnotationTestController.java');
+  // console.log(ret);
   // const methodsInStartings = getMethodInfoFinds('./test', 'OverloadTestServiceImpl');
   // for (let nMethod = 0; nMethod < methodsInStartings.length; nMethod++) {
   //   const methodInStartings = methodsInStartings[nMethod];
@@ -118,6 +120,6 @@ function doTest() {
   // const tablesUsed = objectAndTables.map(({ tables }) => [...tables]).flat();
   // // ['TAB1', 'TAB2', 'TAB3', 'TAB4', 'TAB6', 'TAB7', 'TAB8']
   // console.log(tablesUsed);
-  // saveToDb();
 }
-doTest();
+// doTest();
+// saveToDb();

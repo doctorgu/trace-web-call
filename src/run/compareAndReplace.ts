@@ -3,7 +3,7 @@ import { Config } from '../config/configTypes';
 import { readFileSyncUtf16le } from '../common/util';
 import { config } from '../config/config';
 
-function compareAndReplace() {
+export function compareAndReplace() {
   function compareAndReplace2(pathNew: string, pathOld: string): boolean {
     const contentNew = readFileSyncUtf16le(pathNew);
     const contentOld = readFileSyncUtf16le(pathOld);
@@ -48,5 +48,3 @@ function compareAndReplace() {
     }
   }
 }
-
-compareAndReplace();

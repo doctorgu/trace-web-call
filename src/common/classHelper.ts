@@ -1,5 +1,13 @@
 import { parse } from 'java-parser';
-import { SqlTemplate, readFileSyncUtf16le, findLastIndex, trimSpecific, trimStartSpecific, escapeDollar } from './util';
+import {
+  SqlTemplate,
+  readFileSyncUtf16le,
+  findLastIndex,
+  trimList,
+  trimStartList,
+  escapeDollar,
+  trimEnd,
+} from './util';
 import { all, get, execSql } from './dbHelper';
 import { configReader } from '../config/config';
 import { runSaveToDbFirst } from './message';
@@ -43,20 +51,21 @@ type Keyword =
   | 'formalParameter'
   | 'unaryExpressionNotPlusMinus'
   | 'methodModifier'
-  | 'Public';
+  | 'Public'
+  | 'elementValuePair';
 
 type PathsAndImage = {
   paths: string[];
   image: string;
 };
 
-export type Annotation = {
-  name: string;
+export type Mapping = {
+  method: string;
   values: string[];
 };
 
 export type VarInfo = {
-  annotations: Annotation[];
+  annotations: Mapping[];
   typeName: string;
   instanceName: string;
 };
@@ -70,7 +79,7 @@ export type CallerInfo = {
 };
 
 export type MethodInfo = {
-  annotations: Annotation[];
+  mapping: Mapping;
   isPublic: boolean;
   name: string;
   parameterCount: number;
@@ -82,6 +91,7 @@ export type MethodInfoFind = {
   className: string;
   implementsName: string;
   extendsName: string;
+  mappingMethod: string;
   mappingValues: string[];
   isPublic: boolean; // !!! Need Public, Protected, Private when finding by extended
   name: string;
@@ -93,7 +103,7 @@ type HeaderInfo = {
   name: string;
   implementsName: string;
   extendsName: string;
-  annotations: Annotation[];
+  mapping: Mapping;
 };
 
 export type ClassInfo = {
@@ -172,7 +182,7 @@ function getPathsAndImageListFromSimpleCst2(parent: any, paths: string[], pathsA
     getPathsAndImageListFromSimpleCst2(prop, pathsNew, pathsAndImageList);
   }
 }
-function getPathsAndImageListFromSimpleCst(parent: any) {
+function getPathsAndImagesFromSimpleCst(parent: any) {
   const paths: string[] = [];
   const pathsAndImageList: PathsAndImage[] = [];
   getPathsAndImageListFromSimpleCst2(parent, paths, pathsAndImageList);
@@ -265,19 +275,74 @@ function includes2(paths: string[], finds: Keyword[]): boolean {
   }
 }
 
+function exec(r: RegExp, paths: string[], index: number = 0) {
+  const value = paths.filter((v, i) => i >= index).join('');
+  return r.exec(value);
+}
+
+function getMapping(
+  mappingName: string,
+  pathsAndImages: PathsAndImage[],
+  posMapping: number
+): { mapping: Mapping; posRBrace: number } | null {
+  const posLBrace = posMapping + 1;
+  const { paths } = pathsAndImages[posLBrace];
+  if (!endsWith(paths, 'LBrace')) {
+    return null;
+  }
+  const posRBrace = getRBracePosition(pathsAndImages, posLBrace);
+
+  let method = '';
+  // PostMapping, GetMapping...
+  if (mappingName !== 'RequestMapping') {
+    method = trimEnd(mappingName, 'Mapping').toUpperCase();
+  }
+
+  const list = pathsAndImages.filter((v, i) => i > posLBrace && i < posRBrace);
+  const images = list.map(({ image }) => image);
+  const posMethod = images.indexOf('method');
+  if (posMethod !== -1) {
+    const m = exec(/RequestMethod\.(\w+)/, images, posMethod);
+    if (m) {
+      method = m[1];
+    }
+  }
+
+  let values: string[] = [];
+  const posValue = images.indexOf('value');
+  const posEqual = images.indexOf('=', posValue);
+  const posLCurly = images.indexOf('{', posEqual);
+  if (posValue !== -1 && posEqual !== -1) {
+    if (posLCurly !== -1) {
+      // @RequestMapping(value={"/abc/abc5.do","/abc/abc6.do"})
+      const posRCurly = getRCurlyPosition(list, posLCurly);
+      values = images.filter((v, i) => i > posLCurly && i < posRCurly && v !== ',').map((v) => v);
+    } else {
+      // @RequestMapping(value = "/abc/abc2.do")
+      values = [images[posEqual + 1]];
+    }
+  } else {
+    // @RequestMapping("/abc/abc.do")
+    values = [images[0]];
+  }
+  values = values.map((value) => trimList(value, '"'));
+
+  return { mapping: { method, values }, posRBrace };
+}
+
 function getHeaderInfo(classDeclaration: any): HeaderInfo {
   const classModifier = getProperty(classDeclaration, 'classModifier'.split('.'));
-  let annotations: Annotation[] = [];
+  let mapping: Mapping = { method: '', values: [] };
   if (classModifier !== null) {
-    const pathsAndImageList = getPathsAndImageListFromSimpleCst(classModifier);
-    for (let i = 0; i < pathsAndImageList.length; i++) {
-      const { paths, image } = pathsAndImageList[i];
+    const pathsAndImages = getPathsAndImagesFromSimpleCst(classModifier);
+    for (let i = 0; i < pathsAndImages.length; i++) {
+      const { paths, image } = pathsAndImages[i];
 
-      if (includes(paths, 'annotation')) {
-        if (endsWith(paths, 'typeName', 'Identifier')) {
-          annotations.push({ name: image, values: [] });
-        } else if (endsWith(paths, 'StringLiteral')) {
-          annotations[annotations.length - 1].values.push(trimSpecific(image, '"'));
+      if (endsWith(paths, 'annotation', 'typeName', 'Identifier') && image.endsWith('Mapping')) {
+        const ret = getMapping(image, pathsAndImages, i);
+        if (ret) {
+          mapping = ret.mapping;
+          i = ret.posRBrace;
         }
       }
     }
@@ -290,14 +355,14 @@ function getHeaderInfo(classDeclaration: any): HeaderInfo {
     'normalClassDeclaration.superinterfaces.interfaceTypeList.interfaceType.classType.Identifier'
   );
 
-  return { name, implementsName, extendsName, annotations };
+  return { name, implementsName, extendsName, mapping };
 }
 
 function getVars(pathsAndImageList: PathsAndImage[]): VarInfo[] {
   const fieldDecls = pathsAndImageList.filter(({ paths, image }) => includes(paths, 'fieldDeclaration'));
 
   const vars: VarInfo[] = [];
-  let annotations: Annotation[] = [];
+  let annotations: Mapping[] = [];
   let typeName = '';
   let instanceName = '';
   for (let i = 0; i < fieldDecls.length; i++) {
@@ -311,9 +376,9 @@ function getVars(pathsAndImageList: PathsAndImage[]): VarInfo[] {
 
     if (includes(paths, 'annotation')) {
       if (endsWith(paths, 'typeName', 'Identifier')) {
-        annotations.push({ name: image, values: [] });
+        annotations.push({ method: image, values: [] });
       } else if (endsWith(paths, 'StringLiteral')) {
-        annotations[annotations.length - 1].values.push(trimSpecific(image, '"'));
+        annotations[annotations.length - 1].values.push(trimList(image, '"'));
       }
     } else if (includes(paths, 'unannType')) {
       typeName = image;
@@ -484,7 +549,7 @@ function getCallerInfos2(
       i = posRBraceInner;
     }
     if (endsWith(paths, 'StringLiteral') && image) {
-      stringLiteral = trimSpecific(image, '"');
+      stringLiteral = trimList(image, '"');
     }
   }
 
@@ -527,7 +592,7 @@ function getMethods(cstSimple: any, pathsAndImageList: PathsAndImage[], vars: Va
   const methodDecls = pathsAndImageList.filter(({ paths, image }) => includes(paths, 'methodDeclaration'));
 
   const methods: MethodInfo[] = [];
-  let annotations: Annotation[] = [];
+  let mapping: Mapping = { method: '', values: [] };
   let isPublic = false;
   let methodName = '';
   let parameterCount = 0;
@@ -535,11 +600,12 @@ function getMethods(cstSimple: any, pathsAndImageList: PathsAndImage[], vars: Va
   for (let i = 0; i < methodDecls.length; i++) {
     const { paths, image } = methodDecls[i];
 
-    if (includes(paths, 'annotation')) {
-      if (endsWith(paths, 'typeName', 'Identifier')) {
-        annotations.push({ name: image, values: [] });
-      } else if (endsWith(paths, 'StringLiteral')) {
-        annotations[annotations.length - 1].values.push(trimSpecific(image, '"'));
+    // RequestMapping, PostMapping, GetMapping
+    if (endsWith(paths, 'annotation', 'typeName', 'Identifier') && image.endsWith('Mapping')) {
+      const ret = getMapping(image, methodDecls, i);
+      if (ret) {
+        mapping = ret.mapping;
+        i = ret.posRBrace;
       }
     } else if (includes(paths, 'methodDeclaration', 'methodModifier') && endsWith(paths, 'Public')) {
       isPublic = true;
@@ -550,9 +616,9 @@ function getMethods(cstSimple: any, pathsAndImageList: PathsAndImage[], vars: Va
       const posRCurly = getRCurlyPosition(methodDecls, posLCurly);
       callers = getCallerInfos(cstSimple, methodDecls, vars, posLCurly, posRCurly);
 
-      methods.push({ annotations, isPublic, name: methodName, parameterCount, callers });
+      methods.push({ mapping, isPublic, name: methodName, parameterCount, callers });
 
-      annotations = [];
+      mapping = { method: '', values: [] };
       isPublic = false;
       methodName = '';
       callers = [];
@@ -593,6 +659,7 @@ export function rowsToFinds(rows: any[]): MethodInfoFind[] {
       className,
       implementsName,
       extendsName,
+      mappingMethod,
       mappingValues,
       isPublic,
       name,
@@ -608,6 +675,7 @@ export function rowsToFinds(rows: any[]): MethodInfoFind[] {
       className,
       implementsName,
       extendsName,
+      mappingMethod,
       mappingValues: mappingValues2,
       isPublic: isPublic2,
       name,
@@ -619,42 +687,16 @@ export function rowsToFinds(rows: any[]): MethodInfoFind[] {
   return finds;
 }
 
-function getClassInfoFromDb(classPath: string): ClassInfo | null {
-  const db = configReader.db();
-  const rowHeader = get(db, 'ClassInfo', 'selectHeaderInfo', { classPath });
-  if (!rowHeader) {
-    return null;
-  }
-
-  const rowsMethod = all(db, 'ClassInfo', 'selectMethodInfo', { classPath });
-
-  const { name, implementsName, extendsName, annotations } = rowHeader;
-  const annoHeader: Annotation[] = JSON.parse(annotations);
-  const header: HeaderInfo = { name, implementsName, extendsName, annotations: annoHeader };
-
-  const methods: MethodInfo[] = [];
-  for (const row of rowsMethod) {
-    const { annotations, isPublic, name, callers, parameterCount } = row;
-    const annoMethod: Annotation[] = JSON.parse(annotations);
-    const isPublic2 = isPublic === 1;
-    const callers2: CallerInfo[] = JSON.parse(callers);
-
-    methods.push({ annotations: annoMethod, isPublic: isPublic2, name, callers: callers2, parameterCount });
-  }
-
-  return { classPath, header, methods };
-}
-
 function insertClassInfo(
   classPath: string,
   header: {
     name: string;
     implementsName: string;
     extendsName: string;
-    annotations: string;
+    mapping: string;
   },
   methods: {
-    annotations: string;
+    mapping: string;
     isPublic: boolean;
     name: string;
     callers: string;
@@ -670,19 +712,19 @@ function insertClassInfo(
 
   const sqlTmpHeader = `
     insert into HeaderInfo
-      (classPath, name, implementsName, extendsName, annotations)
+      (classPath, name, implementsName, extendsName, mapping)
     values
-      ({classPath}, {header.name}, {header.implementsName}, {header.extendsName}, {header.annotations})`;
+      ({classPath}, {header.name}, {header.implementsName}, {header.extendsName}, {header.mapping})`;
   const sqlHeader = new SqlTemplate(sqlTmpHeader).replaceAll({ classPath, header });
 
   let sqlMethod = '';
   if (methods.length) {
     const sqlTmpMethod = `
     insert into MethodInfo
-      (classPath, annotations, isPublic, name, callers, parameterCount)
+      (classPath, mapping, isPublic, name, callers, parameterCount)
     values
       {values}`;
-    const sqlTmpValues = `({classPath}, {method.annotations}, {method.isPublic}, {method.name}, {method.callers}, {method.parameterCount})`;
+    const sqlTmpValues = `({classPath}, {method.mapping}, {method.isPublic}, {method.name}, {method.callers}, {method.parameterCount})`;
     const sqlValues = new SqlTemplate(sqlTmpValues).replaceAlls(
       methods.map((method) => ({ classPath, method })),
       ',\n'
@@ -698,15 +740,47 @@ function insertClassInfo(
   execSql(configReader.db(), sqlAll);
 }
 
-export function getClassInfo(rootDir: string, fullPath: string): ClassInfo {
+export function getClassInfoFromDb(rootDir: string, fullPath: string): ClassInfo {
   const classPath = getDbPath(rootDir, fullPath);
 
-  const classDb = getClassInfoFromDb(classPath);
-  if (!classDb) {
+  const db = configReader.db();
+  const rowHeader = get(db, 'ClassInfo', 'selectHeaderInfo', { classPath });
+  if (!rowHeader) {
     throw new Error(runSaveToDbFirst);
   }
 
-  return classDb;
+  const rowsMethod = all(db, 'ClassInfo', 'selectMethodInfo', { classPath });
+
+  const { name, implementsName, extendsName, mapping: mappingHeader } = rowHeader;
+  const header: HeaderInfo = { name, implementsName, extendsName, mapping: JSON.parse(mappingHeader) };
+
+  const methods: MethodInfo[] = [];
+  for (const row of rowsMethod) {
+    const { mapping, isPublic, name, callers, parameterCount } = row;
+    const mapping2: Mapping = JSON.parse(mapping);
+    const isPublic2 = isPublic === 1;
+    const callers2: CallerInfo[] = JSON.parse(callers);
+
+    methods.push({ mapping: mapping2, isPublic: isPublic2, name, callers: callers2, parameterCount });
+  }
+
+  return { classPath, header, methods };
+}
+
+export function getClassInfo(fullPath: string) {
+  const content = readFileSyncUtf16le(fullPath);
+  const cst = parse(content);
+
+  const pathsAndImageListAll = getPathsAndImageListFromCst(cst);
+  const cstSimpleAll = getSimplifiedCst(pathsAndImageListAll);
+  const classDeclaration = getCstClassDeclaration(cstSimpleAll);
+  const pathsAndImageList = getPathsAndImagesFromSimpleCst(classDeclaration);
+
+  const header = getHeaderInfo(classDeclaration);
+  const vars = getVars(pathsAndImageList);
+  const methods = getMethods(classDeclaration, pathsAndImageList, vars);
+
+  return { header, vars, methods };
 }
 
 export function saveClassInfoToDb(rootDir: string, fullPath: string): ClassInfo | null {
@@ -718,26 +792,16 @@ export function saveClassInfoToDb(rootDir: string, fullPath: string): ClassInfo 
     return null;
   }
 
-  const content = readFileSyncUtf16le(fullPath);
-  const cst = parse(content);
-
-  const pathsAndImageListAll = getPathsAndImageListFromCst(cst);
-  const cstSimpleAll = getSimplifiedCst(pathsAndImageListAll);
-  const classDeclaration = getCstClassDeclaration(cstSimpleAll);
-  const pathsAndImageList = getPathsAndImageListFromSimpleCst(classDeclaration);
-
-  const header = getHeaderInfo(classDeclaration);
-  const vars = getVars(pathsAndImageList);
-  const methods = getMethods(classDeclaration, pathsAndImageList, vars);
+  const { header, vars, methods } = getClassInfo(fullPath);
 
   const headerJson = {
     name: header.name,
     implementsName: header.implementsName,
     extendsName: header.extendsName,
-    annotations: JSON.stringify(header.annotations),
+    mapping: JSON.stringify(header.mapping),
   };
   const methodsJson = methods.map((method) => ({
-    annotations: JSON.stringify(method.annotations),
+    mapping: JSON.stringify(method.mapping),
     isPublic: method.isPublic,
     name: method.name,
     callers: JSON.stringify(method.callers),
@@ -755,6 +819,7 @@ function insertMethodInfoFind(
     className: string;
     implementsName: string;
     extendsName: string;
+    mappingMethod: string;
     mappingValues: string;
     isPublic: boolean;
     name: string;
@@ -766,10 +831,10 @@ function insertMethodInfoFind(
 
   const sqlTmp = `
   insert into MethodInfoFind
-    (filePostfix, classPath, className, implementsName, extendsName, mappingValues, isPublic, name, parameterCount, callers)
+    (filePostfix, classPath, className, implementsName, extendsName, mappingMethod, mappingValues, isPublic, name, parameterCount, callers)
   values
     {values}`;
-  const sqlTmpValues = `({filePostfix}, {classPath}, {className}, {implementsName}, {extendsName}, {mappingValues}, {isPublic}, {name}, {parameterCount}, {callers})`;
+  const sqlTmpValues = `({filePostfix}, {classPath}, {className}, {implementsName}, {extendsName}, {mappingMethod}, {mappingValues}, {isPublic}, {name}, {parameterCount}, {callers})`;
   const sqlValues = new SqlTemplate(sqlTmpValues).replaceAlls(finds, ',\n');
   const sql = sqlTmp.replace('{values}', escapeDollar(sqlValues));
   execSql(configReader.db(), sql);
@@ -789,29 +854,25 @@ function getDupMethod(finds: MethodInfoFind[]): string {
   const [name] = foundDup;
   return name;
 }
-export function saveMethodInfoFindToDb(classInfosMerged: ClassInfo[], filePostfix: string): MethodInfoFind[] {
+function getMethodInfoFinds(classInfosMerged: ClassInfo[]): MethodInfoFind[] {
   let finds: MethodInfoFind[] = [];
 
   for (const classInfo of classInfosMerged) {
     const { classPath, header, methods } = classInfo;
-    const { name: className, implementsName, extendsName, annotations: annotationsClass } = header;
-    const findsCur = methods.map(({ annotations, isPublic, name, parameterCount, callers }) => {
-      const mappingClass = annotationsClass.find(({ name }) => name.endsWith('Mapping'));
-      const root = mappingClass?.values?.[0] || '';
+    const { name: className, implementsName, extendsName, mapping: mappingClass } = header;
+    const findsCur = methods.map(({ mapping, isPublic, name, parameterCount, callers }) => {
+      const methodRoot = mappingClass.method;
+      const mappingRoot = mappingClass.values?.[0] || '';
 
-      const mappingValues: string[] = [];
-      const mappingCur = annotations.find(({ name }) => name.endsWith('Mapping'));
-      if (mappingCur) {
-        for (let i = 0; i < mappingCur.values.length; i++) {
-          mappingValues.push(`${root}${mappingCur.values[i]}`);
-        }
-      }
+      const mappingMethod = mapping.method || methodRoot;
+      const mappingValues = mapping.values.map((value) => `${mappingRoot}${value}`);
 
       return {
         classPath,
         className,
         implementsName,
         extendsName,
+        mappingMethod,
         mappingValues,
         isPublic,
         name,
@@ -829,12 +890,19 @@ export function saveMethodInfoFindToDb(classInfosMerged: ClassInfo[], filePostfi
     finds = finds.concat(findsCur);
   }
 
+  return finds;
+}
+
+export function saveMethodInfoFindToDb(classInfosMerged: ClassInfo[], filePostfix: string): MethodInfoFind[] {
+  const finds = getMethodInfoFinds(classInfosMerged);
+
   const findsJson = finds.map((find) => ({
     filePostfix,
     classPath: find.classPath,
     className: find.className,
     implementsName: find.implementsName,
     extendsName: find.extendsName,
+    mappingMethod: find.mappingMethod,
     mappingValues: JSON.stringify(find.mappingValues),
     isPublic: find.isPublic,
     name: find.name,
@@ -846,7 +914,7 @@ export function saveMethodInfoFindToDb(classInfosMerged: ClassInfo[], filePostfi
   return finds;
 }
 
-export function getMethodInfoFinds(
+export function getMethodInfoFindsFromDb(
   filePostfix: string,
   directory: string,
   filePattern: string | RegExp

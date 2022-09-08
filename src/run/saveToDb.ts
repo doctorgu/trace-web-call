@@ -50,8 +50,10 @@ function saveClassAndXmlToDb(
 }
 
 export function saveToDb() {
-  console.log(`Deleting ${config.path.database}`);
-  unlinkSync(config.path.database);
+  if (existsSync(config.path.database)) {
+    console.log(`Deleting ${config.path.database}`);
+    unlinkSync(config.path.database);
+  }
 
   const db = configReader.db();
 
@@ -110,5 +112,3 @@ export function saveToDb() {
     saveMethodInfoFindToDb(classInfosMerged, filePostfix);
   }
 }
-
-saveToDb();

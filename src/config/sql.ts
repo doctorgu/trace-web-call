@@ -35,14 +35,14 @@ create table HeaderInfo (
     name text not null,
     implementsName text not null,
     extendsName text not null,
-    annotations text not null,
+    mapping text not null,
     primary key (classPath, name),
     foreign key (classPath) references ClassInfo (classPath) on update cascade on delete cascade
 ) strict;
 
 create table MethodInfo (
     classPath text not null,
-    annotations text not null,
+    mapping text not null,
     isPublic int not null check (isPublic in (0, 1)),
     name text not null,
     parameterCount int not null,
@@ -56,6 +56,7 @@ create table MethodInfoFind (
     className text not null,
     implementsName text not null,
     extendsName text not null,
+    mappingMethod text not null,
     mappingValues text not null,
     isPublic int not null check (isPublic in (0, 1)),
     name text not null,

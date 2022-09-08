@@ -1,7 +1,14 @@
 import { existsSync, statSync } from 'fs';
 import { resolve } from 'path';
 import { findFiles } from './util';
-import { MethodInfo, MethodInfoFind, getMethodInfoFinds, ClassInfo, CallerInfo, rowsToFinds } from './classHelper';
+import {
+  MethodInfo,
+  MethodInfoFind,
+  getMethodInfoFindsFromDb,
+  ClassInfo,
+  CallerInfo,
+  rowsToFinds,
+} from './classHelper';
 import { XmlNodeInfoFind, getXmlInfo, ObjectAndTables } from './sqlHelper';
 import { config, configReader } from '../config/config';
 import { StartingPoint } from '../config/configTypes';
@@ -294,24 +301,23 @@ export function getStartingToTables(
     const routes: RouteInfo[] = [];
 
     if (startingPoint === 'map') {
-      for (let nValue = 0; nValue < mappingValues.length; nValue++) {
-        const mappingValue = mappingValues[nValue];
+      const mappingValuesComma = mappingValues.join(',');
 
-        const classDotMethod = `${className}.${methodName}`;
-        let depth = -1;
-        routes.push({ routeType: 'mapping', value: `${mappingValue}`, depth: ++depth });
-        routes.push({ routeType: 'method', value: classDotMethod, depth: ++depth });
+      let depth = -1;
+      routes.push({ routeType: 'mapping', value: `${mappingValuesComma}`, depth: ++depth });
 
-        const { tables, objectAndTables } = getTableNamesByMethod(
-          filePostfix,
-          methodInStartings,
-          directories,
-          xmlsAll,
-          routes,
-          depth + 1
-        );
-        startToObjects.push({ mappingOrMethod: mappingValue, tables, objectAndTables, routes });
-      }
+      const classDotMethod = `${className}.${methodName}`;
+      routes.push({ routeType: 'method', value: classDotMethod, depth: ++depth });
+
+      const { tables, objectAndTables } = getTableNamesByMethod(
+        filePostfix,
+        methodInStartings,
+        directories,
+        xmlsAll,
+        routes,
+        depth + 1
+      );
+      startToObjects.push({ mappingOrMethod: mappingValuesComma, tables, objectAndTables, routes });
     } else if (startingPoint === 'publicMethod') {
       const classDotMethod = `${className}.${methodName}`;
       let depth = -1;

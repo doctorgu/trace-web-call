@@ -28,18 +28,19 @@ public class AnnotationTestController extends AbstractBaseController {
 		return new ModelAndView("output/abc5", model);
 	}
 
-	@RequestMapping(value={"/abc/abc7.do","/abc/abc8.do"},method=RequestMethod.GET)
-	public ModelAndView getAbc7(Model model) throws Exception {
-		return new ModelAndView("output/abc7", model);
-	}
-
-	@RequestMapping(value="/abc/abc9", produces="application/json; charset=utf8")
-	public ModelAndView getAbc9(Model model) throws Exception {
-		return new ModelAndView("output/abc9", model);
+	@RequestMapping(value={"/abc/abc7.do","/abc/abc8.do","/abc/abc9.do"},method=RequestMethod.GET)
+	public ModelAndView getAbc789(Model model) throws Exception {
+		return new ModelAndView("output/abc789", model);
 	}
 
 	@RequestMapping(value="/abc/abc10"+ACTION_NAME)
-	public ModelAndView getAbc9(Model model) throws Exception {
+	public ModelAndView getAbc10(Model model) throws Exception {
 		return new ModelAndView("output/abc10", model);
 	}
+
+	@RequestMapping(value="/abc/abc11", produces="application/json; charset=utf8")
+	public ModelAndView getAbc11(Model model) throws Exception {
+		return new ModelAndView("output/abc11", model);
+	}
+
 }

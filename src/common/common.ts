@@ -1,5 +1,5 @@
-import { trimStartSpecific } from './util';
+import { trimStartList } from './util';
 
 export function getDbPath(rootDir: string, fullPath: string): string {
-  return trimStartSpecific(fullPath.substring(rootDir.length).replace(/\\/g, '/'), '/');
+  return trimStartList(fullPath.substring(rootDir.length).replace(/\\/g, '/'), '/');
 }

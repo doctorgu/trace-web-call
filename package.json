@@ -9,10 +9,11 @@
   "scripts": {
     "start": "tsc && node dist/index.js",
     "dev": "nodemon --watch 'src/**/*.ts' --exec ts-node src/index.ts",
-    "compareAndReplace": "ts-node ./src/run/compareAndReplace.ts",
-    "copyModifiedUntracked": "ts-node ./src/run/copyModifiedUntracked.ts",
-    "saveToDb": "ts-node ./src/run/saveToDb.ts",
-    "logGitCount": "ts-node ./src/run/logGitCount.ts"
+    "compareAndReplace": "tsc && node -e \"require('./dist/run/compareAndReplace').compareAndReplace()\"",
+    "copyModifiedUntracked": "tsc && node -e \"require('./dist/run/copyModifiedUntracked').copyModifiedUntracked()\"",
+    "saveToDb": "tsc && node -e \"require('./dist/run/saveToDb').saveToDb()\"",
+    "saveToDbNoBuild": "node -e \"require('./dist/run/saveToDb').saveToDb()\"",
+    "logGitCount": "tsc && node -e \"require('./dist/run/logGitCount').logGitCount()\""
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.0"
