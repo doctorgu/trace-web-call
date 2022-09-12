@@ -4,7 +4,7 @@ import { findFiles } from './util';
 import {
   MethodInfo,
   MethodInfoFind,
-  getMethodInfoFindsFromDb,
+  getFindsByClassPathClassNameFromDb,
   ClassInfo,
   CallerInfo,
   rowsToFinds,
@@ -12,19 +12,30 @@ import {
 import { XmlNodeInfoFind, getXmlInfo, ObjectAndTables } from './sqlHelper';
 import { config, configReader } from '../config/config';
 import { StartingPoint } from '../config/configTypes';
-import { all } from './dbHelper';
+import tClassInfo from '../sqlTemplate/TClassInfo';
+import tTables from '../sqlTemplate/TTables';
+import tXmlInfo from '../sqlTemplate/TXmlInfo';
 
-export type RouteInfo = {
-  routeType: 'mapping' | 'method' | 'xml' | 'table' | 'view' | 'function' | 'procedure';
-  value: string;
+export type RouteType = 'mapping' | 'method' | 'xml' | 'table' | 'view' | 'function' | 'procedure';
+export type RouteInfo<RouteType> = {
+  groupSeq?: number; // Only used for inserting to table
+  seq: number;
   depth: number;
+  routeType: RouteType;
+  valueMapping?: RouteType extends 'mapping' ? string[] : [];
+  valueMethod?: RouteType extends 'method' ? string : '';
+  valueXml?: RouteType extends 'xml' ? string : '';
+  valueTable?: RouteType extends 'table' ? Set<string> : null;
+  valueView?: RouteType extends 'view' ? { object: string; tables: Set<string> } : {};
+  valueFunction?: RouteType extends 'function' ? { object: string; tables: Set<string> } : {};
+  valueProcedure?: RouteType extends 'procedure' ? { object: string; tables: Set<string> } : {};
 };
 
 type StartToObjects = {
   mappingOrMethod: string;
   tables: Set<string>;
   objectAndTables: ObjectAndTables;
-  routes: RouteInfo[];
+  routes: RouteInfo<RouteType>[];
 };
 
 function getBaseMethods(classInfos: ClassInfo[], extendsNameSub: string): MethodInfo[] {
@@ -32,7 +43,7 @@ function getBaseMethods(classInfos: ClassInfo[], extendsNameSub: string): Method
 
   const classBases = classInfos.filter(({ header: { name: className } }) => className === extendsNameSub);
   if (!classBases.length) {
-    console.error(`Base class: ${extendsNameSub} not exists.`);
+    console.warn(`Base class: ${extendsNameSub} not exists.`);
     return [];
   }
 
@@ -79,18 +90,19 @@ export function getXmlNodeInfoFinds(
   const tablesAll = configReader.tables();
 
   const objectAndTablesAll = new Map<string, Set<string>>();
-  [...configReader.objectAndTables('view')].forEach(([object, tables]) => objectAndTablesAll.set(object, tables));
-  [...configReader.objectAndTables('function')].forEach(([object, tables]) => objectAndTablesAll.set(object, tables));
-  [...configReader.objectAndTables('procedure')].forEach(([object, tables]) => objectAndTablesAll.set(object, tables));
+  configReader.objectAndTables('view').forEach((tables, object) => objectAndTablesAll.set(object, tables));
+  configReader.objectAndTables('function').forEach((tables, object) => objectAndTablesAll.set(object, tables));
+  configReader.objectAndTables('procedure').forEach((tables, object) => objectAndTablesAll.set(object, tables));
 
   const fullPaths = statSync(fullDir).isDirectory() ? [...findFiles(fullDir, filePattern)] : [fullDir];
   for (const fullPath of fullPaths) {
     const xmlInfo = getXmlInfo(rootDir, fullPath, tablesAll, objectAndTablesAll);
     if (!xmlInfo) continue;
 
-    const { namespace, nodes } = xmlInfo;
-    const findsCur = nodes.map(({ id, tagName, params, tables, objectAndTables }) => ({
-      namespace,
+    const { xmlPath, namespace, nodes } = xmlInfo;
+    const findsCur: XmlNodeInfoFind[] = nodes.map(({ id, tagName, params, tables, objectAndTables }) => ({
+      xmlPath,
+      namespaceId: namespace ? `${namespace}.${id}` : id,
       id,
       tagName,
       params,
@@ -104,65 +116,46 @@ export function getXmlNodeInfoFinds(
 }
 
 function getObjectByStringLiteral(
-  xmlsAll: XmlNodeInfoFind[],
+  keyName: string,
+  directoriesXml: string[],
   stringLiteral: string
 ): { tables: Set<string>; objectAndTables: ObjectAndTables } | null {
   // User.updateInfo
   // User.UserDao.updateInfo
-  const literals = stringLiteral.split('.');
-  const first = literals[0];
-  const rest = literals.filter((v, i) => i >= 1).join('.');
 
-  const nodeInfoFind = xmlsAll.find(
-    ({ namespace, id }) => (namespace === first && id === rest) || id === stringLiteral
+  const row = tXmlInfo.selectXmlNodeInfoFindByNamespaceId(keyName, directoriesXml, stringLiteral);
+  if (!row) {
+    return null;
+  }
+
+  const { tables, objectAndTables } = row;
+
+  const tables2 = new Set<string>(JSON.parse(tables));
+
+  const objectAndTables2 = JSON.parse(objectAndTables) as [string, string[]][];
+  const objectAndTables3 = new Map<string, Set<string>>(
+    objectAndTables2.map(([object, tables]) => [object, new Set<string>(tables)])
   );
-  if (!nodeInfoFind) return null;
 
-  const { tables, objectAndTables } = nodeInfoFind;
-  return { tables, objectAndTables };
+  return { tables: tables2, objectAndTables: objectAndTables3 };
 }
 
-// function findByTypeMethod(
-//   methodsAll: MethodInfoFind[],
-//   typeName: string,
-//   classNameThis: string,
-//   methodName: string,
-//   callerParameterCount: number
-// ): MethodInfoFind[] {
-//   const foundsClass = methodsAll.filter(({ className, implementsName }) =>
-//     typeName ? className === typeName || implementsName === typeName : className === classNameThis
-//   );
-//   if (!foundsClass.length) {
-//     return [];
-//   }
-
-//   const foundsMethod = foundsClass.filter(
-//     ({ name, parameterCount }) => name === methodName && parameterCount === callerParameterCount
-//   );
-//   if (!foundsMethod.length) {
-//     const { extendsName } = foundsClass[0];
-//     return findByTypeMethod(methodsAll, extendsName, '', methodName, callerParameterCount);
-//   }
-
-//   return foundsMethod;
-// }
 function findByTypeMethod(
-  filePostfix: string,
+  keyName: string,
   directories: string[],
   typeName: string,
   classNameThis: string,
   methodName: string,
   callerParameterCount: number
 ): MethodInfoFind[] {
-  const db = configReader.db();
-  const rows = all(db, 'ClassInfo', 'selectMethodInfoFindByNameParameterCount', {
-    filePostfix,
-    classPathsLike: directories,
-    typeName,
-    classNameThis,
+  const rows = tClassInfo.selectMethodInfoFindByNameParameterCount(
+    keyName,
     methodName,
     callerParameterCount,
-  });
+    directories,
+    typeName,
+    classNameThis
+  );
   const finds = rowsToFinds(rows);
   return finds;
 
@@ -176,11 +169,11 @@ function findByTypeMethod(
 }
 
 export function getTableNamesByMethod(
-  filePostfix: string,
+  keyName: string,
   find: MethodInfoFind,
   directories: string[],
-  xmlsAll: XmlNodeInfoFind[],
-  routes: RouteInfo[],
+  directoriesXml: string[],
+  routes: RouteInfo<RouteType>[],
   depth: number
 ): { tables: Set<string>; objectAndTables: ObjectAndTables } {
   let tablesRet: string[] = [];
@@ -190,26 +183,63 @@ export function getTableNamesByMethod(
   for (let i = 0; i < callers.length; i++) {
     const { typeName, instanceName, methodName, parameterCount: callerParameterCount, stringLiteral } = callers[i];
     if (stringLiteral) {
-      const ret = getObjectByStringLiteral(xmlsAll, stringLiteral);
+      const ret = getObjectByStringLiteral(keyName, directoriesXml, stringLiteral);
       if (ret) {
         const { tables, objectAndTables } = ret;
 
-        routes.push({ routeType: 'xml', value: stringLiteral, depth: depth });
+        const routeXml: RouteInfo<'xml'> = {
+          seq: routes.length,
+          depth: depth,
+          routeType: 'xml',
+          valueXml: stringLiteral,
+        };
+        routes.push(routeXml);
 
-        routes.push({ routeType: 'table', value: [...tables].join(','), depth: depth + 1 });
+        const routeTable: RouteInfo<'table'> = {
+          seq: routes.length,
+          depth: depth + 1,
+          routeType: 'table',
+          valueTable: tables,
+        };
+        routes.push(routeTable);
+
         if (objectAndTables.size) {
           for (const [object, tables] of objectAndTables) {
             const objectType = configReader.objectType(object);
-            routes.push({
-              routeType: objectType,
-              value: `${object}(${[...tables].join(',')})`,
-              depth: depth + 1,
-            });
+            switch (objectType) {
+              case 'view':
+                const routeView: RouteInfo<'view'> = {
+                  seq: routes.length,
+                  depth: depth + 1,
+                  routeType: objectType,
+                  valueView: { object, tables },
+                };
+                routes.push(routeView);
+                break;
+              case 'function':
+                const routeFunction: RouteInfo<'function'> = {
+                  seq: routes.length,
+                  depth: depth + 1,
+                  routeType: objectType,
+                  valueFunction: { object, tables },
+                };
+                routes.push(routeFunction);
+                break;
+              case 'procedure':
+                const routeProcedure: RouteInfo<'procedure'> = {
+                  seq: routes.length,
+                  depth: depth + 1,
+                  routeType: objectType,
+                  valueProcedure: { object, tables },
+                };
+                routes.push(routeProcedure);
+                break;
+            }
           }
         }
 
         tablesRet = tablesRet.concat([...tables]);
-        [...objectAndTables].forEach(([object, tables]) => {
+        objectAndTables.forEach((tables, object) => {
           objectAndTablesRet.set(object, tables);
           tablesRet = tablesRet.concat([...tables]);
         });
@@ -217,14 +247,7 @@ export function getTableNamesByMethod(
       }
     }
 
-    const founds = findByTypeMethod(
-      filePostfix,
-      directories,
-      typeName,
-      classNameThis,
-      methodName,
-      callerParameterCount
-    );
+    const founds = findByTypeMethod(keyName, directories, typeName, classNameThis, methodName, callerParameterCount);
     // const founds = methodsAll.filter(({ className, implementsName, extendsName, name, parameterCount }) => {
     //   const classFound = typeName ? className === typeName || implementsName === typeName : className === classNameThis;
     //   if (!classFound) return false;
@@ -239,18 +262,24 @@ export function getTableNamesByMethod(
         const value = `${typeName ? `${typeName}.` : ''}${methodName}(${callerParameterCount})`;
         // to prevent duplicated search
         const foundPrev = routes.some(
-          ({ routeType: routeTypePrev, value: valuePrev, depth: depthPrev }) =>
-            routeTypePrev === 'method' && valuePrev === value && depthPrev <= depth
+          ({ routeType: routeTypePrev, valueMethod: valueMethodPrev, depth: depthPrev }) =>
+            routeTypePrev === 'method' && valueMethodPrev === value && depthPrev <= depth
         );
         if (foundPrev) continue;
 
-        routes.push({ routeType: 'method', value, depth });
+        const routeMethod: RouteInfo<'method'> = {
+          seq: routes.length,
+          depth: depth,
+          routeType: 'method',
+          valueMethod: value,
+        };
+        routes.push(routeMethod);
 
-        const ret = getTableNamesByMethod(filePostfix, found, directories, xmlsAll, routes, depth + 1);
+        const ret = getTableNamesByMethod(keyName, found, directories, directoriesXml, routes, depth + 1);
         if (ret) {
           const { tables, objectAndTables } = ret;
           tablesRet = tablesRet.concat([...tables]);
-          [...objectAndTables].forEach(([object, tables]) => objectAndTablesRet.set(object, tables));
+          objectAndTables.forEach((tables, object) => objectAndTablesRet.set(object, tables));
           continue;
         }
       }
@@ -260,36 +289,33 @@ export function getTableNamesByMethod(
   return { tables: new Set(tablesRet), objectAndTables: objectAndTablesRet };
 }
 
-export function getDependency(): { directories: string[]; xmls: XmlNodeInfoFind[] } {
-  const directories: string[] = [];
-  let xmls: XmlNodeInfoFind[] = [];
+// export function getDependency(): { directories: string[]; xmls: XmlNodeInfoFind[] } {
+//   const directories: string[] = [];
+//   let xmls: XmlNodeInfoFind[] = [];
 
-  const { rootDir } = config.path.source;
-  for (let i = 0; i < config.path.source.dependency.length; i++) {
-    const {
-      service: { directory },
-      xml,
-    } = config.path.source.dependency[i];
+//   const { rootDir } = config.path.source;
+//   for (let i = 0; i < config.path.source.dependency.length; i++) {
+//     const {
+//       service: { directory },
+//       xml,
+//     } = config.path.source.dependency[i];
 
-    directories.push(directory);
+//     directories.push(directory);
 
-    const xmlsCur = getXmlNodeInfoFinds(rootDir, xml, '*.xml');
-    xmls = xmls.concat(xmlsCur);
-  }
+//     const xmlsCur = getXmlNodeInfoFinds(rootDir, xml, '*.xml');
+//     xmls = xmls.concat(xmlsCur);
+//   }
 
-  return { directories, xmls };
-}
+//   return { directories, xmls };
+// }
 
 export function getStartingToTables(
-  filePostfix: string,
+  keyName: string,
   findsStarting: MethodInfoFind[],
   directories: string[],
-  xmls: XmlNodeInfoFind[],
-  xmlsDependency: XmlNodeInfoFind[],
+  directoriesXml: string[],
   startingPoint: StartingPoint
 ): StartToObjects[] {
-  const xmlsAll = xmls.concat(xmlsDependency);
-
   const startToObjects: StartToObjects[] = [];
 
   for (let nMethod = 0; nMethod < findsStarting.length; nMethod++) {
@@ -298,36 +324,52 @@ export function getStartingToTables(
     if (startingPoint === 'map' && !mappingValues.length) continue;
     if (startingPoint === 'publicMethod' && !methodIsPublic) continue;
 
-    const routes: RouteInfo[] = [];
+    const routes: RouteInfo<RouteType>[] = [];
 
     if (startingPoint === 'map') {
-      const mappingValuesComma = mappingValues.join(',');
-
       let depth = -1;
-      routes.push({ routeType: 'mapping', value: `${mappingValuesComma}`, depth: ++depth });
+      const routeMapping: RouteInfo<'mapping'> = {
+        seq: routes.length,
+        depth: ++depth,
+        routeType: 'mapping',
+        valueMapping: mappingValues,
+      };
+      routes.push(routeMapping);
 
       const classDotMethod = `${className}.${methodName}`;
-      routes.push({ routeType: 'method', value: classDotMethod, depth: ++depth });
+      const routeMethod: RouteInfo<'method'> = {
+        seq: routes.length,
+        depth: ++depth,
+        routeType: 'method',
+        valueMethod: classDotMethod,
+      };
+      routes.push(routeMethod);
 
       const { tables, objectAndTables } = getTableNamesByMethod(
-        filePostfix,
+        keyName,
         methodInStartings,
         directories,
-        xmlsAll,
+        directoriesXml,
         routes,
         depth + 1
       );
-      startToObjects.push({ mappingOrMethod: mappingValuesComma, tables, objectAndTables, routes });
+      startToObjects.push({ mappingOrMethod: mappingValues.join(','), tables, objectAndTables, routes });
     } else if (startingPoint === 'publicMethod') {
       const classDotMethod = `${className}.${methodName}`;
       let depth = -1;
-      routes.push({ routeType: 'method', value: classDotMethod, depth: ++depth });
+      const routeMethod: RouteInfo<'method'> = {
+        seq: routes.length,
+        depth: ++depth,
+        routeType: 'method',
+        valueMethod: classDotMethod,
+      };
+      routes.push(routeMethod);
 
       const { tables, objectAndTables } = getTableNamesByMethod(
-        filePostfix,
+        keyName,
         methodInStartings,
         directories,
-        xmlsAll,
+        directoriesXml,
         routes,
         depth + 1
       );
