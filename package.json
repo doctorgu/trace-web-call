@@ -10,9 +10,10 @@
     "start": "tsc && node dist/index.js",
     "dev": "nodemon --watch 'src/**/*.ts' --exec ts-node src/index.ts",
     "compareAndReplace": "tsc && node -e \"require('./dist/run/compareAndReplace').compareAndReplace()\"",
+    "compareAndReplace2": "node -e \"require('./dist/run/compareAndReplace').compareAndReplace()\"",
     "copyModifiedUntracked": "tsc && node -e \"require('./dist/run/copyModifiedUntracked').copyModifiedUntracked()\"",
-    "saveToDb": "tsc && node -e \"require('./dist/run/saveToDb').saveToDb()\"",
-    "saveToDbNoBuild": "node -e \"require('./dist/run/saveToDb').saveToDb()\"",
+    "insertToDb": "tsc && node -e \"require('./dist/run/insertToDb').insertToDb()\"",
+    "insertToDb2": "node -e \"require('./dist/run/insertToDb').insertToDb()\"",
     "logGitCount": "tsc && node -e \"require('./dist/run/logGitCount').logGitCount()\""
   },
   "devDependencies": {
@@ -24,7 +25,6 @@
     "date-fns": "^2.28.0",
     "discord.js": "^13.8.1",
     "java-parser": "^2.0.2",
-    "mybatis-mapper": "^0.6.8",
     "nodemon": "^1.19.1",
     "xml-js": "^1.6.11"
   }

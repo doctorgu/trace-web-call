@@ -1,17 +1,12 @@
 import { parse } from 'java-parser';
-import {
-  SqlTemplate,
-  readFileSyncUtf16le,
-  findLastIndex,
-  trimList,
-  trimStartList,
-  escapeDollar,
-  trimEnd,
-} from './util';
-import { all, get, execSql } from './dbHelper';
-import { configReader } from '../config/config';
-import { runSaveToDbFirst } from './message';
+import { readFileSyncUtf16le, trimList, trimEnd } from './util';
+import { SqlTemplate } from '../common/sqliteHelper';
+import { config, configReader } from '../config/config';
+import { runinsertToDbFirst } from './message';
 import { getDbPath } from './common';
+import { getStartingToTables, RouteInfo } from './traceHelper';
+import tClassInfo from '../sqlTemplate/TClassInfo';
+import tCommon from '../sqlTemplate/TCommon';
 
 type Keyword =
   | 'LCurly'
@@ -99,7 +94,7 @@ export type MethodInfoFind = {
   callers: CallerInfo[];
 };
 
-type HeaderInfo = {
+export type HeaderInfo = {
   name: string;
   implementsName: string;
   extendsName: string;
@@ -687,69 +682,15 @@ export function rowsToFinds(rows: any[]): MethodInfoFind[] {
   return finds;
 }
 
-function insertClassInfo(
-  classPath: string,
-  header: {
-    name: string;
-    implementsName: string;
-    extendsName: string;
-    mapping: string;
-  },
-  methods: {
-    mapping: string;
-    isPublic: boolean;
-    name: string;
-    callers: string;
-    parameterCount: number;
-  }[]
-) {
-  const sqlTmpClass = `
-  insert into ClassInfo
-    (classPath)
-  values
-    ({classPath})`;
-  const sqlClass = new SqlTemplate(sqlTmpClass).replace('{classPath}', classPath).toString();
-
-  const sqlTmpHeader = `
-    insert into HeaderInfo
-      (classPath, name, implementsName, extendsName, mapping)
-    values
-      ({classPath}, {header.name}, {header.implementsName}, {header.extendsName}, {header.mapping})`;
-  const sqlHeader = new SqlTemplate(sqlTmpHeader).replaceAll({ classPath, header });
-
-  let sqlMethod = '';
-  if (methods.length) {
-    const sqlTmpMethod = `
-    insert into MethodInfo
-      (classPath, mapping, isPublic, name, callers, parameterCount)
-    values
-      {values}`;
-    const sqlTmpValues = `({classPath}, {method.mapping}, {method.isPublic}, {method.name}, {method.callers}, {method.parameterCount})`;
-    const sqlValues = new SqlTemplate(sqlTmpValues).replaceAlls(
-      methods.map((method) => ({ classPath, method })),
-      ',\n'
-    );
-    sqlMethod = sqlTmpMethod.replace('{values}', escapeDollar(sqlValues));
-  }
-
-  const sqlAll = `
-  ${sqlClass};
-  ${sqlHeader};
-  ${sqlMethod};
-  `;
-  execSql(configReader.db(), sqlAll);
-}
-
 export function getClassInfoFromDb(rootDir: string, fullPath: string): ClassInfo {
   const classPath = getDbPath(rootDir, fullPath);
 
-  const db = configReader.db();
-  const rowHeader = get(db, 'ClassInfo', 'selectHeaderInfo', { classPath });
+  const rowHeader = tClassInfo.selectHeaderInfo(classPath);
   if (!rowHeader) {
-    throw new Error(runSaveToDbFirst);
+    throw new Error(runinsertToDbFirst);
   }
 
-  const rowsMethod = all(db, 'ClassInfo', 'selectMethodInfo', { classPath });
+  const rowsMethod = tClassInfo.selectMethodInfo(classPath);
 
   const { name, implementsName, extendsName, mapping: mappingHeader } = rowHeader;
   const header: HeaderInfo = { name, implementsName, extendsName, mapping: JSON.parse(mappingHeader) };
@@ -783,61 +724,19 @@ export function getClassInfo(fullPath: string) {
   return { header, vars, methods };
 }
 
-export function saveClassInfoToDb(rootDir: string, fullPath: string): ClassInfo | null {
+export function insertClassInfo(rootDir: string, fullPath: string): ClassInfo | null {
   const classPath = getDbPath(rootDir, fullPath);
 
-  const db = configReader.db();
-  const rowClass = get(db, 'ClassInfo', 'selectClassInfo', { classPath });
+  const rowClass = tClassInfo.selectClassInfo(classPath);
   if (rowClass) {
     return null;
   }
 
   const { header, vars, methods } = getClassInfo(fullPath);
 
-  const headerJson = {
-    name: header.name,
-    implementsName: header.implementsName,
-    extendsName: header.extendsName,
-    mapping: JSON.stringify(header.mapping),
-  };
-  const methodsJson = methods.map((method) => ({
-    mapping: JSON.stringify(method.mapping),
-    isPublic: method.isPublic,
-    name: method.name,
-    callers: JSON.stringify(method.callers),
-    parameterCount: method.parameterCount,
-  }));
-  insertClassInfo(classPath, headerJson, methodsJson);
+  tClassInfo.insertClassInfo(classPath, header, methods);
 
   return { classPath, header, methods };
-}
-
-function insertMethodInfoFind(
-  finds: {
-    filePostfix: string;
-    classPath: string;
-    className: string;
-    implementsName: string;
-    extendsName: string;
-    mappingMethod: string;
-    mappingValues: string;
-    isPublic: boolean;
-    name: string;
-    parameterCount: number;
-    callers: string;
-  }[]
-) {
-  if (!finds.length) return;
-
-  const sqlTmp = `
-  insert into MethodInfoFind
-    (filePostfix, classPath, className, implementsName, extendsName, mappingMethod, mappingValues, isPublic, name, parameterCount, callers)
-  values
-    {values}`;
-  const sqlTmpValues = `({filePostfix}, {classPath}, {className}, {implementsName}, {extendsName}, {mappingMethod}, {mappingValues}, {isPublic}, {name}, {parameterCount}, {callers})`;
-  const sqlValues = new SqlTemplate(sqlTmpValues).replaceAlls(finds, ',\n');
-  const sql = sqlTmp.replace('{values}', escapeDollar(sqlValues));
-  execSql(configReader.db(), sql);
 }
 
 function getDupMethod(finds: MethodInfoFind[]): string {
@@ -893,29 +792,22 @@ function getMethodInfoFinds(classInfosMerged: ClassInfo[]): MethodInfoFind[] {
   return finds;
 }
 
-export function saveMethodInfoFindToDb(classInfosMerged: ClassInfo[], filePostfix: string): MethodInfoFind[] {
+export function insertMethodInfoFindKeyName(keyName: string, classInfosMerged: ClassInfo[]): MethodInfoFind[] {
   const finds = getMethodInfoFinds(classInfosMerged);
 
-  const findsJson = finds.map((find) => ({
-    filePostfix,
-    classPath: find.classPath,
-    className: find.className,
-    implementsName: find.implementsName,
-    extendsName: find.extendsName,
-    mappingMethod: find.mappingMethod,
-    mappingValues: JSON.stringify(find.mappingValues),
-    isPublic: find.isPublic,
-    name: find.name,
-    parameterCount: find.parameterCount,
-    callers: JSON.stringify(find.callers),
-  }));
-  insertMethodInfoFind(findsJson);
+  tClassInfo.insertMethodInfoFindKeyName(keyName, finds);
 
   return finds;
 }
 
-export function getMethodInfoFindsFromDb(
-  filePostfix: string,
+export function getFindsByKeyNameFromDb(keyName: string): MethodInfoFind[] {
+  const rows = tClassInfo.selectMethodInfoFindByKeyName(keyName);
+  const finds = rowsToFinds(rows);
+  return finds;
+}
+
+export function getFindsByClassPathClassNameFromDb(
+  keyName: string,
   directory: string,
   filePattern: string | RegExp
 ): MethodInfoFind[] {
@@ -929,12 +821,50 @@ export function getMethodInfoFindsFromDb(
     fileNamePattern = filePattern.source;
   }
 
-  const rows = all(db, 'ClassInfo', 'selectMethodInfoFindByClassPathClassName', {
-    filePostfix,
-    classPathLike: directory,
+  const rows = tClassInfo.selectMethodInfoFindByClassPathClassName(
+    keyName,
+    directory,
     fileNameWildcard,
-    fileNamePattern,
-  });
+    fileNamePattern
+  );
   const finds = rowsToFinds(rows);
   return finds;
+}
+
+export function insertRouteInfoKeyName() {
+  const directoriesDep: string[] = config.path.source.dependency.map(({ service: { directory } }) => directory);
+  const directoriesXmlDep: string[] = config.path.source.dependency.map(({ xml }) => xml);
+
+  for (let i = 0; i < config.path.source.main.length; i++) {
+    const {
+      startings: { directory, file },
+      serviceAndXmls,
+      keyName,
+    } = config.path.source.main[i];
+
+    const findsStarting = getFindsByClassPathClassNameFromDb(keyName, directory, file);
+
+    const directories = serviceAndXmls.map(({ service: { directory } }) => directory);
+    const directoriesXml = serviceAndXmls.map(({ xml }) => xml);
+
+    console.log(`getStartingToTables`);
+    const startToTables = getStartingToTables(
+      keyName,
+      findsStarting,
+      directories.concat(directoriesDep),
+      directoriesXml.concat(directoriesXmlDep),
+      config.startingPoint
+    );
+
+    const routesCur = startToTables
+      .map(({ routes }, i) => {
+        return routes.map((route) => ({ groupSeq: i, ...route }));
+      })
+      .flat();
+    if (!routesCur.length) {
+      continue;
+    }
+    console.log(`insertRouteInfoKeyName`);
+    tCommon.insertRouteInfoKeyName(keyName, routesCur);
+  }
 }

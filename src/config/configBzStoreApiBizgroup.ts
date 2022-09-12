@@ -19,7 +19,7 @@ export const configBzStoreApiBizgroup: Config = {
               xml: 'bz-store-api-bizgroup/src/main/resources/sql/oracle',
             },
           ],
-          filePostfix: '-bz-store-api-bizgroup2',
+          keyName: '-bz-store-api-bizgroup2',
         },
       ],
       dependency: [],

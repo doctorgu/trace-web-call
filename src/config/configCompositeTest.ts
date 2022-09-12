@@ -19,7 +19,7 @@ export const configCompositeTest: Config = {
               xml: 'bz-store-api-bizgroup/src/main/resources/sql/oracle',
             },
           ],
-          filePostfix: '-bz-store-api-bizgroupTest2',
+          keyName: '-bz-store-api-bizgroupTest2',
         },
       ],
       dependency: [],

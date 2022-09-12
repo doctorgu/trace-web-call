@@ -5,16 +5,17 @@ import {
   removeCommentLiteralSql,
   trimList,
   readFileSyncUtf16le,
-  SqlTemplate,
   escapeDollar,
 } from './util';
+import { SqlTemplate } from '../common/sqliteHelper';
 import { config, configReader } from '../config/config';
 import { readdirSync, existsSync, statSync } from 'fs';
 import { resolve } from 'path';
-import { all, get, run, exec, execSql } from './dbHelper';
 import betterSqlite3 from 'better-sqlite3';
-import { runSaveToDbFirst } from './message';
+import { runinsertToDbFirst } from './message';
 import { getDbPath } from './common';
+import tTables from '../sqlTemplate/TTables';
+import tXmlInfo from '../sqlTemplate/TXmlInfo';
 
 export type XmlNodeInfo = {
   id: string;
@@ -23,63 +24,29 @@ export type XmlNodeInfo = {
   tables: Set<string>;
   objectAndTables: ObjectAndTables;
 };
+export type XmlNodeInfoFind = XmlNodeInfo & {
+  xmlPath: string;
+  namespaceId: string;
+};
 export type XmlInfo = {
   xmlPath: string;
   namespace: string;
   nodes: XmlNodeInfo[];
-};
-export type XmlNodeInfoFind = XmlNodeInfo & {
-  namespace: string;
 };
 
 export type ObjectAndTables = Map<string, Set<string>>;
 export type ObjectType = 'view' | 'function' | 'procedure';
 
 export function getTablesFromDb(): Set<string> {
-  const db = configReader.db();
-
-  const rows = all(db, 'Tables', 'selectTables');
+  const rows = tTables.selectTables();
   const tables = new Set(rows.map(({ name }) => name));
   return tables;
 }
 
-export function insertTables(tables: Set<string>) {
-  if (!tables.size) return;
-
-  const db = configReader.db();
-  exec(db, 'Tables', 'insertTables', { tables: [...tables] });
-}
-
 export function getObjectAndTablesFromDb(objectType: ObjectType): ObjectAndTables {
-  const db = configReader.db();
-
-  const rows = all(db, 'Tables', 'selectObjectAndTables', { objectType });
+  const rows = tTables.selectObjectAndTables(objectType);
   const objectAndTables = new Map(rows.map(({ object, tables }) => [object, new Set<string>(JSON.parse(tables))]));
   return objectAndTables;
-}
-
-export function insertObjectAndTables(objectType: ObjectType, objectAndTables: ObjectAndTables) {
-  if (!objectAndTables.size) return;
-
-  const sqlTmp = `
-  insert into objectAndTables
-    (object, objectType, tables)
-  values
-    {values}
-  `;
-  const sqlTmpValues = `
-  ({object}, {objectType}, {tables})
-  `;
-
-  const db = configReader.db();
-  const params = [...objectAndTables].map(([object, tables]) => ({
-    object,
-    objectType,
-    tables: JSON.stringify([...tables]),
-  }));
-  const sqlValues = new SqlTemplate(sqlTmpValues).replaceAlls(params, ',\n');
-  const sql = sqlTmp.replace('{values}', escapeDollar(sqlValues));
-  execSql(db, sql);
 }
 
 export function getObjectAndTablesByObjectType(objectType: ObjectType, tables: Set<string>): ObjectAndTables {
@@ -109,7 +76,7 @@ export function getObjectAndTablesByObjectType(objectType: ObjectType, tables: S
       files.forEach((file) => {
         const value = readFileSyncUtf16le(resolve(path, file));
         const objectAndTablesCur = getObjectAndTables(value, tables, objectType);
-        [...objectAndTablesCur].forEach(([object, tables]) => {
+        objectAndTablesCur.forEach((tables, object) => {
           objectAndTables.set(object, tables);
         });
       });
@@ -274,16 +241,14 @@ function getTextInclude(parent: Element, elemRows: Element[]): string {
 }
 
 function getXmlInfoFromDb(xmlPath: string): XmlInfo | null {
-  const db = configReader.db();
-
   const nodes: XmlNodeInfo[] = [];
 
-  const rowXml = get(db, 'XmlInfo', 'selectXmlInfo', { xmlPath });
+  const rowXml = tXmlInfo.selectXmlInfo(xmlPath);
   if (!rowXml) {
     return null;
   }
 
-  const rowsXmlNode = all(db, 'XmlInfo', 'selectXmlNodeInfo', { xmlPath });
+  const rowsXmlNode = tXmlInfo.selectXmlNodeInfo(xmlPath);
 
   const { namespace } = rowXml;
 
@@ -302,46 +267,6 @@ function getXmlInfoFromDb(xmlPath: string): XmlInfo | null {
 
   return { xmlPath, namespace, nodes };
 }
-function insertXmlNodeInfo(
-  xmlPath: string,
-  namespace: string,
-  nodes: {
-    id: string;
-    tagName: string;
-    params: string;
-    tables: string;
-    objectAndTables: string;
-  }[]
-) {
-  const sqlTmpXml = `
-    insert into XmlInfo
-      (xmlPath, namespace)
-    values
-      ({xmlPath}, {namespace});
-  `;
-  const sqlXml = new SqlTemplate(sqlTmpXml).replaceAll({ xmlPath, namespace });
-
-  let sqlXmlNode = '';
-  if (nodes.length) {
-    const sqlTmpXmlNode = `
-    insert into XmlNodeInfo
-      (xmlPath, id, tagName, params, tables, objectAndTables)
-    values      
-      {values}
-`;
-    const sqlTmpValues = `({xmlPath}, {node.id}, {node.tagName}, {node.params}, {node.tables}, {node.objectAndTables})`;
-    const sqlValues = new SqlTemplate(sqlTmpValues).replaceAlls(
-      nodes.map((node) => ({ xmlPath, node })),
-      ','
-    );
-    sqlXmlNode = sqlTmpXmlNode.replace('{values}', escapeDollar(sqlValues));
-  }
-
-  const sqlAll = `
-  ${sqlXml};
-  ${sqlXmlNode};`;
-  execSql(configReader.db(), sqlAll);
-}
 
 export function getXmlInfo(
   rootDir: string,
@@ -353,13 +278,13 @@ export function getXmlInfo(
 
   const xmlDb = getXmlInfoFromDb(xmlPath);
   // if (!xmlDb) {
-  //   throw new Error(runSaveToDbFirst);
+  //   throw new Error(runinsertToDbFirst);
   // }
 
   return xmlDb;
 }
 
-export function saveTablesToDb(): Set<string> {
+export function insertTablesToDb(): Set<string> {
   let tablesNew = new Set<string>();
 
   const path = config.path.data.tables;
@@ -384,24 +309,29 @@ export function saveTablesToDb(): Set<string> {
     );
   }
 
-  insertTables(tablesNew);
+  if (!tablesNew.size) return tablesNew;
+
+  tTables.insertTables(tablesNew);
+
   return tablesNew;
 }
 
-export function saveObjectAndTables(tables: Set<string>): ObjectAndTables {
+export function insertObjectAndTables(tables: Set<string>): ObjectAndTables {
   const objectAndTablesAll = new Map<string, Set<string>>();
 
   const objectTypes: ObjectType[] = ['view', 'function', 'procedure'];
   for (const objectType of objectTypes) {
     const objectAndTables = getObjectAndTablesByObjectType(objectType, tables);
-    [...objectAndTables].forEach(([object, tables]) => objectAndTablesAll.set(object, tables));
-    insertObjectAndTables(objectType, objectAndTables);
+    objectAndTables.forEach((tables, object) => objectAndTablesAll.set(object, tables));
+    if (objectAndTables.size) {
+      tTables.insertObjectAndTables(objectType, objectAndTables);
+    }
   }
 
   return objectAndTablesAll;
 }
 
-export function saveXmlInfoToDb(
+export function insertXmlInfoXmlNodeInfo(
   rootDir: string,
   fullPath: string,
   tablesAll: Set<string>,
@@ -478,14 +408,24 @@ export function saveXmlInfoToDb(
     nodes.push({ id, tagName, params, tables, objectAndTables });
   }
 
-  const nodesJson = nodes.map((node) => ({
-    id: node.id,
-    tagName: node.tagName,
-    params: JSON.stringify([...node.params]),
-    tables: JSON.stringify([...node.tables]),
-    objectAndTables: JSON.stringify([...node.objectAndTables].map(([object, tables]) => [object, [...tables]])),
-  }));
-  insertXmlNodeInfo(xmlPath, namespace, nodesJson);
+  tXmlInfo.insertXmlInfoXmlNodeInfo(xmlPath, namespace, nodes);
 
   return { xmlPath, namespace, nodes };
+}
+
+export function insertXmlInfoFindKeyName(keyName: string, xmlInfosCur: XmlInfo[]) {
+  const finds: XmlNodeInfoFind[] = xmlInfosCur
+    .map(({ xmlPath, namespace, nodes }) => {
+      return nodes.map((node) => ({
+        xmlPath,
+        namespaceId: namespace ? `${namespace}.${node.id}` : `${node.id}`,
+        id: node.id,
+        tagName: node.tagName,
+        params: node.params,
+        tables: node.tables,
+        objectAndTables: node.objectAndTables,
+      }));
+    })
+    .flat();
+  tXmlInfo.insertXmlInfoFindKeyName(keyName, finds);
 }

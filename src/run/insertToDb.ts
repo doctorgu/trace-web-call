@@ -1,23 +1,34 @@
 import { existsSync, statSync, unlinkSync } from 'fs';
 import { resolve } from 'path';
 import { findFiles } from '../common/util';
-import { ClassInfo, saveClassInfoToDb, saveMethodInfoFindToDb } from '../common/classHelper';
-import { ObjectAndTables, saveTablesToDb, saveObjectAndTables, saveXmlInfoToDb, XmlInfo } from '../common/sqlHelper';
+import {
+  ClassInfo,
+  getFindsByClassPathClassNameFromDb,
+  insertClassInfo,
+  insertMethodInfoFindKeyName,
+  insertRouteInfoKeyName,
+} from '../common/classHelper';
+import {
+  ObjectAndTables,
+  insertTablesToDb,
+  insertObjectAndTables,
+  insertXmlInfoXmlNodeInfo,
+  XmlInfo,
+  insertXmlInfoFindKeyName,
+} from '../common/sqlHelper';
 import { config, configReader } from '../config/config';
 import { DirectoryAndFilePattern } from '../config/configTypes';
-import { all, exec, execSql, get } from '../common/dbHelper';
 import { mergeExtends } from '../common/traceHelper';
 import { sqlInit } from '../config/sql';
+import tCommon from '../sqlTemplate/TCommon';
+import TXmlInfo from '../sqlTemplate/TXmlInfo';
 
-function saveClassAndXmlToDb(
+function insertClassAndXml(
   rootDir: string,
   tablesAll: Set<string>,
   objectAndTablesAll: ObjectAndTables,
   serviceAndXmls: { service: DirectoryAndFilePattern; xml: string }[]
 ): { classInfos: ClassInfo[]; xmlInfos: XmlInfo[] } {
-  console.log(
-    `Inserting ClassInfo, HeaderInfo, MethodInfo ${serviceAndXmls.map((s) => s.service.directory).join(',')}`
-  );
   const classInfos: ClassInfo[] = [];
   const xmlInfos: XmlInfo[] = [];
 
@@ -25,20 +36,19 @@ function saveClassAndXmlToDb(
     const initDir = resolve(rootDir, directory);
 
     for (const fullPath of [...findFiles(initDir, file)]) {
-      const classInfo = saveClassInfoToDb(rootDir, fullPath);
+      const classInfo = insertClassInfo(rootDir, fullPath);
       if (classInfo) {
         classInfos.push(classInfo);
       }
     }
   });
 
-  console.log(`Inserting XmlInfo, XmlNodeInfo ${serviceAndXmls.map((s) => s.xml).join(',')}`);
   serviceAndXmls.forEach(({ xml }) => {
     const fullDir = resolve(rootDir, xml);
     if (existsSync(fullDir)) {
       const fullPaths = statSync(fullDir).isDirectory() ? [...findFiles(fullDir, '*.xml')] : [fullDir];
       for (const fullPath of fullPaths) {
-        const xmlInfo = saveXmlInfoToDb(rootDir, fullPath, tablesAll, objectAndTablesAll);
+        const xmlInfo = insertXmlInfoXmlNodeInfo(rootDir, fullPath, tablesAll, objectAndTablesAll);
         if (xmlInfo) {
           xmlInfos.push(xmlInfo);
         }
@@ -49,66 +59,65 @@ function saveClassAndXmlToDb(
   return { classInfos, xmlInfos };
 }
 
-export function saveToDb() {
+export function insertToDb() {
   if (existsSync(config.path.database)) {
     console.log(`Deleting ${config.path.database}`);
     unlinkSync(config.path.database);
   }
 
-  const db = configReader.db();
-
-  console.log(`Initializing all tables`);
-  execSql(db, sqlInit);
+  console.log(`initDb`);
+  tCommon.initDb(sqlInit);
 
   const { rootDir } = config.path.source;
 
-  console.log(`Inserting Tables`);
-  const tablesAll = saveTablesToDb();
+  console.log(`insertTablesToDb`);
+  const tablesAll = insertTablesToDb();
 
-  console.log(`Inserting ObjectAndTables`);
-  const objectAndTablesAll = saveObjectAndTables(tablesAll);
+  console.log(`insertObjectAndTables`);
+  const objectAndTablesAll = insertObjectAndTables(tablesAll);
 
-  // let classInfosAll: ClassInfo[] = [];
-  // let xmlInfosAll: XmlInfo[] = [];
-
-  const { classInfos: classInfosDep, xmlInfos: xmlInfosDep } = saveClassAndXmlToDb(
+  const { classInfos: classInfosDep, xmlInfos: xmlInfosDep } = insertClassAndXml(
     rootDir,
     tablesAll,
     objectAndTablesAll,
     config.path.source.dependency
   );
-  // classInfosAll = classInfosAll.concat(classInfosDep);
-  // xmlInfosAll = xmlInfosAll.concat(xmlInfosDep);
 
   for (let i = 0; i < config.path.source.main.length; i++) {
     const {
       startings: { directory, file },
       serviceAndXmls,
-      filePostfix,
+      keyName,
     } = config.path.source.main[i];
 
-    console.log(`Inserting startings ClassInfo, HeaderInfo, MethodInfo ${directory}`);
     const initDir = resolve(rootDir, directory);
 
     const classInfosStarting: ClassInfo[] = [];
     for (const fullPath of [...findFiles(initDir, file)]) {
-      const classInfo = saveClassInfoToDb(rootDir, fullPath);
+      const classInfo = insertClassInfo(rootDir, fullPath);
       if (classInfo) {
         classInfosStarting.push(classInfo);
       }
     }
 
-    const { classInfos: classInfosMain, xmlInfos: xmlInfosMain } = saveClassAndXmlToDb(
+    console.log(`insertClassAndXml ${directory}`);
+    const { classInfos: classInfosMain, xmlInfos: xmlInfosMain } = insertClassAndXml(
       rootDir,
       tablesAll,
       objectAndTablesAll,
       serviceAndXmls
     );
-    // classInfosAll = classInfosAll.concat(classInfosMain);
-    // xmlInfosAll = xmlInfosAll.concat(xmlInfosMain);
 
     const classInfosCur = [...classInfosDep, ...classInfosStarting, ...classInfosMain];
     const classInfosMerged = mergeExtends(classInfosCur);
-    saveMethodInfoFindToDb(classInfosMerged, filePostfix);
+    console.log(`insertMethodInfoFindKeyName ${directory}`);
+    insertMethodInfoFindKeyName(keyName, classInfosMerged);
+
+    const xmlInfosCur = [...xmlInfosDep, ...xmlInfosMain];
+    console.log(`insertXmlInfoFindKeyName ${directory}`);
+    insertXmlInfoFindKeyName(keyName, xmlInfosCur);
   }
+
+  console.log(`insertRouteInfoKeyName`);
+  insertRouteInfoKeyName();
 }

@@ -15,7 +15,7 @@ export type Config = {
           service: DirectoryAndFilePattern;
           xml: string;
         }[];
-        filePostfix: string;
+        keyName: string;
       }[];
       dependency: {
         service: DirectoryAndFilePattern;

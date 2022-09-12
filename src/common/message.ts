@@ -1,1 +1,1 @@
-export const runSaveToDbFirst = 'Run saveToDbFirst';
+export const runinsertToDbFirst = 'Run insertToDbFirst';

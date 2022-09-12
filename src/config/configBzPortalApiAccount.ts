@@ -19,7 +19,7 @@ export const configBzPortalApiAccount: Config = {
               xml: 'bz-portal-api-account/src/main/resources/sql/oracle',
             },
           ],
-          filePostfix: '-bz-portal-api-account2',
+          keyName: '-bz-portal-api-account2',
         },
       ],
       dependency: [],

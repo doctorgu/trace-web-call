@@ -19,7 +19,7 @@ export const configBzManualApiCommon: Config = {
               xml: 'bz-manual-api-common/src/main/resources/sql/oracle',
             },
           ],
-          filePostfix: '-bz-manual-api-common2',
+          keyName: '-bz-manual-api-common2',
         },
       ],
       dependency: [],

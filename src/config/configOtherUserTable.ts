@@ -16,7 +16,7 @@ export const configOtherUserTable: Config = {
               xml: 'test/OtherUserTables.xml',
             },
           ],
-          filePostfix: 'OtherUserTables2',
+          keyName: 'OtherUserTables2',
         },
       ],
       dependency: [

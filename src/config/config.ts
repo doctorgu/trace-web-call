@@ -8,17 +8,8 @@ import { configBzStoreApiBizgroup } from './configBzStoreApiBizgroup';
 import { configBzManualApiCommon } from './configBzManualApiCommon';
 import { configComposite } from './configComposite';
 import { configBzPortalApiAccount } from './configBzPortalApiAccount';
-import {
-  insertTables,
-  getTablesFromDb,
-  ObjectType,
-  ObjectAndTables,
-  getObjectAndTablesByObjectType,
-  getObjectAndTablesFromDb,
-  insertObjectAndTables,
-} from '../common/sqlHelper';
-import { runSaveToDbFirst } from '../common/message';
-import { execSql, get } from '../common/dbHelper';
+import { getTablesFromDb, ObjectType, ObjectAndTables, getObjectAndTablesFromDb } from '../common/sqlHelper';
+import { runinsertToDbFirst } from '../common/message';
 
 let tablesCache = new Set<string>();
 let objectTypeAndObjectAndTablesCache = new Map<ObjectType, ObjectAndTables>();
@@ -33,7 +24,10 @@ export const configReader = {
 
     const db = new betterSqlite3(config.path.database, { readonly: false });
     // enable on delete cascade on update cascade
-    db.exec('PRAGMA foreign_keys=ON');
+    db.exec(`
+    PRAGMA foreign_keys=ON;
+    PRAGMA cache_size = -200000; -- 200MB
+    `);
     db.function('testWildcardFileName', testWildcardFileNameSqlite);
     db.function('regexp', regexpSqlite);
     // const ret = db.prepare("select f from (select 'aaa' f union all select 'bbb') t where f = ?").pluck().get('aaa');
@@ -55,58 +49,50 @@ export const configReader = {
 
     const tablesDb = getTablesFromDb();
     if (!tablesDb.size) {
-      throw new Error(runSaveToDbFirst);
+      throw new Error(runinsertToDbFirst);
     }
 
     tablesCache = tablesDb;
     return tablesCache;
   },
+  objectTypeAndObjectAndTables: (): Map<ObjectType, ObjectAndTables> => {
+    if (objectTypeAndObjectAndTablesCache.size) {
+      return objectTypeAndObjectAndTablesCache;
+    }
+
+    const objectTypes: ObjectType[] = ['view', 'function', 'procedure'];
+    for (const objectType of objectTypes) {
+      const objectAndTablesDb = getObjectAndTablesFromDb(objectType);
+      objectTypeAndObjectAndTablesCache.set(objectType, objectAndTablesDb);
+    }
+
+    return objectTypeAndObjectAndTablesCache;
+  },
   objectAndTables: (objectType: ObjectType): ObjectAndTables => {
-    if (!tablesCache.size) {
-      throw new Error(`tablesCache.size: ${tablesCache.size} is 0.`);
-    }
+    const objectTypeAndObjectAndTables = configReader.objectTypeAndObjectAndTables();
 
-    let objectAndTablesCache = objectTypeAndObjectAndTablesCache.get(objectType);
-    if (objectAndTablesCache) {
-      return objectAndTablesCache;
-    }
+    const objectAndTables = objectTypeAndObjectAndTables.get(objectType);
+    if (!objectAndTables) return new Map<string, Set<string>>();
 
-    const objectAndTablesDb = getObjectAndTablesFromDb(objectType);
-    // if (!objectAndTablesDb.size) {
-    //   throw new Error(runSaveToDbFirst);
-    // }
-
-    objectTypeAndObjectAndTablesCache.set(objectType, objectAndTablesDb);
-    return objectTypeAndObjectAndTablesCache.get(objectType) as ObjectAndTables;
+    return objectAndTables;
   },
   tablesInObject: () => {
-    if (!tablesCache.size) {
-      throw new Error(`tablesCache.size: ${tablesCache.size} is 0.`);
-    }
+    const tablesNew = configReader.tables();
 
-    const tablesNew = new Set(tablesCache);
-
-    [...configReader.objectAndTables('view')].forEach(([object, tablesCur]) => {
+    configReader.objectAndTables('view').forEach((tablesCur) => {
       tablesCur.forEach((t) => tablesNew.add(t));
     });
-    [...configReader.objectAndTables('function')].forEach(([object, tablesCur]) => {
+    configReader.objectAndTables('function').forEach((tablesCur) => {
       tablesCur.forEach((t) => tablesNew.add(t));
     });
-    [...configReader.objectAndTables('procedure')].forEach(([object, tablesCur]) => {
+    configReader.objectAndTables('procedure').forEach((tablesCur) => {
       tablesCur.forEach((t) => tablesNew.add(t));
     });
 
     return tablesNew;
   },
   objectType: (objectName: string) => {
-    if (!tablesCache.size) {
-      throw new Error(`tablesCache.size: ${tablesCache.size} is 0`);
-    }
-    if (!objectTypeAndObjectAndTablesCache.size) {
-      throw new Error(`objectTypeAndObjectAndTablesCache.size: ${objectTypeAndObjectAndTablesCache.size} is 0`);
-    }
-
-    for (const [objectType, objectAndCache] of objectTypeAndObjectAndTablesCache) {
+    for (const [objectType, objectAndCache] of configReader.objectTypeAndObjectAndTables()) {
       if (objectAndCache.has(objectName)) return objectType;
     }
 

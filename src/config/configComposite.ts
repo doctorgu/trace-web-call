@@ -19,7 +19,7 @@ export const configComposite: Config = {
               xml: 'bz-manual-api-common/src/main/resources/sql/oracle',
             },
           ],
-          filePostfix: '-bz-manual-api-common2',
+          keyName: '-bz-manual-api-common2',
         },
         {
           startings: {
@@ -35,7 +35,7 @@ export const configComposite: Config = {
               xml: 'bz-store-api-bizgroup/src/main/resources/sql/oracle',
             },
           ],
-          filePostfix: '-bz-store-api-bizgroup2',
+          keyName: '-bz-store-api-bizgroup2',
         },
       ],
       dependency: [],

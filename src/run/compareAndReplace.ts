@@ -14,15 +14,15 @@ export function compareAndReplace() {
   }
 
   for (let i = 0; i < config.path.source.main.length; i++) {
-    const { filePostfix: filePostfixNew } = config.path.source.main[i];
-    if (!filePostfixNew.endsWith('2')) {
-      throw new Error(`${filePostfixNew} not ends with '2'`);
+    const { keyName: keyNameNew } = config.path.source.main[i];
+    if (!keyNameNew.endsWith('2')) {
+      throw new Error(`${keyNameNew} not ends with '2'`);
     }
 
-    const filePostfixOld = filePostfixNew.substring(0, filePostfixNew.length - 1);
+    const keyNameOld = keyNameNew.substring(0, keyNameNew.length - 1);
 
-    const pathStartToTableNew = `${config.path.outputDirectory}/${config.startingPoint}ToTables${filePostfixNew}.${config.outputType}`;
-    const pathStartToTableOld = `${config.path.outputDirectory}/${config.startingPoint}ToTables${filePostfixOld}.${config.outputType}`;
+    const pathStartToTableNew = `${config.path.outputDirectory}/${config.startingPoint}ToTables${keyNameNew}.${config.outputType}`;
+    const pathStartToTableOld = `${config.path.outputDirectory}/${config.startingPoint}ToTables${keyNameOld}.${config.outputType}`;
     const existsStartToTableNew = existsSync(pathStartToTableNew);
     const existsStartToTableOld = existsSync(pathStartToTableOld);
     if (!existsStartToTableNew) {
@@ -34,8 +34,8 @@ export function compareAndReplace() {
       console.log(`${successStartToTable} = compareAndReplace2(${pathStartToTableNew}, ${pathStartToTableOld})`);
     }
 
-    const pathRouteNew = `${config.path.outputDirectory}/routes${filePostfixNew}.${config.outputType}`;
-    const pathRouteOld = `${config.path.outputDirectory}/routes${filePostfixOld}.${config.outputType}`;
+    const pathRouteNew = `${config.path.outputDirectory}/routes${keyNameNew}.${config.outputType}`;
+    const pathRouteOld = `${config.path.outputDirectory}/routes${keyNameOld}.${config.outputType}`;
     const existsRouteNew = existsSync(pathRouteNew);
     const existsRouteOld = existsSync(pathRouteOld);
     if (!existsRouteNew) {
