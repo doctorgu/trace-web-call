@@ -318,7 +318,8 @@ function getMapping(
     }
   } else {
     // @RequestMapping("/abc/abc.do")
-    values = [images[0]];
+    // @RequestMapping({"/abc/abc.do", "/abc/abc2.do"})
+    values = images.filter((v) => v !== '{' && v !== '}' && v !== ',').map((v) => v);
   }
   values = values.map((value) => trimList(value, '"'));
 
@@ -619,7 +620,7 @@ function getMethods(cstSimple: any, pathsAndImageList: PathsAndImage[], vars: Va
       callers = [];
 
       i = posRCurly;
-    } else if (endsWith(paths, 'LBrace')) {
+    } else if (endsWith(paths, 'LBrace') && methodName) {
       const posLBrace = i;
       const posRBrace = getRBracePosition(methodDecls, posLBrace);
       const rangeBrace = methodDecls.filter((v, i) => i > posLBrace && i < posRBrace);
