@@ -15,23 +15,24 @@ drop view if exists vRoutes;
 drop view if exists vRoutesTxt;
 drop view if exists vStartToTables;
 
+-- strict removed because SQLiteStudio does not support it.
 
 create table Tables (
     name text not null primary key
-) strict;
+); -- strict;
 
 create table ObjectAndTables (
     objectType text not null,
     object text not null primary key,
     tables text not null
-) strict;
+); -- strict;
 create index IxObjectAndTables1 on ObjectAndTables (objectType);
 
 
 create table XmlInfo (
     xmlPath text not null primary key,
     namespace text not null
-) strict;
+); -- strict;
 
 create table XmlNodeInfo (
     xmlPath text not null,
@@ -42,7 +43,7 @@ create table XmlNodeInfo (
     objectAndTables text not null,
     primary key (xmlPath, id),
     foreign key (xmlPath) references XmlInfo (xmlPath) on update cascade on delete cascade
-) strict;
+); -- strict;
 
 create table XmlNodeInfoFind (
     keyName text not null,
@@ -54,13 +55,13 @@ create table XmlNodeInfoFind (
     tables text not null,
     objectAndTables text not null,
     primary key (keyName, id, xmlPath)
-) strict;
+); -- strict;
 create index IxXmlNodeInfoFind1 on XmlNodeInfoFind (keyName, namespaceId, xmlPath);
 
 
 create table ClassInfo (
     classPath text not null primary key
-) strict;
+); -- strict;
 
 create table HeaderInfo (
     classPath text not null,
@@ -70,7 +71,7 @@ create table HeaderInfo (
     mapping text not null,
     primary key (classPath, name),
     foreign key (classPath) references ClassInfo (classPath) on update cascade on delete cascade
-) strict;
+); -- strict;
 
 create table MethodInfo (
     classPath text not null,
@@ -80,7 +81,7 @@ create table MethodInfo (
     parameterCount int not null,
     callers text not null,
     foreign key (classPath) references ClassInfo (classPath) on update cascade on delete cascade
-) strict;
+); -- strict;
 
 create table MethodInfoFind (
     keyName text not null,
@@ -95,7 +96,7 @@ create table MethodInfoFind (
     parameterCount int not null,
     callers text not null,
     foreign key (classPath) references ClassInfo (classPath) on update cascade on delete cascade
-) strict;
+); -- strict;
 create index IxMethodInfoFind1 on MethodInfoFind (keyName, name, parameterCount, className, implementsName);
 create index IxMethodInfoFind2 on MethodInfoFind (keyName, classPath);
 
@@ -113,7 +114,7 @@ create table RouteInfo (
     valueFunction text not null,
     valueProcedure text not null,
     primary key (keyName, groupSeq, seq)
-) strict;
+); -- strict;
 
 
 create view vRoutes
