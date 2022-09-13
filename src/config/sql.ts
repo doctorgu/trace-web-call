@@ -131,7 +131,7 @@ select  r.keyName, r.groupSeq, r.seq, min(r.depth) depth, min(r.routeType) route
                     case when jView.key = 'object' then
                         jView.value
                     else
-                        '(' || (select group_concat(value) from json_each(jView.value)) || ')'
+                        '(' || ifnull((select group_concat(value) from json_each(jView.value)), '') || ')'
                     end, ''
                 )
             when 'function' then
@@ -139,7 +139,7 @@ select  r.keyName, r.groupSeq, r.seq, min(r.depth) depth, min(r.routeType) route
                     case when jFunction.key = 'object' then
                         jFunction.value
                     else
-                        '(' || (select group_concat(value) from json_each(jFunction.value)) || ')'
+                        '(' || ifnull((select group_concat(value) from json_each(jFunction.value)), '') || ')'
                     end, ''
                 )
             when 'procedure' then
@@ -147,7 +147,7 @@ select  r.keyName, r.groupSeq, r.seq, min(r.depth) depth, min(r.routeType) route
                     case when jProcedure.key = 'object' then
                         jProcedure.value
                     else
-                        '(' || (select group_concat(value) from json_each(jProcedure.value)) || ')'
+                        '(' || ifnull((select group_concat(value) from json_each(jProcedure.value)), '') || ')'
                     end, ''
                 )
             end
