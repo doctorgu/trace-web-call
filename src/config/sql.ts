@@ -163,7 +163,7 @@ group by r.keyName, r.groupSeq, r.seq;
 
 create view vRoutesTxt
 as
-select  keyName,
+select  keyName, groupSeq, seq,
         case when seq = 0 then char(13) else '' end
         || substring('         ' || routeType, -9)
         || ': ' ||
@@ -189,6 +189,8 @@ from    (
                 case routeType
                 when 'table' then jTable.value
                 when 'view' then jView.value
+                when 'function' then jFunction.value
+                when 'procedure' then jProcedure.value
                 end tables
         from    RouteInfo r
                 left join json_each(r.valueMapping) jMapping

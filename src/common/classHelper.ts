@@ -606,7 +606,7 @@ function getMethods(cstSimple: any, pathsAndImageList: PathsAndImage[], vars: Va
       isPublic = true;
     } else if (endsWith(paths, 'methodDeclarator', 'Identifier')) {
       methodName = image;
-    } else if (endsWith(paths, 'LCurly')) {
+    } else if (endsWith(paths, 'LCurly') && methodName) {
       const posLCurly = i;
       const posRCurly = getRCurlyPosition(methodDecls, posLCurly);
       callers = getCallerInfos(cstSimple, methodDecls, vars, posLCurly, posRCurly);
