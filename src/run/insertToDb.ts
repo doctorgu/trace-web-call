@@ -16,12 +16,12 @@ import {
   XmlInfo,
   insertXmlInfoFindKeyName,
 } from '../common/sqlHelper';
-import { config, configReader } from '../config/config';
+import { config } from '../config/config';
+import { configReader } from '../config/configReader';
 import { DirectoryAndFilePattern } from '../config/configTypes';
 import { mergeExtends } from '../common/traceHelper';
 import { sqlInit } from '../config/sql';
 import tCommon from '../sqlTemplate/TCommon';
-import TXmlInfo from '../sqlTemplate/TXmlInfo';
 
 function insertClassAndXml(
   rootDir: string,
@@ -60,9 +60,10 @@ function insertClassAndXml(
 }
 
 export function insertToDb() {
-  if (existsSync(config.path.database)) {
-    console.log(`Deleting ${config.path.database}`);
-    unlinkSync(config.path.database);
+  const path = configReader.pathDatabase();
+  if (existsSync(path)) {
+    console.log(`Deleting ${path}`);
+    unlinkSync(path);
   }
 
   console.log(`initDb`);
@@ -75,6 +76,8 @@ export function insertToDb() {
 
   console.log(`insertObjectAndTables`);
   const objectAndTablesAll = insertObjectAndTables(tablesAll);
+
+  tCommon.insertKeyInfo(config.path.source.main.map(({ keyName }) => ({ keyName })));
 
   const { classInfos: classInfosDep, xmlInfos: xmlInfosDep } = insertClassAndXml(
     rootDir,

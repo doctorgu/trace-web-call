@@ -1,12 +1,21 @@
 import { parse } from 'java-parser';
+import { exec as execProc } from 'child_process';
+import { statSync } from 'fs';
+import { promisify } from 'util';
+import { fromFileSync } from 'hasha';
+
 import { readFileSyncUtf16le, trimList, trimEnd } from './util';
 import { SqlTemplate } from '../common/sqliteHelper';
-import { config, configReader } from '../config/config';
+import { config } from '../config/config';
+import { configReader } from '../config/configReader';
 import { runinsertToDbFirst } from './message';
 import { getDbPath } from './common';
 import { getStartingToTables, RouteInfo } from './traceHelper';
 import tClassInfo from '../sqlTemplate/TClassInfo';
 import tCommon from '../sqlTemplate/TCommon';
+import tCache from '../sqlTemplate/TCache';
+
+const runExec = promisify(execProc);
 
 type Keyword =
   | 'LCurly'
@@ -709,13 +718,45 @@ export function getClassInfoFromDb(rootDir: string, fullPath: string): ClassInfo
   return { classPath, header, methods };
 }
 
-export function getClassInfo(fullPath: string) {
+// async function getSha1UsingGit(fullPath: string): Promise<string> {
+//   const cmd = `git hash-object ${fullPath}`;
+//   const { stdout, stderr } = await runExec(cmd);
+//   if (stderr) {
+//     throw new Error(`${cmd} ${stderr}`);
+//   }
+//   return stdout;
+// }
+
+function getCstSimple(fullPath: string): any {
   const content = readFileSyncUtf16le(fullPath);
   const cst = parse(content);
 
   const pathsAndImageListAll = getPathsAndImageListFromCst(cst);
-  const cstSimpleAll = getSimplifiedCst(pathsAndImageListAll);
-  const classDeclaration = getCstClassDeclaration(cstSimpleAll);
+  const cstSimple = getSimplifiedCst(pathsAndImageListAll);
+  return cstSimple;
+}
+
+function getCstSimpleFromDbCache(fullPath: string): { cstSimple: any; sha1: string } | null {
+  const sha1 = fromFileSync(fullPath, { algorithm: 'sha1' });
+  const cstSimpleFromDb = tCache.selectCstSimpleBySha1(sha1);
+  if (cstSimpleFromDb) {
+    return JSON.parse(cstSimpleFromDb);
+  }
+
+  const cstSimple = getCstSimple(fullPath);
+  const path = getDbPath(config.path.source.rootDir, fullPath);
+  tCache.insertCstSimple(sha1, path, cstSimple);
+
+  return cstSimple;
+}
+
+export function getClassInfo(fullPath: string): {
+  header: HeaderInfo;
+  vars: VarInfo[];
+  methods: MethodInfo[];
+} {
+  const cstSimple = getCstSimpleFromDbCache(fullPath);
+  const classDeclaration = getCstClassDeclaration(cstSimple);
   const pathsAndImageList = getPathsAndImagesFromSimpleCst(classDeclaration);
 
   const header = getHeaderInfo(classDeclaration);
