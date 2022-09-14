@@ -51,7 +51,7 @@ export async function logGitCount() {
       const left2 = left.trim();
       const right2 = right.trim();
       if (left2 === '0' || right2 === '0') {
-        console.log(`${dir} ${left2} ${right2}`);
+        console.log(`${left2} ${right2} ${dir}`);
       }
     } catch (ex) {
       console.log(dir);

@@ -4,6 +4,7 @@ drop table if exists ObjectAndTables;
 
 drop table if exists XmlInfo;
 drop table if exists XmlNodeInfo;
+drop table if exists XmlNodeInfoFind;
 
 drop table if exists ClassInfo;
 drop table if exists HeaderInfo;
@@ -18,21 +19,30 @@ drop view if exists vStartToTables;
 -- strict removed because SQLiteStudio does not support it.
 
 create table Tables (
-    name text not null primary key
-); -- strict;
+    name text not null primary key,
+    insertTime timestamp not null default current_timestamp
+);
 
 create table ObjectAndTables (
     objectType text not null,
     object text not null primary key,
-    tables text not null
-); -- strict;
+    tables text not null,
+    insertTime timestamp not null default current_timestamp
+);
 create index IxObjectAndTables1 on ObjectAndTables (objectType);
+
+
+create table KeyInfo (
+    keyName text not null primary key,
+    insertTime timestamp not null default current_timestamp
+);
 
 
 create table XmlInfo (
     xmlPath text not null primary key,
-    namespace text not null
-); -- strict;
+    namespace text not null,
+    insertTime timestamp not null default current_timestamp
+);
 
 create table XmlNodeInfo (
     xmlPath text not null,
@@ -41,9 +51,10 @@ create table XmlNodeInfo (
     params text not null,
     tables text not null,
     objectAndTables text not null,
+    insertTime timestamp not null default current_timestamp,
     primary key (xmlPath, id),
     foreign key (xmlPath) references XmlInfo (xmlPath) on update cascade on delete cascade
-); -- strict;
+);
 
 create table XmlNodeInfoFind (
     keyName text not null,
@@ -54,14 +65,17 @@ create table XmlNodeInfoFind (
     params text not null,
     tables text not null,
     objectAndTables text not null,
-    primary key (keyName, id, xmlPath)
-); -- strict;
+    insertTime timestamp not null default current_timestamp,
+    primary key (keyName, id, xmlPath),
+    foreign key (keyName) references KeyInfo (keyName) on update cascade on delete cascade
+);
 create index IxXmlNodeInfoFind1 on XmlNodeInfoFind (keyName, namespaceId, xmlPath);
 
 
 create table ClassInfo (
-    classPath text not null primary key
-); -- strict;
+    classPath text not null primary key,
+    insertTime timestamp not null default current_timestamp
+);
 
 create table HeaderInfo (
     classPath text not null,
@@ -69,9 +83,10 @@ create table HeaderInfo (
     implementsName text not null,
     extendsName text not null,
     mapping text not null,
+    insertTime timestamp not null default current_timestamp,
     primary key (classPath, name),
     foreign key (classPath) references ClassInfo (classPath) on update cascade on delete cascade
-); -- strict;
+);
 
 create table MethodInfo (
     classPath text not null,
@@ -80,8 +95,9 @@ create table MethodInfo (
     name text not null,
     parameterCount int not null,
     callers text not null,
+    insertTime timestamp not null default current_timestamp,
     foreign key (classPath) references ClassInfo (classPath) on update cascade on delete cascade
-); -- strict;
+);
 
 create table MethodInfoFind (
     keyName text not null,
@@ -95,8 +111,10 @@ create table MethodInfoFind (
     name text not null,
     parameterCount int not null,
     callers text not null,
-    foreign key (classPath) references ClassInfo (classPath) on update cascade on delete cascade
-); -- strict;
+    insertTime timestamp not null default current_timestamp,
+    foreign key (classPath) references ClassInfo (classPath) on update cascade on delete cascade,
+    foreign key (keyName) references KeyInfo (keyName) on update cascade on delete cascade
+);
 create index IxMethodInfoFind1 on MethodInfoFind (keyName, name, parameterCount, className, implementsName);
 create index IxMethodInfoFind2 on MethodInfoFind (keyName, classPath);
 
@@ -113,8 +131,9 @@ create table RouteInfo (
     valueView text not null,
     valueFunction text not null,
     valueProcedure text not null,
+    insertTime timestamp not null default current_timestamp,
     primary key (keyName, groupSeq, seq)
-); -- strict;
+);
 
 
 create view vRoutes

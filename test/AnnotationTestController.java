@@ -43,4 +43,8 @@ public class AnnotationTestController extends AbstractBaseController {
 		return new ModelAndView("output/abc11", model);
 	}
 
+	@RequestMapping({"/abc/abc12", "/abc/abc13"})
+	public ModelAndView getAbc12(Model model) throws Exception {
+		return new ModelAndView("output/abc12", model);
+	}
 }

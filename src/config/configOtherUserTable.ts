@@ -1,9 +1,16 @@
 import { Config } from './configTypes';
 
 export const configOtherUserTable: Config = {
+  name: 'OtherUserTable2',
   path: {
     source: {
       rootDir: 'C:/source/trace-web-call',
+      dependency: [
+        {
+          service: { directory: `test/`, file: 'OtherUserTablesDependency.java' },
+          xml: 'test/OtherUserTablesDependency.xml',
+        },
+      ],
       main: [
         {
           startings: { directory: `test/`, file: 'OtherUserTablesController.java' },
@@ -16,13 +23,7 @@ export const configOtherUserTable: Config = {
               xml: 'test/OtherUserTables.xml',
             },
           ],
-          keyName: 'OtherUserTables2',
-        },
-      ],
-      dependency: [
-        {
-          service: { directory: `test/`, file: 'OtherUserTablesDependency.java' },
-          xml: 'test/OtherUserTablesDependency.xml',
+          keyName: 'OtherUserTables',
         },
       ],
     },
@@ -32,10 +33,10 @@ export const configOtherUserTable: Config = {
       functions: '',
       procedures: '',
     },
-    database: './data/databases/OtherUserTable.db',
+    databaseDirectory: './data/databases',
     outputDirectory: './test/output',
     logDirectory: './test/output',
   },
-  outputType: 'txt',
+
   startingPoint: 'map',
 };

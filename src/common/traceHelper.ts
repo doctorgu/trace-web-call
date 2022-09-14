@@ -10,7 +10,8 @@ import {
   rowsToFinds,
 } from './classHelper';
 import { XmlNodeInfoFind, getXmlInfo, ObjectAndTables } from './sqlHelper';
-import { config, configReader } from '../config/config';
+import { config } from '../config/config';
+import { configReader } from '../config/configReader';
 import { StartingPoint } from '../config/configTypes';
 import tClassInfo from '../sqlTemplate/TClassInfo';
 import tTables from '../sqlTemplate/TTables';

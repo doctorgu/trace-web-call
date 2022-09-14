@@ -15,84 +15,6 @@ import { getXmlNodeInfoFinds, getStartingToTables, RouteInfo } from './common/tr
 import { readFileSyncUtf16le, removeCommentLiteralSql } from './common/util';
 import { insertToDb } from './run/insertToDb';
 
-// function writeStartToTables() {
-//   function getBranch(depth: number) {
-//     if (depth === 0) return '';
-//     // return `|---${'-'.repeat((depth - 1) * 4)}`;
-//     return `${' '.repeat((depth - 1) * 4)}+-- `;
-//   }
-
-//   const { xmls: xmlsDependency, directories: directoriesDependency } = getDependency();
-
-//   const { rootDir } = config.path.source;
-//   for (let i = 0; i < config.path.source.main.length; i++) {
-//     const {
-//       startings: { directory, file },
-//       serviceAndXmls,
-//       keyName,
-//     } = config.path.source.main[i];
-
-//     const findsStarting = getMethodInfoFindsFromDb(keyName, directory, file);
-
-//     const directories = serviceAndXmls.map(({ service: { directory } }) => directory);
-//     const xmls = serviceAndXmls.map(({ xml }) => getXmlNodeInfoFinds(rootDir, xml, '*.xml')).flat();
-
-//     const startToTablesAll: string[] = [];
-//     const routesAll: string[] = [];
-
-//     console.log(`Get starting to tables...`);
-//     const startToTables = getStartingToTables(
-//       keyName,
-//       findsStarting,
-//       directories.concat(directoriesDependency),
-//       xmls,
-//       xmlsDependency,
-//       config.startingPoint
-//     );
-//     let headerStartToTables = '';
-//     let headerRoutes = '';
-//     let lineSepRoutes = '';
-
-//     if (config.outputType === 'txt') {
-//       lineSepRoutes = '\n\n';
-
-//       for (const { mappingOrMethod, tables, routes } of startToTables) {
-//         const tablesComma = [...tables].sort().join(',');
-
-//         startToTablesAll.push(`${mappingOrMethod}: ${tablesComma}`);
-//         routesAll.push(
-//           routes
-//             .map(({ routeType, value, depth: depth }) => `${routeType.padStart(9, ' ')}: ${getBranch(depth)}${value}`)
-//             .join('\n')
-//         );
-//       }
-//     } else if (config.outputType === 'csv') {
-//       headerStartToTables = 'Mapping,Table\n';
-//       headerRoutes = 'Name,Depth,Value\n';
-//       lineSepRoutes = '\n';
-
-//       for (const { mappingOrMethod, tables, routes } of startToTables) {
-//         const tablesComma = `"${[...tables].sort().join(',')}"`;
-
-//         startToTablesAll.push(`${mappingOrMethod},${tablesComma}`);
-//         routesAll.push(
-//           routes.map(({ routeType, value, depth: depth }) => `${routeType},${depth},"${value}"`).join('\n')
-//         );
-//       }
-//     }
-
-//     const pathStartToTable = `${config.path.outputDirectory}/${config.startingPoint}ToTables${keyName}.${config.outputType}`;
-//     console.log(`Writing to ${pathStartToTable}`);
-//     writeFileSync(pathStartToTable, `${headerStartToTables}${startToTablesAll.join('\n')}`, 'utf-8');
-
-//     const pathRoute = `${config.path.outputDirectory}/routes${keyName}.${config.outputType}`;
-//     console.log(`Writing to ${pathRoute}`);
-//     writeFileSync(pathRoute, `${headerRoutes}${routesAll.join(lineSepRoutes)}`, 'utf-8');
-//   }
-// }
-function writeStartToTables() {}
-// writeStartToTables();
-
 function doTest() {
   // const ret = getClassInfo('C:/source/trace-web-call/test/AnnotationTestController.java');
   // console.log(ret);
@@ -102,15 +24,10 @@ function doTest() {
   //   const { callers } = methodInStartings;
   //   console.log(callers);
   // }
-  // const methodsInStartings = getMethodInfoFinds(
-  //   config.path.test,
-  //   'AnnotationTestController',
-  //   'controller'
-  // );
-  // for (let nMethod = 0; nMethod < methodsInStartings.length; nMethod++) {
-  //   const methodInStartings = methodsInStartings[nMethod];
-  //   const { mappingValues } = methodInStartings;
-  //   console.log(mappingValues);
+  // const { methods } = getClassInfo('./test/AnnotationTestController.java');
+  // for (let nMethod = 0; nMethod < methods.length; nMethod++) {
+  //   const { mapping } = methods[nMethod];
+  //   console.log(mapping.values.join(','));
   // }
   // const xmls = getXmlNodeInfoFinds('./test', 'IncludeTest.xml');
   // for (let i = 0; i < xmls.length; i++) {

@@ -1,4 +1,4 @@
-import { configReader } from '../config/config';
+import { configReader } from '../config/configReader';
 import betterSqlite3 from 'better-sqlite3';
 import { ObjectAndTables, ObjectType } from '../common/sqlHelper';
 import { escapeDollar } from '../common/util';
@@ -6,44 +6,40 @@ import { all, exec, get, run, SqlTemplate } from '../common/sqliteHelper';
 
 class TTables {
   selectTables(): any[] {
-    const db = configReader.db();
-
     const sql = `
 select  name
 from    Tables
 order by name
   `;
-    return all(sql);
+    return all(configReader.db(), sql);
   }
 
-  insertTables(tables: Set<string>): betterSqlite3.RunResult {
-    const db = configReader.db();
-
+  insertTables(tables: Set<string>): betterSqlite3.Database {
     const sql = `
+delete from Tables;
+
 insert into Tables
   (name)
 values
   ${[...tables].map((table) => `('${table}')`).join(',')}
   `;
-    return run(sql);
+    return exec(configReader.db(), sql);
   }
 
   selectObjectAndTables(objectType: ObjectType): any[] {
-    const db = configReader.db();
-
     const sql = `
 select  object, tables
 from    ObjectAndTables
 where   objectType = @objectType
 order by object
 `;
-    return all(sql, { objectType });
+    return all(configReader.db(), sql, { objectType });
   }
 
-  insertObjectAndTables(objectType: ObjectType, objectAndTables: ObjectAndTables): betterSqlite3.RunResult {
-    const db = configReader.db();
-
+  insertObjectAndTables(objectType: ObjectType, objectAndTables: ObjectAndTables): betterSqlite3.Database {
     const sqlTmp = `
+delete from objectAndTables;
+
 insert into objectAndTables
   (object, objectType, tables)
 values
@@ -61,7 +57,7 @@ values
     const sqlValues = new SqlTemplate(sqlTmpValues).replaceAlls(params, ',\n');
     const sql = sqlTmp.replace('{values}', escapeDollar(sqlValues));
 
-    return run(sql);
+    return exec(configReader.db(), sql);
   }
 }
 export default new TTables();

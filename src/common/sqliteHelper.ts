@@ -1,18 +1,9 @@
 import betterSqlite3, { SqliteError } from 'better-sqlite3';
 import { writeFileSync } from 'fs';
 import { resolve } from 'path';
-import { config, configReader } from '../config/config';
+import { config } from '../config/config';
+import { configReader } from '../config/configReader';
 import { escapeDollar, escapeRegexp } from './util';
-
-// export function handleException(sql: string, params: { [key: string]: any }, callback: Function): any {
-//   try {
-//     return callback(sql, params);
-//   } catch (ex) {
-//     const msg = `${sql}\n${JSON.stringify(params)}\n${ex?.code} ${ex?.message}\n${ex?.stack}`;
-//     writeFileSync(resolve(config.path.logDirectory, 'exception.log'), msg);
-//     throw new Error(msg);
-//   }
-// }
 
 function writeAndError(ex: any, sql: string, params: { [name: string]: any } = {}): any {
   const msg = `${sql}\n${JSON.stringify(params)}\n${ex?.code} ${ex?.message}\n${ex?.stack}`;
@@ -20,9 +11,7 @@ function writeAndError(ex: any, sql: string, params: { [name: string]: any } = {
   throw new Error(msg);
 }
 
-export function get(sql: string, params: { [name: string]: any } = {}): any {
-  const db = configReader.db();
-
+export function get(db: betterSqlite3.Database, sql: string, params: { [name: string]: any } = {}): any {
   try {
     return db.prepare(sql).get(params);
   } catch (ex) {
@@ -30,9 +19,15 @@ export function get(sql: string, params: { [name: string]: any } = {}): any {
   }
 }
 
-export function all(sql: string, params: { [name: string]: any } = {}): any[] {
-  const db = configReader.db();
+export function pluck(db: betterSqlite3.Database, sql: string, params: { [name: string]: any } = {}): any {
+  try {
+    return db.prepare(sql).pluck().get(params);
+  } catch (ex) {
+    return writeAndError(ex, sql, params);
+  }
+}
 
+export function all(db: betterSqlite3.Database, sql: string, params: { [name: string]: any } = {}): any[] {
   try {
     return db.prepare(sql).all(params);
   } catch (ex) {
@@ -40,9 +35,11 @@ export function all(sql: string, params: { [name: string]: any } = {}): any[] {
   }
 }
 
-export function run(sql: string, params: { [name: string]: any } = {}): betterSqlite3.RunResult {
-  const db = configReader.db();
-
+export function run(
+  db: betterSqlite3.Database,
+  sql: string,
+  params: { [name: string]: any } = {}
+): betterSqlite3.RunResult {
   try {
     return db.prepare(sql).run(params);
   } catch (ex) {
@@ -50,9 +47,7 @@ export function run(sql: string, params: { [name: string]: any } = {}): betterSq
   }
 }
 
-export function exec(sql: string): betterSqlite3.Database {
-  const db = configReader.db();
-
+export function exec(db: betterSqlite3.Database, sql: string): betterSqlite3.Database {
   try {
     return db.exec(sql);
   } catch (ex) {

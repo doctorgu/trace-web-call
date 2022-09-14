@@ -1,9 +1,11 @@
 import { Config } from './configTypes';
 
 export const configComposite: Config = {
+  name: 'Composite2',
   path: {
     source: {
       rootDir: 'D:/Temp/kbbizmicro-sb',
+      dependency: [],
       main: [
         {
           startings: {
@@ -19,7 +21,7 @@ export const configComposite: Config = {
               xml: 'bz-manual-api-common/src/main/resources/sql/oracle',
             },
           ],
-          keyName: '-bz-manual-api-common2',
+          keyName: 'bz-manual-api-common',
         },
         {
           startings: {
@@ -35,10 +37,25 @@ export const configComposite: Config = {
               xml: 'bz-store-api-bizgroup/src/main/resources/sql/oracle',
             },
           ],
-          keyName: '-bz-store-api-bizgroup2',
+          keyName: 'bz-store-api-bizgroup',
+        },
+        {
+          startings: {
+            directory: 'bz-portal-api-account/src/main/java/biz/micro/portal/common/api/account/service',
+            file: '*Impl.java',
+          },
+          serviceAndXmls: [
+            {
+              service: {
+                directory: 'bz-portal-api-account/src/main/java/biz/micro/portal/common/api/account/service',
+                file: /.+Impl\.java|.+DAO\.java/,
+              },
+              xml: 'bz-portal-api-account/src/main/resources/sql/oracle',
+            },
+          ],
+          keyName: 'bz-portal-api-account',
         },
       ],
-      dependency: [],
     },
     data: {
       tables: './data/tables',
@@ -46,10 +63,10 @@ export const configComposite: Config = {
       functions: './data/functions',
       procedures: './data/procedures',
     },
-    database: './data/databases/Composite.db',
+    databaseDirectory: './data/databases',
     outputDirectory: './output',
     logDirectory: './output/log',
   },
-  outputType: 'txt',
+
   startingPoint: 'map',
 };

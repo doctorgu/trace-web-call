@@ -1,9 +1,11 @@
 import { Config } from './configTypes';
 
 export const configCompositeTest: Config = {
+  name: 'CompositeTest2',
   path: {
     source: {
       rootDir: 'D:/Temp/kbbizmicro-sb',
+      dependency: [],
       main: [
         {
           startings: {
@@ -19,10 +21,9 @@ export const configCompositeTest: Config = {
               xml: 'bz-store-api-bizgroup/src/main/resources/sql/oracle',
             },
           ],
-          keyName: '-bz-store-api-bizgroupTest2',
+          keyName: 'bz-store-api-bizgroupTest',
         },
       ],
-      dependency: [],
     },
     data: {
       tables: './data/tables',
@@ -30,10 +31,10 @@ export const configCompositeTest: Config = {
       functions: './data/functions',
       procedures: './data/procedures',
     },
-    database: './data/databases/CompositeTest.db',
+    databaseDirectory: './data/databases',
     outputDirectory: './output',
     logDirectory: './output/log',
   },
-  outputType: 'txt',
+
   startingPoint: 'map',
 };

@@ -2,7 +2,7 @@ import { XmlInfo, XmlNodeInfo, XmlNodeInfoFind } from '../common/sqlHelper';
 import { all, exec, get, run } from '../common/sqliteHelper';
 import { escapeDollar } from '../common/util';
 import { SqlTemplate } from '../common/sqliteHelper';
-import { configReader } from '../config/config';
+import { configReader } from '../config/configReader';
 import betterSqlite3 from 'better-sqlite3';
 
 class TXmlInfo {
@@ -12,7 +12,7 @@ select  xmlPath, namespace
 from    XmlInfo
 where   xmlPath = @xmlPath
 `;
-    return get(sql, { xmlPath });
+    return get(configReader.db(), sql, { xmlPath });
   }
 
   selectXmlNodeInfo(xmlPath: string): any[] {
@@ -21,7 +21,7 @@ select  id, tagName, params, tables, objectAndTables
 from    XmlNodeInfo
 where   xmlPath = @xmlPath
 `;
-    return all(sql, { xmlPath });
+    return all(configReader.db(), sql, { xmlPath });
   }
 
   selectXmlNodeInfoFindByNamespaceId(keyName: string, xmlPathsLike: string[], id: string): any {
@@ -41,7 +41,7 @@ where   keyName = @keyName
         (${xmlPathsLike.map((xmlPathLike) => `xmlPath like '${xmlPathLike}' || '%'`).join(' or ')})
 limit 1
 `;
-    return get(sql, { keyName, id });
+    return get(configReader.db(), sql, { keyName, id });
   }
 
   insertXmlInfoXmlNodeInfo(xmlPath: string, namespace: string, nodes: XmlNodeInfo[]): betterSqlite3.Database {
@@ -82,7 +82,7 @@ values
 ${sqlXml};
 ${sqlXmlNode};
   `;
-    return exec(sql);
+    return exec(configReader.db(), sql);
   }
 
   insertXmlInfoFindKeyName(keyName: string, finds: XmlNodeInfoFind[]): betterSqlite3.RunResult {
@@ -112,7 +112,7 @@ values
     const sqlValues = new SqlTemplate(sqlTmpValues).replaceAlls(findsJson, ',\n');
     const sql = sqlTmp.replace('{values}', escapeDollar(sqlValues));
 
-    return run(sql);
+    return run(configReader.db(), sql);
   }
 }
 export default new TXmlInfo();

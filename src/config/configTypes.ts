@@ -6,9 +6,14 @@ export type StartingPoint = 'map' | 'publicMethod';
 export type DirectoryAndFilePattern = { directory: string; file: string | RegExp };
 
 export type Config = {
+  name: string;
   path: {
     source: {
       rootDir: string;
+      dependency: {
+        service: DirectoryAndFilePattern;
+        xml: string;
+      }[];
       main: {
         startings: DirectoryAndFilePattern;
         serviceAndXmls: {
@@ -17,10 +22,6 @@ export type Config = {
         }[];
         keyName: string;
       }[];
-      dependency: {
-        service: DirectoryAndFilePattern;
-        xml: string;
-      }[];
     };
     data: {
       tables: string;
@@ -28,10 +29,9 @@ export type Config = {
       functions: string;
       procedures: string;
     };
-    database: string;
+    databaseDirectory: string;
     outputDirectory: string;
     logDirectory: string;
   };
-  outputType: OutputType;
   startingPoint: StartingPoint;
 };

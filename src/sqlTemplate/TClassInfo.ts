@@ -1,7 +1,7 @@
-import { all, exec, get, run } from '../common/sqliteHelper';
+import { all, exec, get, pluck, run } from '../common/sqliteHelper';
 import { escapeDollar } from '../common/util';
 import { SqlTemplate } from '../common/sqliteHelper';
-import { configReader } from '../config/config';
+import { configReader } from '../config/configReader';
 import { HeaderInfo, MethodInfo, MethodInfoFind } from '../common/classHelper';
 import betterSqlite3 from 'better-sqlite3';
 
@@ -12,7 +12,7 @@ select  classPath
 from    ClassInfo
 where   classPath = @classPath
 `;
-    return get(sql, { classPath });
+    return get(configReader.db(), sql, { classPath });
   }
 
   selectHeaderInfo(classPath: string): any {
@@ -21,7 +21,7 @@ select  name, implementsName, extendsName, mapping
 from    HeaderInfo
 where   classPath = @classPath
 `;
-    return get(sql, { classPath });
+    return get(configReader.db(), sql, { classPath });
   }
 
   selectMethodInfo(classPath: string): any[] {
@@ -30,7 +30,7 @@ select  mapping, isPublic, name, callers, parameterCount
 from    MethodInfo
 where   classPath = @classPath
 `;
-    return all(sql, { classPath });
+    return all(configReader.db(), sql, { classPath });
   }
 
   selectMethodInfoFindByKeyName(keyName: string): any[] {
@@ -39,7 +39,7 @@ select  classPath, className, implementsName, extendsName, mappingMethod, mappin
 from    MethodInfoFind
 where   keyName = @keyName
 `;
-    return all(sql, { keyName });
+    return all(configReader.db(), sql, { keyName });
   }
 
   selectMethodInfoFindByClassPathClassName(
@@ -56,7 +56,7 @@ where   keyName = @keyName
         ${fileNameWildcard && `and testWildcardFileName(@fileNameWildcard, className || '.java', 1) = 1`}
         ${fileNamePattern && `and className || '.java' regexp @fileNamePattern`}
 `;
-    return all(sql, {
+    return all(configReader.db(), sql, {
       keyName,
       classPathLike,
       ...(fileNameWildcard ? { fileNameWildcard } : {}),
@@ -82,7 +82,12 @@ where   keyName = @keyName
         (${classPathsLike.map((classPathLike) => `classPath like '${classPathLike}' || '%'`).join(' or ')})
         ${typeName ? `and (className = @typeName or implementsName = @typeName)` : `and className = @classNameThis`}
 `;
-    return all(sql, { keyName, methodName, callerParameterCount, ...(typeName ? { typeName } : { classNameThis }) });
+    return all(configReader.db(), sql, {
+      keyName,
+      methodName,
+      callerParameterCount,
+      ...(typeName ? { typeName } : { classNameThis }),
+    });
   }
 
   insertClassInfo(classPath: string, header: HeaderInfo, methods: MethodInfo[]): betterSqlite3.Database {
@@ -136,7 +141,7 @@ ${sqlClass};
 ${sqlHeader};
 ${sqlMethod};
 `;
-    return exec(sql);
+    return exec(configReader.db(), sql);
   }
 
   insertMethodInfoFindKeyName(keyName: string, finds: MethodInfoFind[]): betterSqlite3.RunResult {
@@ -165,7 +170,7 @@ values
     const sqlValues = new SqlTemplate(sqlTmpValues).replaceAlls(findsJson, ',\n');
     const sql = sqlTmp.replace('{values}', escapeDollar(sqlValues));
 
-    return run(sql);
+    return run(configReader.db(), sql);
   }
 }
 export default new TClassInfo();

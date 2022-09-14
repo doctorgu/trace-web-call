@@ -8,7 +8,8 @@ import {
   escapeDollar,
 } from './util';
 import { SqlTemplate } from '../common/sqliteHelper';
-import { config, configReader } from '../config/config';
+import { config } from '../config/config';
+import { configReader } from '../config/configReader';
 import { readdirSync, existsSync, statSync } from 'fs';
 import { resolve } from 'path';
 import betterSqlite3 from 'better-sqlite3';
