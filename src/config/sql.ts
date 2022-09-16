@@ -230,10 +230,24 @@ group by keyName, groupSeq;
 
 create view vViewNames
 as
-select  f.keyName, f.className, jMv.value mappingValues, group_concat(jVn.value, ',') viewNames
-from    MethodInfoFind f
-        left join json_each(f.mappingValues) jMv
-        left join json_each(f.viewNames) jVn
-where   f.mappingValues != '[]'
-group by f.keyName, f.className, jMv.value;
+select  keyName, className, mappingValues, viewNames,
+        case
+        when viewNames like '%/%'
+        and viewNames regexp '\w+'
+        and viewNames not like '%"%'
+        and viewNames not like '%+%'
+        and viewNames not like '%(")%'
+        and viewNames not like ',%' then
+            1
+        else
+            0
+        end success
+from    (
+        select  f.keyName, f.className, jMv.value mappingValues, group_concat(jVn.value, ',') viewNames
+        from    MethodInfoFind f
+                left join json_each(f.mappingValues) jMv
+                left join json_each(f.viewNames) jVn
+        where   f.returnType = 'ModelAndView'
+        group by f.keyName, f.className, jMv.value
+        );
 `;
