@@ -36,7 +36,7 @@ order by object
     return all(configReader.db(), sql, { objectType });
   }
 
-  insertObjectAndTables(objectType: ObjectType, objectAndTables: ObjectAndTables): betterSqlite3.Database {
+  insertObjectAndTables(objectTypeAndObjectAndTables: Map<ObjectType, ObjectAndTables>): betterSqlite3.Database {
     const sqlTmp = `
 delete from objectAndTables;
 
@@ -49,11 +49,15 @@ values
 ({object}, {objectType}, {tables})
 `;
 
-    const params = [...objectAndTables].map(([object, tables]) => ({
-      object,
-      objectType,
-      tables: JSON.stringify([...tables]),
-    }));
+    const params = [...objectTypeAndObjectAndTables]
+      .map(([objectType, objectAndTables]) => {
+        return [...objectAndTables].map(([object, tables]) => ({
+          object,
+          objectType,
+          tables: JSON.stringify([...tables]),
+        }));
+      })
+      .flat();
     const sqlValues = new SqlTemplate(sqlTmpValues).replaceAlls(params, ',\n');
     const sql = sqlTmp.replace('{values}', escapeDollar(sqlValues));
 

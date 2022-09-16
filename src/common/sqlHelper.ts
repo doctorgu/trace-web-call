@@ -318,17 +318,21 @@ export function insertTablesToDb(): Set<string> {
 }
 
 export function insertObjectAndTables(tables: Set<string>): ObjectAndTables {
-  const objectAndTablesAll = new Map<string, Set<string>>();
+  const objectTypeAndObjectAndTables = new Map<ObjectType, ObjectAndTables>();
 
   const objectTypes: ObjectType[] = ['view', 'function', 'procedure'];
   for (const objectType of objectTypes) {
     const objectAndTables = getObjectAndTablesByObjectType(objectType, tables);
-    objectAndTables.forEach((tables, object) => objectAndTablesAll.set(object, tables));
-    if (objectAndTables.size) {
-      tTables.insertObjectAndTables(objectType, objectAndTables);
-    }
+    objectTypeAndObjectAndTables.set(objectType, objectAndTables);
   }
+  tTables.insertObjectAndTables(objectTypeAndObjectAndTables);
 
+  const objectAndTablesAll = new Map<string, Set<string>>();
+  objectTypeAndObjectAndTables.forEach((objectAndTablesAll, objectType) => {
+    objectAndTablesAll.forEach((tables, object) => {
+      objectAndTablesAll.set(object, tables);
+    });
+  });
   return objectAndTablesAll;
 }
 
