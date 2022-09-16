@@ -2,9 +2,11 @@ export const sqlCacheInit = `
 drop table if exists CstSimple;
 
 create table CstSimple (
-    sha1 text not null primary key,
     path text not null,
+    mtime timestamp not null,
     cstSimple text not null,
-    insertTime timestamp not null default current_timestamp
+    insertTime timestamp not null default current_timestamp,
+    primary key (path, mtime)
 );
+
 `;

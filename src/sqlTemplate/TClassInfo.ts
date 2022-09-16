@@ -26,7 +26,7 @@ where   classPath = @classPath
 
   selectMethodInfo(classPath: string): any[] {
     const sql = `
-select  mapping, isPublic, name, callers, parameterCount
+select  mapping, isPublic, returnType, name, parameterCount, callers, viewNames
 from    MethodInfo
 where   classPath = @classPath
 `;
@@ -35,7 +35,7 @@ where   classPath = @classPath
 
   selectMethodInfoFindByKeyName(keyName: string): any[] {
     const sql = `
-select  classPath, className, implementsName, extendsName, mappingMethod, mappingValues, isPublic, name, parameterCount, callers
+select  classPath, className, implementsName, extendsName, mappingMethod, mappingValues, isPublic, returnType, name, parameterCount, callers, viewNames
 from    MethodInfoFind
 where   keyName = @keyName
 `;
@@ -49,7 +49,7 @@ where   keyName = @keyName
     fileNamePattern: string
   ): any[] {
     const sql = `
-select  classPath, className, implementsName, extendsName, mappingMethod, mappingValues, isPublic, name, parameterCount, callers
+select  classPath, className, implementsName, extendsName, mappingMethod, mappingValues, isPublic, returnType, name, parameterCount, callers, viewNames
 from    MethodInfoFind
 where   keyName = @keyName
         and classPath like @classPathLike || '%'
@@ -73,7 +73,7 @@ where   keyName = @keyName
     classNameThis: string
   ): any[] {
     const sql = `
-select  classPath, className, implementsName, extendsName, mappingMethod, mappingValues, isPublic, name, parameterCount, callers
+select  classPath, className, implementsName, extendsName, mappingMethod, mappingValues, isPublic, returnType, name, parameterCount, callers, viewNames
 from    MethodInfoFind
 where   keyName = @keyName
         and name = @methodName
@@ -102,8 +102,10 @@ where   keyName = @keyName
       classPath,
       mapping: JSON.stringify(method.mapping),
       isPublic: method.isPublic,
+      returnType: method.returnType,
       name: method.name,
       callers: JSON.stringify(method.callers),
+      viewNames: JSON.stringify(method.viewNames),
       parameterCount: method.parameterCount,
     }));
 
@@ -125,10 +127,10 @@ values
     if (methods.length) {
       const sqlTmpMethod = `
 insert into MethodInfo
-  (classPath, mapping, isPublic, name, callers, parameterCount)
+  (classPath, mapping, isPublic, returnType, name, callers, viewNames, parameterCount)
 values
   {values}`;
-      const sqlTmpValues = `({classPath}, {mapping}, {isPublic}, {name}, {callers}, {parameterCount})`;
+      const sqlTmpValues = `({classPath}, {mapping}, {isPublic}, {returnType}, {name}, {callers}, {viewNames}, {parameterCount})`;
       const sqlValues = new SqlTemplate(sqlTmpValues).replaceAlls(
         methodsJson.map((method) => method),
         ',\n'
@@ -156,17 +158,19 @@ ${sqlMethod};
       mappingMethod: find.mappingMethod,
       mappingValues: JSON.stringify(find.mappingValues),
       isPublic: find.isPublic,
+      returnType: find.returnType,
       name: find.name,
       parameterCount: find.parameterCount,
       callers: JSON.stringify(find.callers),
+      viewNames: JSON.stringify(find.viewNames),
     }));
 
     const sqlTmp = `
 insert into MethodInfoFind
-  (keyName, classPath, className, implementsName, extendsName, mappingMethod, mappingValues, isPublic, name, parameterCount, callers)
+  (keyName, classPath, className, implementsName, extendsName, mappingMethod, mappingValues, isPublic, returnType, name, parameterCount, callers, viewNames)
 values
   {values}`;
-    const sqlTmpValues = `({keyName}, {classPath}, {className}, {implementsName}, {extendsName}, {mappingMethod}, {mappingValues}, {isPublic}, {name}, {parameterCount}, {callers})`;
+    const sqlTmpValues = `({keyName}, {classPath}, {className}, {implementsName}, {extendsName}, {mappingMethod}, {mappingValues}, {isPublic}, {returnType}, {name}, {parameterCount}, {callers}, {viewNames})`;
     const sqlValues = new SqlTemplate(sqlTmpValues).replaceAlls(findsJson, ',\n');
     const sql = sqlTmp.replace('{values}', escapeDollar(sqlValues));
 

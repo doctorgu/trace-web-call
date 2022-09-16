@@ -15,6 +15,7 @@ drop table if exists MethodInfoFind;
 drop view if exists vRoutes;
 drop view if exists vRoutesTxt;
 drop view if exists vStartToTables;
+drop view if exists vViewNames;
 
 -- strict removed because SQLiteStudio does not support it.
 
@@ -92,9 +93,11 @@ create table MethodInfo (
     classPath text not null,
     mapping text not null,
     isPublic int not null check (isPublic in (0, 1)),
+    returnType text not null,
     name text not null,
     parameterCount int not null,
     callers text not null,
+    viewNames text not null,
     insertTime timestamp not null default current_timestamp,
     foreign key (classPath) references ClassInfo (classPath) on update cascade on delete cascade
 );
@@ -108,9 +111,11 @@ create table MethodInfoFind (
     mappingMethod text not null,
     mappingValues text not null,
     isPublic int not null check (isPublic in (0, 1)),
+    returnType text not null,
     name text not null,
     parameterCount int not null,
     callers text not null,
+    viewNames text not null,
     insertTime timestamp not null default current_timestamp,
     foreign key (classPath) references ClassInfo (classPath) on update cascade on delete cascade,
     foreign key (keyName) references KeyInfo (keyName) on update cascade on delete cascade
@@ -222,4 +227,13 @@ from    (
         order by r.keyName, r.groupSeq, tables
         )
 group by keyName, groupSeq;
+
+create view vViewNames
+as
+select  f.keyName, f.className, jMv.value mappingValues, group_concat(jVn.value, ',') viewNames
+from    MethodInfoFind f
+        left join json_each(f.mappingValues) jMv
+        left join json_each(f.viewNames) jVn
+where   f.mappingValues != '[]'
+group by f.keyName, f.className, jMv.value;
 `;

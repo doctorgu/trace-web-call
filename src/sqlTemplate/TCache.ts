@@ -6,21 +6,22 @@ import { HeaderInfo, MethodInfo, MethodInfoFind } from '../common/classHelper';
 import betterSqlite3 from 'better-sqlite3';
 
 class TCache {
-  selectCstSimpleBySha1(sha1: string): any {
+  selectCstSimpleByMtime(path: string, mtime: Date): any {
     const sql = `
 select  cstSimple
 from    CstSimple
-where   sha1 = @sha1`;
-    return pluck(configReader.dbCache(), sql, { sha1 });
+where   path = @path
+        and mtime = datetime(@mtime)`;
+    return pluck(configReader.dbCache(), sql, { path, mtime: mtime.toISOString() });
   }
 
-  insertCstSimple(sha1: string, path: string, cstSimple: any): betterSqlite3.RunResult {
+  insertCstSimple(path: string, mtime: Date, cstSimple: any): betterSqlite3.RunResult {
     const sql = `
 insert into CstSimple
-  (sha1, path, cstSimple)
+  (path, mtime, cstSimple)
 values
-  (@sha1, @path, @cstSimple)`;
-    return run(configReader.dbCache(), sql, { sha1, path, cstSimple: JSON.stringify(cstSimple) });
+  (@path, datetime(@mtime), @cstSimple)`;
+    return run(configReader.dbCache(), sql, { path, mtime: mtime.toISOString(), cstSimple: JSON.stringify(cstSimple) });
   }
 }
 export default new TCache();

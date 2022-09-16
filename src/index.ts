@@ -10,7 +10,7 @@
 import { writeFileSync } from 'fs';
 import { resolve } from 'path';
 import { config } from './config/config';
-import { getClassInfo, getFindsByClassPathClassNameFromDb } from './common/classHelper';
+import { getClassInfo, getCstSimple, getFindsByClassPathClassNameFromDb } from './common/classHelper';
 import { getXmlNodeInfoFinds, getStartingToTables, RouteInfo } from './common/traceHelper';
 import { readFileSyncUtf16le, removeCommentLiteralSql } from './common/util';
 import { insertToDb } from './run/insertToDb';
@@ -24,11 +24,14 @@ function doTest() {
   //   const { callers } = methodInStartings;
   //   console.log(callers);
   // }
-  // const { methods } = getClassInfo('./test/AnnotationTestController.java');
+  // --
+  // const { methods } = getClassInfo('./test/ModelAndViewTestController.java');
+  // // const { methods } = getClassInfo('./test/SeparatorTest.java');
   // for (let nMethod = 0; nMethod < methods.length; nMethod++) {
-  //   const { mapping } = methods[nMethod];
-  //   console.log(mapping.values.join(','));
+  //   const { viewNames } = methods[nMethod];
+  //   console.log(viewNames.join(','));
   // }
+  // --
   // const xmls = getXmlNodeInfoFinds('./test', 'IncludeTest.xml');
   // for (let i = 0; i < xmls.length; i++) {
   //   const { namespace, id, tagName, params, tables } = xmls[i];

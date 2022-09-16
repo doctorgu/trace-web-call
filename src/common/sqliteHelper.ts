@@ -5,13 +5,13 @@ import { config } from '../config/config';
 import { configReader } from '../config/configReader';
 import { escapeDollar, escapeRegexp } from './util';
 
-function writeAndError(ex: any, sql: string, params: { [name: string]: any } = {}): any {
+function writeAndError(ex: any, sql: string, params: { [key: string]: any } = {}): any {
   const msg = `${sql}\n${JSON.stringify(params)}\n${ex?.code} ${ex?.message}\n${ex?.stack}`;
   writeFileSync(resolve(config.path.logDirectory, 'exception.log'), msg);
   throw new Error(msg);
 }
 
-export function get(db: betterSqlite3.Database, sql: string, params: { [name: string]: any } = {}): any {
+export function get(db: betterSqlite3.Database, sql: string, params: { [key: string]: any } = {}): any {
   try {
     return db.prepare(sql).get(params);
   } catch (ex) {
@@ -19,7 +19,7 @@ export function get(db: betterSqlite3.Database, sql: string, params: { [name: st
   }
 }
 
-export function pluck(db: betterSqlite3.Database, sql: string, params: { [name: string]: any } = {}): any {
+export function pluck(db: betterSqlite3.Database, sql: string, params: { [key: string]: any } = {}): any {
   try {
     return db.prepare(sql).pluck().get(params);
   } catch (ex) {
@@ -27,7 +27,7 @@ export function pluck(db: betterSqlite3.Database, sql: string, params: { [name: 
   }
 }
 
-export function all(db: betterSqlite3.Database, sql: string, params: { [name: string]: any } = {}): any[] {
+export function all(db: betterSqlite3.Database, sql: string, params: { [key: string]: any } = {}): any[] {
   try {
     return db.prepare(sql).all(params);
   } catch (ex) {
@@ -38,7 +38,7 @@ export function all(db: betterSqlite3.Database, sql: string, params: { [name: st
 export function run(
   db: betterSqlite3.Database,
   sql: string,
-  params: { [name: string]: any } = {}
+  params: { [key: string]: any } = {}
 ): betterSqlite3.RunResult {
   try {
     return db.prepare(sql).run(params);

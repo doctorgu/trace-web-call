@@ -2,7 +2,6 @@ import { parse } from 'java-parser';
 import { exec as execProc } from 'child_process';
 import { statSync } from 'fs';
 import { promisify } from 'util';
-import { fromFileSync } from 'hasha';
 
 import { readFileSyncUtf16le, trimList, trimEnd } from './util';
 import { SqlTemplate } from '../common/sqliteHelper';
@@ -56,9 +55,13 @@ type Keyword =
   | 'unaryExpressionNotPlusMinus'
   | 'methodModifier'
   | 'Public'
-  | 'elementValuePair';
+  | 'elementValuePair'
+  | 'methodHeader'
+  | 'result'
+  | 'Return'
+  | 'BinaryOperator';
 
-type PathsAndImage = {
+export type PathsAndImage = {
   paths: string[];
   image: string;
 };
@@ -85,9 +88,11 @@ export type CallerInfo = {
 export type MethodInfo = {
   mapping: Mapping;
   isPublic: boolean;
+  returnType: string;
   name: string;
   parameterCount: number;
   callers: CallerInfo[];
+  viewNames: string[];
 };
 
 export type MethodInfoFind = {
@@ -98,9 +103,11 @@ export type MethodInfoFind = {
   mappingMethod: string;
   mappingValues: string[];
   isPublic: boolean; // !!! Need Public, Protected, Private when finding by extended
+  returnType: string;
   name: string;
   parameterCount: number;
   callers: CallerInfo[];
+  viewNames: string[];
 };
 
 export type HeaderInfo = {
@@ -169,6 +176,29 @@ function getSimplifiedCst(pathsAndImageList: PathsAndImage[]) {
   return treeNew;
 }
 
+function getOpeningPosition(
+  list: (PathsAndImage & { binMoved: boolean })[],
+  posClose: number,
+  symbolOpen: string,
+  symbolClose: string
+): number {
+  let counter = 1;
+
+  for (let i = posClose - 1; i >= 0; i--) {
+    const { image } = list[i];
+    if (image === symbolClose) {
+      counter++;
+    } else if (image === symbolOpen) {
+      counter--;
+    }
+
+    if (counter === 0) {
+      return i;
+    }
+  }
+
+  throw new Error(`Openning symbol not found before ${posClose} index.`);
+}
 function getPathsAndImageListFromSimpleCst2(parent: any, paths: string[], pathsAndImageList: PathsAndImage[]): void {
   if (typeof parent === 'string') {
     pathsAndImageList.push({ paths, image: parent });
@@ -186,11 +216,70 @@ function getPathsAndImageListFromSimpleCst2(parent: any, paths: string[], pathsA
     getPathsAndImageListFromSimpleCst2(prop, pathsNew, pathsAndImageList);
   }
 }
+function getInsertIdx(list: (PathsAndImage & { binMoved: boolean })[], start: number, offset: number): number {
+  let counter = 0;
+  for (let i = start; i >= 0; i--) {
+    const { image } = list[i];
+    if (image === ')') {
+      i = getOpeningPosition(list, i, '(', ')');
+    }
+
+    counter++;
+    if (counter === offset) {
+      return i;
+    }
+  }
+
+  throw new Error(`Not reached by offset: ${offset}`);
+}
+function moveBinaryOperator(list: (PathsAndImage & { binMoved: boolean })[], posBin: number, lastIdxBin: number): void {
+  // [1, 2, 3, 4, +, +, +] -> [1, +, 2, +, 3, +, 4]
+  //    : [1, 2, 3, 4, +, +, +]
+  // - 3: [1, 2, 3, +, 4, +, +]
+  // - 4: [1, 2, +, 3, +, 4, +]
+  // - 5: [1, +, 2, +, 3, +, 4]
+  let insertIdx = -1;
+  let offset = lastIdxBin + 1;
+  for (let i = 0; i < lastIdxBin + 1; i++) {
+    const cur = list.splice(posBin, 1)[0];
+    insertIdx = getInsertIdx(list, posBin - 1, offset);
+    list.splice(insertIdx, 0, cur);
+    cur.binMoved = true;
+
+    offset++;
+  }
+}
+function reorderBinaryOperator(pathsAndImageList: PathsAndImage[]): PathsAndImage[] {
+  const list: (PathsAndImage & { binMoved: boolean })[] = pathsAndImageList.map(({ paths, image }) => ({
+    paths,
+    image,
+    binMoved: false,
+  }));
+  const dests = ['BinaryOperator', 'Comma'];
+
+  for (let i = list.length - 1; i >= 0; i--) {
+    const { paths, binMoved } = list[i];
+
+    const rDigit = /^[0-9]+$/;
+    const binOne = dests.includes(paths[paths.length - 1]);
+    const binOneMore = dests.includes(paths[paths.length - 2]) && rDigit.test(paths[paths.length - 1]);
+    if ((!binOne && !binOneMore) || binMoved) continue;
+
+    const lastIdxS = binOne ? '0' : paths[paths.length - 1];
+
+    moveBinaryOperator(list, i, parseInt(lastIdxS));
+  }
+  return list.map(({ paths, image }) => ({ paths, image }));
+}
 function getPathsAndImagesFromSimpleCst(parent: any) {
   const paths: string[] = [];
   const pathsAndImageList: PathsAndImage[] = [];
+
   getPathsAndImageListFromSimpleCst2(parent, paths, pathsAndImageList);
-  return pathsAndImageList;
+
+  const pathsAndImageListOrdered = reorderBinaryOperator(pathsAndImageList);
+
+  return pathsAndImageListOrdered;
 }
 
 function getPathsAndImageListFromCst2(parent: any, paths: string[], pathsAndImageList: PathsAndImage[]): void {
@@ -279,8 +368,8 @@ function includes2(paths: string[], finds: Keyword[]): boolean {
   }
 }
 
-function exec(r: RegExp, paths: string[], index: number = 0) {
-  const value = paths.filter((v, i) => i >= index).join('');
+function execImages(r: RegExp, images: string[], separator: string = '', index: number = 0) {
+  const value = images.filter((v, i) => i >= index).join(separator);
   return r.exec(value);
 }
 
@@ -306,7 +395,7 @@ function getMapping(
   const images = list.map(({ image }) => image);
   const posMethod = images.indexOf('method');
   if (posMethod !== -1) {
-    const m = exec(/RequestMethod\.(\w+)/, images, posMethod);
+    const m = execImages(/RequestMethod\.(\w+)/, images, '', posMethod);
     if (m) {
       method = m[1];
     }
@@ -593,15 +682,51 @@ function getCallerInfos(
   return callers;
 }
 
+function getViewNames(methodDecls: PathsAndImage[], posLCurly: number, posRCurly: number): string[] {
+  let viewNames: string[] = [];
+
+  let foundReturn = false;
+  let images: string[] = [];
+  const list = methodDecls.filter((v, i) => i > posLCurly && i < posRCurly);
+  for (let i = 0; i < list.length; i++) {
+    const { paths, image } = list[i];
+
+    if (endsWith(paths, 'Return')) {
+      foundReturn = true;
+    }
+    if (foundReturn) {
+      images.push(image);
+
+      if (endsWith(paths, 'Semicolon')) {
+        const m = execImages(/return new ModelAndView \(([^,)]+)/, images, ' ');
+        if (m) {
+          const viewName = m[1].trim();
+          const onlyLiteral = /^"[\w/.]*"$/.test(viewName);
+          const viewName2 = onlyLiteral ? trimList(viewName, '"') : viewName;
+          viewNames.push(viewName2);
+        }
+
+        foundReturn = false;
+        images = [];
+      }
+    }
+  }
+
+  return viewNames;
+}
+
 function getMethods(cstSimple: any, pathsAndImageList: PathsAndImage[], vars: VarInfo[]): MethodInfo[] {
   const methodDecls = pathsAndImageList.filter(({ paths, image }) => includes(paths, 'methodDeclaration'));
 
   const methods: MethodInfo[] = [];
   let mapping: Mapping = { method: '', values: [] };
   let isPublic = false;
+  let returnType = '';
   let methodName = '';
   let parameterCount = 0;
   let callers: CallerInfo[] = [];
+  let viewNames: string[] = [];
+
   for (let i = 0; i < methodDecls.length; i++) {
     const { paths, image } = methodDecls[i];
 
@@ -614,17 +739,22 @@ function getMethods(cstSimple: any, pathsAndImageList: PathsAndImage[], vars: Va
       }
     } else if (includes(paths, 'methodDeclaration', 'methodModifier') && endsWith(paths, 'Public')) {
       isPublic = true;
+    } else if (includes(paths, 'methodDeclaration', 'methodHeader', 'result')) {
+      // ResponseEntity<?> will return 'ResponseEntity', '<', '?', '>'
+      returnType += image;
     } else if (endsWith(paths, 'methodDeclarator', 'Identifier')) {
       methodName = image;
     } else if (endsWith(paths, 'LCurly') && methodName) {
       const posLCurly = i;
       const posRCurly = getRCurlyPosition(methodDecls, posLCurly);
       callers = getCallerInfos(cstSimple, methodDecls, vars, posLCurly, posRCurly);
+      viewNames = getViewNames(methodDecls, posLCurly, posRCurly);
 
-      methods.push({ mapping, isPublic, name: methodName, parameterCount, callers });
+      methods.push({ mapping, isPublic, returnType, name: methodName, parameterCount, callers, viewNames });
 
       mapping = { method: '', values: [] };
       isPublic = false;
+      returnType = '';
       methodName = '';
       callers = [];
 
@@ -667,13 +797,16 @@ export function rowsToFinds(rows: any[]): MethodInfoFind[] {
       mappingMethod,
       mappingValues,
       isPublic,
+      returnType,
       name,
       parameterCount,
       callers,
+      viewNames,
     } = row;
     const mappingValues2: string[] = JSON.parse(mappingValues);
     const isPublic2 = isPublic === 1;
     const callers2: CallerInfo[] = JSON.parse(callers);
+    const viewNames2: string[] = JSON.parse(viewNames);
 
     finds.push({
       classPath,
@@ -683,9 +816,11 @@ export function rowsToFinds(rows: any[]): MethodInfoFind[] {
       mappingMethod,
       mappingValues: mappingValues2,
       isPublic: isPublic2,
+      returnType,
       name,
       parameterCount,
       callers: callers2,
+      viewNames: viewNames2,
     });
   }
 
@@ -707,45 +842,46 @@ export function getClassInfoFromDb(rootDir: string, fullPath: string): ClassInfo
 
   const methods: MethodInfo[] = [];
   for (const row of rowsMethod) {
-    const { mapping, isPublic, name, callers, parameterCount } = row;
+    const { mapping, isPublic, returnType, name, parameterCount, callers, viewNames } = row;
     const mapping2: Mapping = JSON.parse(mapping);
     const isPublic2 = isPublic === 1;
     const callers2: CallerInfo[] = JSON.parse(callers);
+    const viewNames2: string[] = JSON.parse(viewNames);
 
-    methods.push({ mapping: mapping2, isPublic: isPublic2, name, callers: callers2, parameterCount });
+    methods.push({
+      mapping: mapping2,
+      isPublic: isPublic2,
+      returnType,
+      name,
+      parameterCount,
+      callers: callers2,
+      viewNames: viewNames2,
+    });
   }
 
   return { classPath, header, methods };
 }
 
-// async function getSha1UsingGit(fullPath: string): Promise<string> {
-//   const cmd = `git hash-object ${fullPath}`;
-//   const { stdout, stderr } = await runExec(cmd);
-//   if (stderr) {
-//     throw new Error(`${cmd} ${stderr}`);
-//   }
-//   return stdout;
-// }
-
-function getCstSimple(fullPath: string): any {
+export function getCstSimple(fullPath: string): any {
   const content = readFileSyncUtf16le(fullPath);
   const cst = parse(content);
 
-  const pathsAndImageListAll = getPathsAndImageListFromCst(cst);
-  const cstSimple = getSimplifiedCst(pathsAndImageListAll);
+  const pathsAndImages = getPathsAndImageListFromCst(cst);
+  const cstSimple = getSimplifiedCst(pathsAndImages);
   return cstSimple;
 }
 
-function getCstSimpleFromDbCache(fullPath: string): { cstSimple: any; sha1: string } | null {
-  const sha1 = fromFileSync(fullPath, { algorithm: 'sha1' });
-  const cstSimpleFromDb = tCache.selectCstSimpleBySha1(sha1);
+function getCstSimpleFromDbCache(fullPath: string): any {
+  const path = getDbPath(config.path.source.rootDir, fullPath);
+  const mtime = statSync(fullPath).mtime;
+
+  const cstSimpleFromDb = tCache.selectCstSimpleByMtime(path, mtime);
   if (cstSimpleFromDb) {
     return JSON.parse(cstSimpleFromDb);
   }
 
   const cstSimple = getCstSimple(fullPath);
-  const path = getDbPath(config.path.source.rootDir, fullPath);
-  tCache.insertCstSimple(sha1, path, cstSimple);
+  tCache.insertCstSimple(path, mtime, cstSimple);
 
   return cstSimple;
 }
@@ -755,7 +891,9 @@ export function getClassInfo(fullPath: string): {
   vars: VarInfo[];
   methods: MethodInfo[];
 } {
-  const cstSimple = getCstSimpleFromDbCache(fullPath);
+  // !!! TODO: uncomment
+  // const cstSimple = getCstSimpleFromDbCache(fullPath);
+  const cstSimple = getCstSimple(fullPath);
   const classDeclaration = getCstClassDeclaration(cstSimple);
   const pathsAndImageList = getPathsAndImagesFromSimpleCst(classDeclaration);
 
@@ -801,7 +939,7 @@ function getMethodInfoFinds(classInfosMerged: ClassInfo[]): MethodInfoFind[] {
   for (const classInfo of classInfosMerged) {
     const { classPath, header, methods } = classInfo;
     const { name: className, implementsName, extendsName, mapping: mappingClass } = header;
-    const findsCur = methods.map(({ mapping, isPublic, name, parameterCount, callers }) => {
+    const findsCur = methods.map(({ mapping, isPublic, returnType, name, parameterCount, callers, viewNames }) => {
       const methodRoot = mappingClass.method;
       const mappingRoot = mappingClass.values?.[0] || '';
 
@@ -816,9 +954,11 @@ function getMethodInfoFinds(classInfosMerged: ClassInfo[]): MethodInfoFind[] {
         mappingMethod,
         mappingValues,
         isPublic,
+        returnType,
         name,
         parameterCount,
         callers,
+        viewNames,
       };
     });
 
