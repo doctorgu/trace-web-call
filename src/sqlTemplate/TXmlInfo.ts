@@ -1,4 +1,4 @@
-import { XmlInfo, XmlNodeInfo, XmlNodeInfoFind } from '../common/sqlHelper';
+import { XmlInfo, XmlNodeInfo, XmlNodeInfoFind } from '../common/batisHelper';
 import { all, exec, get, run } from '../common/sqliteHelper';
 import { escapeDollar } from '../common/util';
 import { SqlTemplate } from '../common/sqliteHelper';

@@ -12,15 +12,15 @@ export const configCompositeTest: Config = {
             directory: 'bz-store-api-bizgroup/src/main/java/biz/micro/portal/store/api/bizgroup/controller',
             file: 'BizBuilderController.java',
           },
-          serviceAndXmls: [
-            {
-              service: {
-                directory: 'bz-store-api-bizgroup/src/main/java/biz/micro/portal/store/api/bizgroup/spring/service',
-                file: /.+Impl\.java|.+DAO\.java/,
-              },
-              xml: 'bz-store-api-bizgroup/src/main/resources/sql/oracle',
+          serviceXmlJspDirs: {
+            service: {
+              directory: 'bz-store-api-bizgroup/src/main/java/biz/micro/portal/store/api/bizgroup/spring/service',
+              file: /.+Impl\.java|.+DAO\.java/,
             },
-          ],
+            xml: 'bz-store-api-bizgroup/src/main/resources/sql/oracle',
+            jspDirectory: '',
+          },
+
           keyName: 'bz-store-api-bizgroupTest',
         },
       ],

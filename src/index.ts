@@ -1,19 +1,15 @@
 // @RequestMapping(value="/coe/cs"+ACTION_NAME)
-// * Two class case
-// * Add current className, methodName, parameterCount to routes !!! to check: routeTypePrev === 'method' && valuePrev === value && depthPrev <= depth
-// * Selecting user_name.tables support
-// * extends support
-// * dependency support
-// * Remove quoted text from sql
-// * Starting point is not mapping
 
 import { writeFileSync } from 'fs';
 import { resolve } from 'path';
 import { config } from './config/config';
-import { getClassInfo, getCstSimple, getFindsByClassPathClassNameFromDb } from './common/classHelper';
-import { getXmlNodeInfoFinds, getStartingToTables, RouteInfo } from './common/traceHelper';
-import { readFileSyncUtf16le, removeCommentLiteralSql } from './common/util';
+import { getClassInfo, getFindsByClassPathClassNameFromDb } from './common/classHelper';
+import { getCstSimple } from './common/cstHelper';
+import { getXmlNodeInfoFinds, getStartingToTables, RouteTable } from './common/traceHelper';
+import { findFiles, readFileSyncUtf16le, removeCommentLiteralSql } from './common/util';
 import { insertToDb } from './run/insertToDb';
+import { getDbPath } from './common/common';
+import { getJspIncludes } from './common/jspHelper';
 
 function doTest() {
   // const ret = getClassInfo('C:/source/trace-web-call/test/AnnotationTestController.java');
@@ -25,11 +21,12 @@ function doTest() {
   //   console.log(callers);
   // }
   // --
-  // const { methods } = getClassInfo('./test/ModelAndViewTestController.java');
-  // // const { methods } = getClassInfo('./test/SeparatorTest.java');
+  // const { methods } = getClassInfo('./test/jspTest/JspTestController.java');
+  // const { methods } = getClassInfo('./test/SeparatorTest.java');
+  // const { methods } = getClassInfo('./test/ControlTestController.java');
   // for (let nMethod = 0; nMethod < methods.length; nMethod++) {
-  //   const { viewNames } = methods[nMethod];
-  //   console.log(viewNames.join(','));
+  //   const { jspViews } = methods[nMethod];
+  //   console.log(jspViews);
   // }
   // --
   // const xmls = getXmlNodeInfoFinds('./test', 'IncludeTest.xml');

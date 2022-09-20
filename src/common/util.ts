@@ -29,6 +29,10 @@ export function removeCommentSql(value: string): string {
   return value.replace(/\/\*[\s\S]*?\*\/|--.*/g, '');
 }
 
+export function removeCommentJsp(value: string): string {
+  return value.replace(/<%--[\s\S]*?--%>/g, '');
+}
+
 /*
 --Example
 console.log(trimList('"a"b"', '"') === 'a"b');
@@ -39,16 +43,16 @@ console.log(trimList('a"', '"') === 'a');
 console.log(trimList('[a]', '[]') === 'a');
 console.log(trimList('{[a]}', '[{}]') === 'a');
 */
-export function trimList(value: string, find: string): string {
-  const find2 = escapeRegexp(find);
+export function trimList(value: string, finds: string[]): string {
+  const find2 = escapeRegexp(finds.join(''));
   return value.replace(new RegExp(`^[${find2}]*(.*?)[${find2}]*$`), '$1');
 }
-export function trimStartList(value: string, find: string): string {
-  const find2 = escapeRegexp(find);
+export function trimStartList(value: string, finds: string[]): string {
+  const find2 = escapeRegexp(finds.join(''));
   return value.replace(new RegExp(`^[${find2}]*(.*)`), '$1');
 }
-export function trimEndList(value: string, find: string): string {
-  const find2 = escapeRegexp(find);
+export function trimEndList(value: string, finds: string[]): string {
+  const find2 = escapeRegexp(finds.join(''));
   return value.replace(new RegExp(`(.*?)[${find2}]*$`), '$1');
 }
 export function trimStart(value: string, find: string): string {
@@ -376,4 +380,16 @@ export function readFileSyncUtf16le(path: string) {
   }
 
   return readFileSync(path, encoding);
+}
+
+/** Separate by '/' or '\' and return last none empty path */
+export function getLastPath(path: string): string {
+  const paths = path.split(/[\/\\]/);
+  return paths[paths.length - 1] || paths[paths.length - 2];
+}
+
+/** Separate by '/' or '\' and return first none empty path */
+export function getFirstPath(path: string): string {
+  const paths = path.split(/[\/\\]/);
+  return paths[0] || paths[1];
 }

@@ -11,7 +11,11 @@ function writeAndError(ex: any, sql: string, params: { [key: string]: any } = {}
   throw new Error(msg);
 }
 
-export function get(db: betterSqlite3.Database, sql: string, params: { [key: string]: any } = {}): any {
+export function get(
+  db: betterSqlite3.Database,
+  sql: string,
+  params: { [key: string]: any } = {}
+): { [key: string]: any } {
   try {
     return db.prepare(sql).get(params);
   } catch (ex) {
@@ -19,7 +23,7 @@ export function get(db: betterSqlite3.Database, sql: string, params: { [key: str
   }
 }
 
-export function pluck(db: betterSqlite3.Database, sql: string, params: { [key: string]: any } = {}): any {
+export function pluck(db: betterSqlite3.Database, sql: string, params: { [key: string]: any } = {}): any[] {
   try {
     return db.prepare(sql).pluck().get(params);
   } catch (ex) {
@@ -27,9 +31,21 @@ export function pluck(db: betterSqlite3.Database, sql: string, params: { [key: s
   }
 }
 
-export function all(db: betterSqlite3.Database, sql: string, params: { [key: string]: any } = {}): any[] {
+export function all(
+  db: betterSqlite3.Database,
+  sql: string,
+  params: { [key: string]: any } = {}
+): { [key: string]: any }[] {
   try {
     return db.prepare(sql).all(params);
+  } catch (ex) {
+    return writeAndError(ex, sql, params);
+  }
+}
+
+export function raw(db: betterSqlite3.Database, sql: string, params: { [key: string]: any } = {}): [][] {
+  try {
+    return db.prepare(sql).raw().all(params);
   } catch (ex) {
     return writeAndError(ex, sql, params);
   }

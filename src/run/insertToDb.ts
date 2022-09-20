@@ -6,7 +6,7 @@ import {
   getFindsByClassPathClassNameFromDb,
   insertClassInfo,
   insertMethodInfoFindKeyName,
-  insertRouteInfoKeyName,
+  insertRouteTableKeyName,
 } from '../common/classHelper';
 import {
   ObjectAndTables,
@@ -15,25 +15,37 @@ import {
   insertXmlInfoXmlNodeInfo,
   XmlInfo,
   insertXmlInfoFindKeyName,
-} from '../common/sqlHelper';
+} from '../common/batisHelper';
 import { config } from '../config/config';
 import { configReader } from '../config/configReader';
 import { DirectoryAndFilePattern } from '../config/configTypes';
 import { mergeExtends } from '../common/traceHelper';
 import { sqlInit } from '../config/sql';
 import tCommon from '../sqlTemplate/TCommon';
+import { getDbPath } from '../common/common';
+import { insertJspInfo, insertJspInfoToDb, insertRouteJspKeyName, JspInfo } from '../common/jspHelper';
 
-function insertClassAndXml(
+function insertJspClassXml(
   rootDir: string,
   tablesAll: Set<string>,
   objectAndTablesAll: ObjectAndTables,
-  serviceAndXmls: { service: DirectoryAndFilePattern; xml: string }[]
-): { classInfos: ClassInfo[]; xmlInfos: XmlInfo[] } {
+  serviceXmlJspDirs: { service: DirectoryAndFilePattern; xml: string; jspDirectory: string }[]
+): { jspInfos: JspInfo[]; classInfos: ClassInfo[]; xmlInfos: XmlInfo[] } {
   const classInfos: ClassInfo[] = [];
   const xmlInfos: XmlInfo[] = [];
+  let jspInfos: JspInfo[] = [];
 
-  serviceAndXmls.forEach(({ service: { directory, file } }) => {
+  serviceXmlJspDirs.forEach(({ service: { directory, file }, jspDirectory }) => {
     const initDir = resolve(rootDir, directory);
+
+    let jspFullPaths: string[] = [];
+    const fullDirJsp = resolve(rootDir, jspDirectory);
+    if (existsSync(fullDirJsp)) {
+      jspFullPaths = [...findFiles(fullDirJsp, '*.jsp')];
+    }
+    if (jspFullPaths.length) {
+      jspInfos = insertJspInfo(fullDirJsp, jspFullPaths);
+    }
 
     for (const fullPath of [...findFiles(initDir, file)]) {
       const classInfo = insertClassInfo(rootDir, fullPath);
@@ -43,7 +55,7 @@ function insertClassAndXml(
     }
   });
 
-  serviceAndXmls.forEach(({ xml }) => {
+  serviceXmlJspDirs.forEach(({ xml }) => {
     const fullDir = resolve(rootDir, xml);
     if (existsSync(fullDir)) {
       const fullPaths = statSync(fullDir).isDirectory() ? [...findFiles(fullDir, '*.xml')] : [fullDir];
@@ -56,7 +68,7 @@ function insertClassAndXml(
     }
   });
 
-  return { classInfos, xmlInfos };
+  return { jspInfos, classInfos, xmlInfos };
 }
 
 export function insertToDb() {
@@ -79,17 +91,16 @@ export function insertToDb() {
 
   tCommon.insertKeyInfo(config.path.source.main.map(({ keyName }) => ({ keyName })));
 
-  const { classInfos: classInfosDep, xmlInfos: xmlInfosDep } = insertClassAndXml(
-    rootDir,
-    tablesAll,
-    objectAndTablesAll,
-    config.path.source.dependency
-  );
+  const {
+    jspInfos: jspInfosDep,
+    classInfos: classInfosDep,
+    xmlInfos: xmlInfosDep,
+  } = insertJspClassXml(rootDir, tablesAll, objectAndTablesAll, config.path.source.dependency);
 
   for (let i = 0; i < config.path.source.main.length; i++) {
     const {
       startings: { directory, file },
-      serviceAndXmls,
+      serviceXmlJspDirs,
       keyName,
     } = config.path.source.main[i];
 
@@ -104,23 +115,26 @@ export function insertToDb() {
     }
 
     console.log(`insertClassAndXml ${directory}`);
-    const { classInfos: classInfosMain, xmlInfos: xmlInfosMain } = insertClassAndXml(
-      rootDir,
-      tablesAll,
-      objectAndTablesAll,
-      serviceAndXmls
-    );
+    const {
+      jspInfos: jspInfosMain,
+      classInfos: classInfosMain,
+      xmlInfos: xmlInfosMain,
+    } = insertJspClassXml(rootDir, tablesAll, objectAndTablesAll, [serviceXmlJspDirs]);
 
+    const jspPathsCur = [...jspInfosDep, ...jspInfosMain].map(({ jspPath }) => jspPath);
     const classInfosCur = [...classInfosDep, ...classInfosStarting, ...classInfosMain];
     const classInfosMerged = mergeExtends(classInfosCur);
     console.log(`insertMethodInfoFindKeyName ${directory}`);
-    insertMethodInfoFindKeyName(keyName, classInfosMerged);
+    insertMethodInfoFindKeyName(keyName, jspPathsCur, classInfosMerged);
 
     const xmlInfosCur = [...xmlInfosDep, ...xmlInfosMain];
     console.log(`insertXmlInfoFindKeyName ${directory}`);
     insertXmlInfoFindKeyName(keyName, xmlInfosCur);
   }
 
-  console.log(`insertRouteInfoKeyName`);
-  insertRouteInfoKeyName();
+  console.log(`insertRouteTableKeyName`);
+  insertRouteTableKeyName();
+
+  console.log(`insertRouteJspKeyName`);
+  insertRouteJspKeyName();
 }

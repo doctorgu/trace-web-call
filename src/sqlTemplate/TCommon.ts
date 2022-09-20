@@ -1,11 +1,11 @@
 import betterSqlite3 from 'better-sqlite3';
 import { parse, basename } from 'path';
 import { configReader } from '../config/configReader';
-import { ObjectAndTables, ObjectType } from '../common/sqlHelper';
+import { ObjectAndTables, ObjectType } from '../common/batisHelper';
 import { escapeDollar } from '../common/util';
 import { SqlTemplate } from '../common/sqliteHelper';
 import { all, exec, get, run } from '../common/sqliteHelper';
-import { RouteInfo, RouteType } from '../common/traceHelper';
+import { RouteJsp, RouteTable, RouteTypeJsp, RouteTypeTable } from '../common/traceHelper';
 
 class TCommon {
   initDb(sql: string): betterSqlite3.Database {
@@ -27,7 +27,7 @@ values
     return exec(configReader.db(), sql);
   }
 
-  insertRouteInfoKeyName(keyName: string, routes: RouteInfo<RouteType>[]): betterSqlite3.RunResult {
+  insertRouteTableKeyName(keyName: string, routes: RouteTable<RouteTypeTable>[]): betterSqlite3.RunResult {
     const routesJson = routes.map(
       ({
         groupSeq,
@@ -41,7 +41,7 @@ values
         valueView,
         valueFunction,
         valueProcedure,
-      }: RouteInfo<RouteType>) => {
+      }: RouteTable<RouteTypeTable>) => {
         const valueView2 = valueView as { object: string; tables: Set<string> };
         const valueFunction2 = valueFunction as { object: string; tables: Set<string> };
         const valueProcedure2 = valueProcedure as { object: string; tables: Set<string> };
@@ -73,11 +73,39 @@ values
     );
 
     const sqlTmp = `
-insert into RouteInfo
+insert into RouteTable
   (keyName, groupSeq, seq, depth, routeType, valueMapping, valueMethod, valueXml, valueTable, valueView, valueFunction, valueProcedure)
 values
   {values}`;
     const sqlTmpValues = `({keyName}, {groupSeq}, {seq}, {depth}, {routeType}, {valueMapping}, {valueMethod}, {valueXml}, {valueTable}, {valueView}, {valueFunction}, {valueProcedure})`;
+    const sqlValues = new SqlTemplate(sqlTmpValues).replaceAlls(routesJson, ',\n');
+    const sql = sqlTmp.replace('{values}', escapeDollar(sqlValues));
+
+    return run(configReader.db(), sql);
+  }
+
+  insertRouteJspKeyName(keyName: string, routes: RouteJsp<RouteTypeJsp>[]): betterSqlite3.RunResult {
+    const routesJson = routes.map(
+      ({ groupSeq, seq, depth, routeType, valueMapping, valueMethod, valueJsp }: RouteJsp<RouteTypeJsp>) => {
+        return {
+          keyName,
+          groupSeq,
+          seq,
+          depth,
+          routeType,
+          valueMapping: routeType === 'mapping' ? JSON.stringify(valueMapping) : '[]',
+          valueMethod: routeType === 'method' ? valueMethod : '',
+          valueJsp: routeType === 'jsp' ? JSON.stringify([...(valueJsp as Set<string>)]) : JSON.stringify([]),
+        };
+      }
+    );
+
+    const sqlTmp = `
+insert into RouteJsp
+  (keyName, groupSeq, seq, depth, routeType, valueMapping, valueMethod, valueJsp)
+values
+  {values}`;
+    const sqlTmpValues = `({keyName}, {groupSeq}, {seq}, {depth}, {routeType}, {valueMapping}, {valueMethod}, {valueJsp})`;
     const sqlValues = new SqlTemplate(sqlTmpValues).replaceAlls(routesJson, ',\n');
     const sql = sqlTmp.replace('{values}', escapeDollar(sqlValues));
 

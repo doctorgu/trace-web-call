@@ -1,6 +1,6 @@
 import { existsSync, statSync } from 'fs';
 import { resolve } from 'path';
-import { findFiles } from './util';
+import { findFiles, getLastPath, trimEnd, trimStart, trimStartList } from './util';
 import {
   MethodInfo,
   MethodInfoFind,
@@ -9,16 +9,17 @@ import {
   CallerInfo,
   rowsToFinds,
 } from './classHelper';
-import { XmlNodeInfoFind, getXmlInfo, ObjectAndTables } from './sqlHelper';
+import { XmlNodeInfoFind, getXmlInfo, ObjectAndTables } from './batisHelper';
 import { config } from '../config/config';
 import { configReader } from '../config/configReader';
 import { StartingPoint } from '../config/configTypes';
 import tClassInfo from '../sqlTemplate/TClassInfo';
 import tTables from '../sqlTemplate/TTables';
 import tXmlInfo from '../sqlTemplate/TXmlInfo';
+import { filterJspFromJsp, getJspInfoFromDb, JspInfo, viewNameToJspPath } from './jspHelper';
 
-export type RouteType = 'mapping' | 'method' | 'xml' | 'table' | 'view' | 'function' | 'procedure';
-export type RouteInfo<RouteType> = {
+export type RouteTypeTable = 'mapping' | 'method' | 'xml' | 'table' | 'view' | 'function' | 'procedure';
+export type RouteTable<RouteType> = {
   groupSeq?: number; // Only used for inserting to table
   seq: number;
   depth: number;
@@ -32,11 +33,28 @@ export type RouteInfo<RouteType> = {
   valueProcedure?: RouteType extends 'procedure' ? { object: string; tables: Set<string> } : {};
 };
 
+export type RouteTypeJsp = 'mapping' | 'method' | 'jsp';
+export type RouteJsp<RouteType> = {
+  groupSeq?: number; // Only used for inserting to table
+  seq: number;
+  depth: number;
+  routeType: RouteType;
+  valueMapping?: RouteType extends 'mapping' ? string[] : [];
+  valueMethod?: RouteType extends 'method' ? string : '';
+  valueJsp?: RouteType extends 'jsp' ? Set<string> : '';
+};
+
 type StartToObjects = {
   mappingOrMethod: string;
   tables: Set<string>;
   objectAndTables: ObjectAndTables;
-  routes: RouteInfo<RouteType>[];
+  routes: RouteTable<RouteTypeTable>[];
+};
+
+type StartToJsps = {
+  mappingOrMethod: string;
+  jsps: Set<string>;
+  routes: RouteTable<RouteTypeJsp>[];
 };
 
 function getBaseMethods(classInfos: ClassInfo[], extendsNameSub: string): MethodInfo[] {
@@ -174,7 +192,7 @@ export function getTableNamesByMethod(
   find: MethodInfoFind,
   directories: string[],
   directoriesXml: string[],
-  routes: RouteInfo<RouteType>[],
+  routes: RouteTable<RouteTypeTable>[],
   depth: number
 ): { tables: Set<string>; objectAndTables: ObjectAndTables } {
   let tablesRet: string[] = [];
@@ -188,7 +206,7 @@ export function getTableNamesByMethod(
       if (ret) {
         const { tables, objectAndTables } = ret;
 
-        const routeXml: RouteInfo<'xml'> = {
+        const routeXml: RouteTable<'xml'> = {
           seq: routes.length,
           depth: depth,
           routeType: 'xml',
@@ -196,7 +214,7 @@ export function getTableNamesByMethod(
         };
         routes.push(routeXml);
 
-        const routeTable: RouteInfo<'table'> = {
+        const routeTable: RouteTable<'table'> = {
           seq: routes.length,
           depth: depth + 1,
           routeType: 'table',
@@ -209,7 +227,7 @@ export function getTableNamesByMethod(
             const objectType = configReader.objectType(object);
             switch (objectType) {
               case 'view':
-                const routeView: RouteInfo<'view'> = {
+                const routeView: RouteTable<'view'> = {
                   seq: routes.length,
                   depth: depth + 1,
                   routeType: objectType,
@@ -218,7 +236,7 @@ export function getTableNamesByMethod(
                 routes.push(routeView);
                 break;
               case 'function':
-                const routeFunction: RouteInfo<'function'> = {
+                const routeFunction: RouteTable<'function'> = {
                   seq: routes.length,
                   depth: depth + 1,
                   routeType: objectType,
@@ -227,7 +245,7 @@ export function getTableNamesByMethod(
                 routes.push(routeFunction);
                 break;
               case 'procedure':
-                const routeProcedure: RouteInfo<'procedure'> = {
+                const routeProcedure: RouteTable<'procedure'> = {
                   seq: routes.length,
                   depth: depth + 1,
                   routeType: objectType,
@@ -268,7 +286,7 @@ export function getTableNamesByMethod(
         );
         if (foundPrev) continue;
 
-        const routeMethod: RouteInfo<'method'> = {
+        const routeMethod: RouteTable<'method'> = {
           seq: routes.length,
           depth: depth,
           routeType: 'method',
@@ -290,26 +308,6 @@ export function getTableNamesByMethod(
   return { tables: new Set(tablesRet), objectAndTables: objectAndTablesRet };
 }
 
-// export function getDependency(): { directories: string[]; xmls: XmlNodeInfoFind[] } {
-//   const directories: string[] = [];
-//   let xmls: XmlNodeInfoFind[] = [];
-
-//   const { rootDir } = config.path.source;
-//   for (let i = 0; i < config.path.source.dependency.length; i++) {
-//     const {
-//       service: { directory },
-//       xml,
-//     } = config.path.source.dependency[i];
-
-//     directories.push(directory);
-
-//     const xmlsCur = getXmlNodeInfoFinds(rootDir, xml, '*.xml');
-//     xmls = xmls.concat(xmlsCur);
-//   }
-
-//   return { directories, xmls };
-// }
-
 export function getStartingToTables(
   keyName: string,
   findsStarting: MethodInfoFind[],
@@ -325,11 +323,11 @@ export function getStartingToTables(
     if (startingPoint === 'map' && !mappingValues.length) continue;
     if (startingPoint === 'publicMethod' && !methodIsPublic) continue;
 
-    const routes: RouteInfo<RouteType>[] = [];
+    const routes: RouteTable<RouteTypeTable>[] = [];
 
     if (startingPoint === 'map') {
       let depth = -1;
-      const routeMapping: RouteInfo<'mapping'> = {
+      const routeMapping: RouteTable<'mapping'> = {
         seq: routes.length,
         depth: ++depth,
         routeType: 'mapping',
@@ -338,7 +336,7 @@ export function getStartingToTables(
       routes.push(routeMapping);
 
       const classDotMethod = `${className}.${methodName}`;
-      const routeMethod: RouteInfo<'method'> = {
+      const routeMethod: RouteTable<'method'> = {
         seq: routes.length,
         depth: ++depth,
         routeType: 'method',
@@ -358,7 +356,7 @@ export function getStartingToTables(
     } else if (startingPoint === 'publicMethod') {
       const classDotMethod = `${className}.${methodName}`;
       let depth = -1;
-      const routeMethod: RouteInfo<'method'> = {
+      const routeMethod: RouteTable<'method'> = {
         seq: routes.length,
         depth: ++depth,
         routeType: 'method',
@@ -384,4 +382,130 @@ export function getStartingToTables(
   }
 
   return startToObjects;
+}
+
+function getJspPathsByJspPath(
+  jspInfos: JspInfo[],
+  jspPath: string,
+  depth: number,
+  routes: RouteJsp<RouteTypeJsp>[]
+): Set<string> {
+  let jspPathsRet: string[] = [];
+
+  const includes = filterJspFromJsp(jspInfos, jspPath);
+  if (includes.size) {
+    jspPathsRet = jspPathsRet.concat([...includes]);
+    for (const include of includes) {
+      const routeJsp: RouteJsp<'jsp'> = {
+        seq: routes.length,
+        depth: depth,
+        routeType: 'jsp',
+        valueJsp: new Set<string>([include]),
+      };
+      routes.push(routeJsp);
+
+      const jspPaths = getJspPathsByJspPath(jspInfos, include, depth + 1, routes);
+      if (jspPaths.size) {
+        jspPathsRet = jspPathsRet.concat([...jspPaths]);
+      }
+    }
+  }
+
+  return new Set<string>(jspPathsRet);
+}
+
+export function getJspsByMethod(
+  jspInfos: JspInfo[],
+  jspDirectory: string,
+  find: MethodInfoFind,
+  routes: RouteJsp<RouteTypeJsp>[],
+  depth: number
+): Set<string> {
+  let jspsRet: string[] = [];
+
+  const jspRoot = getLastPath(jspDirectory);
+
+  const { jspViewFinds } = find;
+  for (let i = 0; i < jspViewFinds.length; i++) {
+    const { name, parsed, exists } = jspViewFinds[i];
+    if (!parsed || !exists) continue;
+
+    const jspPath = viewNameToJspPath(jspRoot, name);
+
+    const routeJsp: RouteJsp<'jsp'> = {
+      seq: routes.length,
+      depth: depth,
+      routeType: 'jsp',
+      valueJsp: new Set<string>([jspPath]),
+    };
+    routes.push(routeJsp);
+
+    const jsps = getJspPathsByJspPath(jspInfos, jspPath, depth + 1, routes);
+    if (jsps.size) {
+      jspsRet = jspsRet.concat([...jsps]);
+    }
+  }
+
+  return new Set(jspsRet);
+}
+
+export function getStartingToJsps(
+  findsStarting: MethodInfoFind[],
+  jspDirectory: string,
+  startingPoint: StartingPoint
+): StartToJsps[] {
+  const startToJsps: StartToJsps[] = [];
+
+  const jspInfos = getJspInfoFromDb();
+
+  for (let nMethod = 0; nMethod < findsStarting.length; nMethod++) {
+    const methodInStartings = findsStarting[nMethod];
+    const { className, mappingValues, isPublic: methodIsPublic, name: methodName } = methodInStartings;
+    if (startingPoint === 'map' && !mappingValues.length) continue;
+    if (startingPoint === 'publicMethod' && !methodIsPublic) continue;
+
+    const routes: RouteJsp<RouteTypeJsp>[] = [];
+
+    if (startingPoint === 'map') {
+      let depth = -1;
+      const routeMapping: RouteJsp<'mapping'> = {
+        seq: routes.length,
+        depth: ++depth,
+        routeType: 'mapping',
+        valueMapping: mappingValues,
+      };
+      routes.push(routeMapping);
+
+      const classDotMethod = `${className}.${methodName}`;
+      const routeMethod: RouteJsp<'method'> = {
+        seq: routes.length,
+        depth: ++depth,
+        routeType: 'method',
+        valueMethod: classDotMethod,
+      };
+      routes.push(routeMethod);
+
+      const jsps = getJspsByMethod(jspInfos, jspDirectory, methodInStartings, routes, depth + 1);
+      startToJsps.push({ mappingOrMethod: mappingValues.join(','), jsps, routes });
+    } else if (startingPoint === 'publicMethod') {
+      const classDotMethod = `${className}.${methodName}`;
+      let depth = -1;
+      const routeMethod: RouteJsp<'method'> = {
+        seq: routes.length,
+        depth: ++depth,
+        routeType: 'method',
+        valueMethod: classDotMethod,
+      };
+      routes.push(routeMethod);
+
+      const jsps = getJspsByMethod(jspInfos, jspDirectory, methodInStartings, routes, depth + 1);
+      startToJsps.push({
+        mappingOrMethod: classDotMethod,
+        jsps,
+        routes,
+      });
+    }
+  }
+
+  return startToJsps;
 }

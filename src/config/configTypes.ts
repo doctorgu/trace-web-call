@@ -1,4 +1,4 @@
-import { ObjectType, ObjectAndTables } from '../common/sqlHelper';
+import { ObjectType, ObjectAndTables } from '../common/batisHelper';
 
 export type OutputType = 'txt' | 'csv';
 export type StartingPoint = 'map' | 'publicMethod';
@@ -13,13 +13,15 @@ export type Config = {
       dependency: {
         service: DirectoryAndFilePattern;
         xml: string;
+        jspDirectory: string;
       }[];
       main: {
         startings: DirectoryAndFilePattern;
-        serviceAndXmls: {
+        serviceXmlJspDirs: {
           service: DirectoryAndFilePattern;
           xml: string;
-        }[];
+          jspDirectory: string;
+        };
         keyName: string;
       }[];
     };

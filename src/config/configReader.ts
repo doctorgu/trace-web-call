@@ -1,7 +1,7 @@
 import { existsSync, statSync, readdirSync } from 'fs';
 import betterSqlite3 from 'better-sqlite3';
 import { readFileSyncUtf16le, regexpSqlite, testWildcardFileName, testWildcardFileNameSqlite } from '../common/util';
-import { getTablesFromDb, ObjectType, ObjectAndTables, getObjectAndTablesFromDb } from '../common/sqlHelper';
+import { getTablesFromDb, ObjectType, ObjectAndTables, getObjectAndTablesFromDb } from '../common/batisHelper';
 import { runinsertToDbFirst } from '../common/message';
 import { config } from './config';
 import { sqlCacheInit } from './sqlCache';

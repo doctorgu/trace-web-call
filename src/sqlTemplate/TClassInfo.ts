@@ -26,7 +26,7 @@ where   classPath = @classPath
 
   selectMethodInfo(classPath: string): any[] {
     const sql = `
-select  mapping, isPublic, returnType, name, parameterCount, callers, viewNames
+select  mapping, isPublic, returnType, name, parameterCount, callers, jspViews
 from    MethodInfo
 where   classPath = @classPath
 `;
@@ -35,7 +35,7 @@ where   classPath = @classPath
 
   selectMethodInfoFindByKeyName(keyName: string): any[] {
     const sql = `
-select  classPath, className, implementsName, extendsName, mappingMethod, mappingValues, isPublic, returnType, name, parameterCount, callers, viewNames
+select  classPath, className, implementsName, extendsName, mappingMethod, mappingValues, isPublic, returnType, name, parameterCount, callers, jspViewFinds
 from    MethodInfoFind
 where   keyName = @keyName
 `;
@@ -49,7 +49,7 @@ where   keyName = @keyName
     fileNamePattern: string
   ): any[] {
     const sql = `
-select  classPath, className, implementsName, extendsName, mappingMethod, mappingValues, isPublic, returnType, name, parameterCount, callers, viewNames
+select  classPath, className, implementsName, extendsName, mappingMethod, mappingValues, isPublic, returnType, name, parameterCount, callers, jspViewFinds
 from    MethodInfoFind
 where   keyName = @keyName
         and classPath like @classPathLike || '%'
@@ -73,7 +73,7 @@ where   keyName = @keyName
     classNameThis: string
   ): any[] {
     const sql = `
-select  classPath, className, implementsName, extendsName, mappingMethod, mappingValues, isPublic, returnType, name, parameterCount, callers, viewNames
+select  classPath, className, implementsName, extendsName, mappingMethod, mappingValues, isPublic, returnType, name, parameterCount, callers, jspViewFinds
 from    MethodInfoFind
 where   keyName = @keyName
         and name = @methodName
@@ -105,7 +105,7 @@ where   keyName = @keyName
       returnType: method.returnType,
       name: method.name,
       callers: JSON.stringify(method.callers),
-      viewNames: JSON.stringify(method.viewNames),
+      jspViews: JSON.stringify(method.jspViews),
       parameterCount: method.parameterCount,
     }));
 
@@ -127,10 +127,10 @@ values
     if (methods.length) {
       const sqlTmpMethod = `
 insert into MethodInfo
-  (classPath, mapping, isPublic, returnType, name, callers, viewNames, parameterCount)
+  (classPath, mapping, isPublic, returnType, name, callers, jspViews, parameterCount)
 values
   {values}`;
-      const sqlTmpValues = `({classPath}, {mapping}, {isPublic}, {returnType}, {name}, {callers}, {viewNames}, {parameterCount})`;
+      const sqlTmpValues = `({classPath}, {mapping}, {isPublic}, {returnType}, {name}, {callers}, {jspViews}, {parameterCount})`;
       const sqlValues = new SqlTemplate(sqlTmpValues).replaceAlls(
         methodsJson.map((method) => method),
         ',\n'
@@ -162,15 +162,15 @@ ${sqlMethod};
       name: find.name,
       parameterCount: find.parameterCount,
       callers: JSON.stringify(find.callers),
-      viewNames: JSON.stringify(find.viewNames),
+      jspViewFinds: JSON.stringify(find.jspViewFinds),
     }));
 
     const sqlTmp = `
 insert into MethodInfoFind
-  (keyName, classPath, className, implementsName, extendsName, mappingMethod, mappingValues, isPublic, returnType, name, parameterCount, callers, viewNames)
+  (keyName, classPath, className, implementsName, extendsName, mappingMethod, mappingValues, isPublic, returnType, name, parameterCount, callers, jspViewFinds)
 values
   {values}`;
-    const sqlTmpValues = `({keyName}, {classPath}, {className}, {implementsName}, {extendsName}, {mappingMethod}, {mappingValues}, {isPublic}, {returnType}, {name}, {parameterCount}, {callers}, {viewNames})`;
+    const sqlTmpValues = `({keyName}, {classPath}, {className}, {implementsName}, {extendsName}, {mappingMethod}, {mappingValues}, {isPublic}, {returnType}, {name}, {parameterCount}, {callers}, {jspViewFinds})`;
     const sqlValues = new SqlTemplate(sqlTmpValues).replaceAlls(findsJson, ',\n');
     const sql = sqlTmp.replace('{values}', escapeDollar(sqlValues));
 

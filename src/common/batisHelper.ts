@@ -7,13 +7,9 @@ import {
   readFileSyncUtf16le,
   escapeDollar,
 } from './util';
-import { SqlTemplate } from '../common/sqliteHelper';
 import { config } from '../config/config';
-import { configReader } from '../config/configReader';
 import { readdirSync, existsSync, statSync } from 'fs';
 import { resolve } from 'path';
-import betterSqlite3 from 'better-sqlite3';
-import { runinsertToDbFirst } from './message';
 import { getDbPath } from './common';
 import tTables from '../sqlTemplate/TTables';
 import tXmlInfo from '../sqlTemplate/TXmlInfo';
@@ -157,7 +153,7 @@ export function getViewAndTables(sql: string, tablesAll: Set<string>): ObjectAnd
     /create(\s+or\s+replace)*((\s+no)*(\s+force))*\s+view\s+(?<schemaDot>"?[\w$#]+"?\.)*(?<view>"?[\w$#]+"?)\s+.+?as(?<sql>.+?);/gis;
   while ((m = re.exec(sqlNoComment)) !== null) {
     // const schemaDot = m.groups?.schemaDot || '';
-    const view = trimList(m.groups?.view || '', '"');
+    const view = trimList(m.groups?.view || '', ['"']);
     const sql = m.groups?.sql || '';
 
     const objectAndSchemaDotObject = getObjectAsUpper(sql);
@@ -177,7 +173,7 @@ export function getFunctionAndTables(sql: string, tablesAll: Set<string>): Objec
     /create(\s+or\s+replace)*(\s+editionable|\s+noneditionable)*\s+function\s+(?<schemaDot>"?[\w$#]+"?\.)*(?<func>"?[\w$#]+"?)\s+.+?return(?<sql>.+?)end(\s+\k<func>)?\s*;/gis;
   while ((m = re.exec(sqlNoComment)) !== null) {
     // const schemaDot = m.groups?.schemaDot || '';
-    const func = trimList(m.groups?.func || '', '"');
+    const func = trimList(m.groups?.func || '', ['"']);
     const sql = m.groups?.sql || '';
 
     const objectAndSchemaDotObject = getObjectAsUpper(sql);
@@ -197,7 +193,7 @@ export function getProcedureAndTables(sql: string, tablesAll: Set<string>): Obje
     /create(\s+or\s+replace)*\s+procedure\s+(?<schemaDot>"?[\w$#]+"?\.)*(?<procedure>"?[\w$#]+"?)\s+.+?(is|as)(?<sql>.+?)end(\s+\k<procedure>)?\s*;/gis;
   while ((m = re.exec(sqlNoComment)) !== null) {
     // const schemaDot = m.groups?.schemaDot || '';
-    const procedure = trimList(m.groups?.procedure || '', '"');
+    const procedure = trimList(m.groups?.procedure || '', ['"']);
     const sql = m.groups?.sql || '';
 
     const objectAndSchemaDotObject = getObjectAsUpper(sql);
@@ -325,7 +321,13 @@ export function insertObjectAndTables(tables: Set<string>): ObjectAndTables {
     const objectAndTables = getObjectAndTablesByObjectType(objectType, tables);
     objectTypeAndObjectAndTables.set(objectType, objectAndTables);
   }
-  tTables.insertObjectAndTables(objectTypeAndObjectAndTables);
+  const count = [...objectTypeAndObjectAndTables.values()].reduce(
+    (prev: number, cur: ObjectAndTables) => prev + cur.size,
+    0
+  );
+  if (count) {
+    tTables.insertObjectAndTables(objectTypeAndObjectAndTables);
+  }
 
   const objectAndTablesAll = new Map<string, Set<string>>();
   objectTypeAndObjectAndTables.forEach((objectAndTablesAll, objectType) => {

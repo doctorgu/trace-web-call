@@ -1,6 +1,6 @@
 import { configReader } from '../config/configReader';
 import betterSqlite3 from 'better-sqlite3';
-import { ObjectAndTables, ObjectType } from '../common/sqlHelper';
+import { ObjectAndTables, ObjectType } from '../common/batisHelper';
 import { escapeDollar } from '../common/util';
 import { all, exec, get, run, SqlTemplate } from '../common/sqliteHelper';
 

@@ -11,11 +11,14 @@ drop table if exists HeaderInfo;
 drop table if exists MethodInfo;
 drop table if exists MethodInfoFind;
 
+drop table if exists RouteTable;
+drop table if exists RouteJsp;
+drop table if exists JspInfo;
 
-drop view if exists vRoutes;
-drop view if exists vRoutesTxt;
+drop view if exists vRouteTable;
+drop view if exists vRouteTableTxt;
 drop view if exists vStartToTables;
-drop view if exists vViewNames;
+drop view if exists vJspViews;
 
 -- strict removed because SQLiteStudio does not support it.
 
@@ -97,7 +100,7 @@ create table MethodInfo (
     name text not null,
     parameterCount int not null,
     callers text not null,
-    viewNames text not null,
+    jspViews text not null,
     insertTime timestamp not null default current_timestamp,
     foreign key (classPath) references ClassInfo (classPath) on update cascade on delete cascade
 );
@@ -115,7 +118,7 @@ create table MethodInfoFind (
     name text not null,
     parameterCount int not null,
     callers text not null,
-    viewNames text not null,
+    jspViewFinds text not null,
     insertTime timestamp not null default current_timestamp,
     foreign key (classPath) references ClassInfo (classPath) on update cascade on delete cascade,
     foreign key (keyName) references KeyInfo (keyName) on update cascade on delete cascade
@@ -123,7 +126,7 @@ create table MethodInfoFind (
 create index IxMethodInfoFind1 on MethodInfoFind (keyName, name, parameterCount, className, implementsName);
 create index IxMethodInfoFind2 on MethodInfoFind (keyName, classPath);
 
-create table RouteInfo (
+create table RouteTable (
     keyName text not null,
     groupSeq int not null,
     seq int not null,
@@ -140,8 +143,28 @@ create table RouteInfo (
     primary key (keyName, groupSeq, seq)
 );
 
+create table RouteJsp (
+    keyName text not null,
+    groupSeq int not null,
+    seq int not null,
+    depth int not null,
+    routeType text not null,
+    valueMapping text not null,
+    valueMethod text not null,
+    valueJsp text not null,
+    insertTime timestamp not null default current_timestamp,
+    primary key (keyName, groupSeq, seq)
+);
 
-create view vRoutes
+create table JspInfo (
+    jspPath text not null,
+    includes text not null,
+    insertTime timestamp not null default current_timestamp,
+    primary key (jspPath)
+);
+
+
+create view vRouteTable
 as
 select  r.keyName, r.groupSeq, r.seq, min(r.depth) depth, min(r.routeType) routeType,
         ifnull(
@@ -177,7 +200,7 @@ select  r.keyName, r.groupSeq, r.seq, min(r.depth) depth, min(r.routeType) route
             end
         , ''
         ) value
-from    RouteInfo r
+from    RouteTable r
         left join json_each(r.valueMapping) jMapping
         left join json_each(r.valueTable) jTable
         left join json_each(r.valueView) jView
@@ -185,7 +208,7 @@ from    RouteInfo r
         left join json_each(r.valueProcedure) jProcedure
 group by r.keyName, r.groupSeq, r.seq;
 
-create view vRoutesTxt
+create view vRouteTableTxt
 as
 select  keyName, groupSeq, seq,
         case when seq = 0 then char(13) else '' end
@@ -197,7 +220,7 @@ select  keyName, groupSeq, seq,
             ''
         end
         || value output
-from    vRoutes;
+from    vRouteTable;
 
 create view vStartToTables
 as
@@ -216,7 +239,7 @@ from    (
                 when 'function' then jFunction.value
                 when 'procedure' then jProcedure.value
                 end tables
-        from    RouteInfo r
+        from    RouteTable r
                 left join json_each(r.valueMapping) jMapping
                 left join json_each(r.valueTable) jTable
                 left join json_each(r.valueView, '$.tables') jView
@@ -228,26 +251,70 @@ from    (
         )
 group by keyName, groupSeq;
 
-create view vViewNames
+
+create view vRouteJsp
 as
-select  keyName, className, mappingValues, viewNames,
-        case
-        when viewNames like '%/%'
-        and viewNames regexp '\w+'
-        and viewNames not like '%"%'
-        and viewNames not like '%+%'
-        and viewNames not like '%(")%'
-        and viewNames not like ',%' then
-            1
+select  r.keyName, r.groupSeq, r.seq, min(r.depth) depth, min(r.routeType) routeType,
+        ifnull(
+            case routeType
+            when 'mapping' then group_concat(jMapping.value, ',')
+            when 'method' then group_concat(r.valueMethod, ',')
+            when 'jsp' then group_concat(jJsp.value, ',')
+            end
+        , ''
+        ) value
+from    RouteJsp r
+        left join json_each(r.valueMapping) jMapping
+        left join json_each(r.valueJsp) jJsp
+group by r.keyName, r.groupSeq, r.seq;
+
+create view vRouteJspTxt
+as
+select  keyName, groupSeq, seq,
+        case when seq = 0 then char(13) else '' end
+        || substring('         ' || routeType, -9)
+        || ': ' ||
+        case when depth > 0 then
+            replace(substring(printf('%0' || (depth * 4) || 'd', 0) || '+-- ', 5), '0', ' ')
         else
-            0
-        end success
+            ''
+        end
+        || value output
+from    vRouteJsp;
+
+create view vStartToJsps
+as
+select  keyName, groupSeq, group_concat(start) start, group_concat(distinct jsps) jsps
 from    (
-        select  f.keyName, f.className, jMv.value mappingValues, group_concat(jVn.value, ',') viewNames
-        from    MethodInfoFind f
-                left join json_each(f.mappingValues) jMv
-                left join json_each(f.viewNames) jVn
-        where   f.returnType = 'ModelAndView'
-        group by f.keyName, f.className, jMv.value
-        );
+        select  r.keyName, r.groupSeq,
+        
+                case routeType 
+                when 'mapping' then jMapping.value
+                when 'method' then r.valueMethod
+                end start,
+        
+                case routeType
+                when 'jsp' then jJsp.value
+                end jsps
+        from    RouteJsp r
+                left join json_each(r.valueMapping) jMapping
+                left join json_each(r.valueJsp) jJsp
+        where   r.seq = 0 and r.routeType in ('mapping', 'method')
+                or r.routeType in ('jsp')
+        order by r.keyName, r.groupSeq, jsps
+        )
+group by keyName, groupSeq;
+
+
+create view vJspViewFinds
+as
+select  f.keyName, f.className, jMv.value mappingValues,
+        json_extract(jVn.value, '$.name') jspName,
+        json_extract(jVn.value, '$.parsed') jspParsed,
+        json_extract(jVn.value, '$.exists') jspExists
+from    MethodInfoFind f
+        left join json_each(f.mappingValues) jMv
+        left join json_each(f.jspViewFinds) jVn
+where   f.returnType = 'ModelAndView'
+group by f.keyName, f.className, json_extract(jVn.value, '$.name');
 `;

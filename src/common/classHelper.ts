@@ -9,14 +9,27 @@ import { config } from '../config/config';
 import { configReader } from '../config/configReader';
 import { runinsertToDbFirst } from './message';
 import { getDbPath } from './common';
-import { getStartingToTables, RouteInfo } from './traceHelper';
+import { getStartingToTables, RouteTable } from './traceHelper';
 import tClassInfo from '../sqlTemplate/TClassInfo';
 import tCommon from '../sqlTemplate/TCommon';
 import tCache from '../sqlTemplate/TCache';
+import {
+  endsWith,
+  endsWith2,
+  getValue,
+  getRBracePosition,
+  getProperty,
+  getRCurlyPosition,
+  includes,
+  includes2,
+  execImages,
+  getCstSimple,
+  getPathsAndImagesFromSimpleCst,
+  indexOf,
+} from './cstHelper';
+import { getJspViewFinds, JspView, JspViewFind } from './jspHelper';
 
-const runExec = promisify(execProc);
-
-type Keyword =
+export type Keyword =
   | 'LCurly'
   | 'RCurly'
   | 'Semicolon'
@@ -41,6 +54,7 @@ type Keyword =
   | 'methodInvocationSuffix'
   | 'LBrace'
   | 'RBrace'
+  | 'expressionStatement'
   | 'literal'
   | 'This'
   | 'variableDeclaratorId'
@@ -59,7 +73,10 @@ type Keyword =
   | 'methodHeader'
   | 'result'
   | 'Return'
-  | 'BinaryOperator';
+  | 'BinaryOperator'
+  | 'localVariableDeclarationStatement'
+  | 'Equals'
+  | 'AssignmentOperator';
 
 export type PathsAndImage = {
   paths: string[];
@@ -92,7 +109,7 @@ export type MethodInfo = {
   name: string;
   parameterCount: number;
   callers: CallerInfo[];
-  viewNames: string[];
+  jspViews: JspView[];
 };
 
 export type MethodInfoFind = {
@@ -107,7 +124,7 @@ export type MethodInfoFind = {
   name: string;
   parameterCount: number;
   callers: CallerInfo[];
-  viewNames: string[];
+  jspViewFinds: JspViewFind[];
 };
 
 export type HeaderInfo = {
@@ -123,255 +140,6 @@ export type ClassInfo = {
   // vars: VarInfo[];
   methods: MethodInfo[];
 };
-
-function getProperty(parent: any, paths: string[]): any {
-  const kvList = Object.entries(parent);
-  for (let i = 0; i < kvList.length; i++) {
-    const [key] = kvList[i];
-
-    if (paths[0] !== key) continue;
-
-    const child = parent[key];
-    paths.shift();
-    if (paths.length === 0) {
-      return child;
-    }
-
-    return getProperty(child, paths);
-  }
-
-  return null;
-}
-
-function getValue(parent: any, pathDotSeparated: string): string {
-  const paths = pathDotSeparated.split('.');
-
-  const prop = getProperty(parent, paths);
-  if (prop === null) return '';
-
-  return prop;
-}
-
-function getSimplifiedCst(pathsAndImageList: PathsAndImage[]) {
-  const treeNew: any = {};
-  for (let i = 0; i < pathsAndImageList.length; i++) {
-    const { paths, image } = pathsAndImageList[i];
-
-    let child = treeNew;
-    for (let i = 0; i < paths.length - 1; i++) {
-      const path = paths[i];
-
-      if (!(path in child)) {
-        const nextPathIsIndex = !isNaN(parseInt(paths[i + 1]));
-        if (nextPathIsIndex) {
-          child[path] = [];
-        } else {
-          child[path] = {};
-        }
-      }
-      child = child[path];
-    }
-    child[paths[paths.length - 1]] = image;
-  }
-  return treeNew;
-}
-
-function getOpeningPosition(
-  list: (PathsAndImage & { binMoved: boolean })[],
-  posClose: number,
-  symbolOpen: string,
-  symbolClose: string
-): number {
-  let counter = 1;
-
-  for (let i = posClose - 1; i >= 0; i--) {
-    const { image } = list[i];
-    if (image === symbolClose) {
-      counter++;
-    } else if (image === symbolOpen) {
-      counter--;
-    }
-
-    if (counter === 0) {
-      return i;
-    }
-  }
-
-  throw new Error(`Openning symbol not found before ${posClose} index.`);
-}
-function getPathsAndImageListFromSimpleCst2(parent: any, paths: string[], pathsAndImageList: PathsAndImage[]): void {
-  if (typeof parent === 'string') {
-    pathsAndImageList.push({ paths, image: parent });
-    return;
-  }
-
-  const kvList = Object.entries(parent);
-  for (let nKv = 0; nKv < kvList.length; nKv++) {
-    const [key, value] = kvList[nKv];
-
-    const prop = parent[key];
-
-    const pathsNew = [...paths];
-    pathsNew.push(key);
-    getPathsAndImageListFromSimpleCst2(prop, pathsNew, pathsAndImageList);
-  }
-}
-function getInsertIdx(list: (PathsAndImage & { binMoved: boolean })[], start: number, offset: number): number {
-  let counter = 0;
-  for (let i = start; i >= 0; i--) {
-    const { image } = list[i];
-    if (image === ')') {
-      i = getOpeningPosition(list, i, '(', ')');
-    }
-
-    counter++;
-    if (counter === offset) {
-      return i;
-    }
-  }
-
-  throw new Error(`Not reached by offset: ${offset}`);
-}
-function moveBinaryOperator(list: (PathsAndImage & { binMoved: boolean })[], posBin: number, lastIdxBin: number): void {
-  // [1, 2, 3, 4, +, +, +] -> [1, +, 2, +, 3, +, 4]
-  //    : [1, 2, 3, 4, +, +, +]
-  // - 3: [1, 2, 3, +, 4, +, +]
-  // - 4: [1, 2, +, 3, +, 4, +]
-  // - 5: [1, +, 2, +, 3, +, 4]
-  let insertIdx = -1;
-  let offset = lastIdxBin + 1;
-  for (let i = 0; i < lastIdxBin + 1; i++) {
-    const cur = list.splice(posBin, 1)[0];
-    insertIdx = getInsertIdx(list, posBin - 1, offset);
-    list.splice(insertIdx, 0, cur);
-    cur.binMoved = true;
-
-    offset++;
-  }
-}
-function reorderBinaryOperator(pathsAndImageList: PathsAndImage[]): PathsAndImage[] {
-  const list: (PathsAndImage & { binMoved: boolean })[] = pathsAndImageList.map(({ paths, image }) => ({
-    paths,
-    image,
-    binMoved: false,
-  }));
-  const dests = ['BinaryOperator', 'Comma'];
-
-  for (let i = list.length - 1; i >= 0; i--) {
-    const { paths, binMoved } = list[i];
-
-    const rDigit = /^[0-9]+$/;
-    const binOne = dests.includes(paths[paths.length - 1]);
-    const binOneMore = dests.includes(paths[paths.length - 2]) && rDigit.test(paths[paths.length - 1]);
-    if ((!binOne && !binOneMore) || binMoved) continue;
-
-    const lastIdxS = binOne ? '0' : paths[paths.length - 1];
-
-    moveBinaryOperator(list, i, parseInt(lastIdxS));
-  }
-  return list.map(({ paths, image }) => ({ paths, image }));
-}
-function getPathsAndImagesFromSimpleCst(parent: any) {
-  const paths: string[] = [];
-  const pathsAndImageList: PathsAndImage[] = [];
-
-  getPathsAndImageListFromSimpleCst2(parent, paths, pathsAndImageList);
-
-  const pathsAndImageListOrdered = reorderBinaryOperator(pathsAndImageList);
-
-  return pathsAndImageListOrdered;
-}
-
-function getPathsAndImageListFromCst2(parent: any, paths: string[], pathsAndImageList: PathsAndImage[]): void {
-  const children = parent.children;
-  // All leaf property name which has value is always 'image', so do not add 'image' to paths
-  if ('image' in parent) {
-    const image = parent.image;
-    pathsAndImageList.push({ paths, image });
-    return;
-  }
-  if (!children) {
-    throw new Error(`No children in ${paths.join('.')}`);
-  }
-
-  const kvList = Object.entries(children);
-  for (let i = 0; i < kvList.length; i++) {
-    const [key, value] = kvList[i];
-
-    const prop = children[key];
-
-    if (Array.isArray(value) && value.length) {
-      const useIndex = value.length > 1;
-      for (let i = 0; i < value.length; i++) {
-        const pathsNew = [...paths];
-        pathsNew.push(key);
-        if (useIndex) pathsNew.push(i.toString());
-        getPathsAndImageListFromCst2(prop[i], pathsNew, pathsAndImageList);
-      }
-    }
-  }
-}
-function getPathsAndImageListFromCst(parent: any) {
-  const paths: string[] = [];
-  const pathsAndImageList: PathsAndImage[] = [];
-  getPathsAndImageListFromCst2(parent, paths, pathsAndImageList);
-  return pathsAndImageList;
-}
-
-// function getAllValues(parent: any): string[] {
-//   const paths: string[] = [];
-//   const pathsAndImageList: PathsAndImage[] = [];
-//   getPathsAndImageList(parent, paths, pathsAndImageList);
-
-//   const pathsRet = pathsAndImageList.map(({ image }) => image);
-//   return pathsRet;
-// }
-
-function endsWith(paths: string[], ...finds: Keyword[]): boolean {
-  return endsWith2(paths, finds);
-}
-function endsWith2(paths: string[], finds: Keyword[]): boolean {
-  const finds2 = [...finds];
-
-  let index = paths.length;
-  for (let i = finds2.length - 1; i >= 0; i--) {
-    index--;
-    if (finds2[i] !== paths[index]) {
-      return false;
-    }
-  }
-
-  return true;
-}
-
-function includes(paths: string[], ...finds: Keyword[]): boolean {
-  return includes2(paths, finds);
-}
-function includes2(paths: string[], finds: Keyword[]): boolean {
-  let fromIndex = 0;
-
-  while (true) {
-    let index = paths.indexOf(finds[0], fromIndex);
-    if (index === -1) return false;
-
-    fromIndex = index + 1;
-
-    let found = true;
-    for (let i = 1; i < finds.length; i++) {
-      index++;
-      if (finds[i] !== paths[index]) {
-        found = false;
-        break;
-      }
-    }
-    if (found) return true;
-  }
-}
-
-function execImages(r: RegExp, images: string[], separator: string = '', index: number = 0) {
-  const value = images.filter((v, i) => i >= index).join(separator);
-  return r.exec(value);
-}
 
 function getMapping(
   mappingName: string,
@@ -419,7 +187,7 @@ function getMapping(
     // @RequestMapping({"/abc/abc.do", "/abc/abc2.do"})
     values = images.filter((v) => v !== '{' && v !== '}' && v !== ',').map((v) => v);
   }
-  values = values.map((value) => trimList(value, '"'));
+  values = values.map((value) => trimList(value, ['"']));
 
   return { mapping: { method, values }, posRBrace };
 }
@@ -472,7 +240,7 @@ function getVars(pathsAndImageList: PathsAndImage[]): VarInfo[] {
       if (endsWith(paths, 'typeName', 'Identifier')) {
         annotations.push({ method: image, values: [] });
       } else if (endsWith(paths, 'StringLiteral')) {
-        annotations[annotations.length - 1].values.push(trimList(image, '"'));
+        annotations[annotations.length - 1].values.push(trimList(image, ['"']));
       }
     } else if (includes(paths, 'unannType')) {
       typeName = image;
@@ -482,44 +250,6 @@ function getVars(pathsAndImageList: PathsAndImage[]): VarInfo[] {
   }
 
   return vars;
-}
-
-function getRCurlyPosition(methodDecls: PathsAndImage[], posLCurly: number): number {
-  let counter = 1;
-
-  for (let i = posLCurly + 1; i < methodDecls.length; i++) {
-    const { paths } = methodDecls[i];
-    if (endsWith(paths, 'LCurly')) {
-      counter++;
-    } else if (endsWith(paths, 'RCurly')) {
-      counter--;
-    }
-
-    if (counter === 0) {
-      return i;
-    }
-  }
-
-  throw new Error(`RCurly not found after ${posLCurly} index.`);
-}
-
-function getRBracePosition(pathsAndImages: PathsAndImage[], posLBrace: number): number {
-  let counter = 1;
-
-  for (let i = posLBrace + 1; i < pathsAndImages.length; i++) {
-    const { paths } = pathsAndImages[i];
-    if (endsWith(paths, 'LBrace')) {
-      counter++;
-    } else if (endsWith(paths, 'RBrace')) {
-      counter--;
-    }
-
-    if (counter === 0) {
-      return i;
-    }
-  }
-
-  throw new Error(`RBrace not found after ${posLBrace} index.`);
 }
 
 function getParameterCount(cstSimple: any, rangeBrace: PathsAndImage[], isMethod: boolean): number {
@@ -643,7 +373,7 @@ function getCallerInfos2(
       i = posRBraceInner;
     }
     if (endsWith(paths, 'StringLiteral') && image) {
-      stringLiteral = trimList(image, '"');
+      stringLiteral = trimList(image, ['"']);
     }
   }
 
@@ -682,37 +412,101 @@ function getCallerInfos(
   return callers;
 }
 
-function getViewNames(methodDecls: PathsAndImage[], posLCurly: number, posRCurly: number): string[] {
-  let viewNames: string[] = [];
+function getValueType(value: string): 'onlyLiteral' | 'onlyVariable' | 'other' {
+  const onlyLiteral = /^"[\w/]*"$/.test(value);
+  const onlyVariable = /^\w+$/.test(value);
+  if (onlyLiteral) return 'onlyLiteral';
+  if (onlyVariable) return 'onlyVariable';
+  return 'other';
+}
+function getJspViewsByVariable(list: PathsAndImage[], posVar: number, varName: string): JspView[] {
+  // String viewNm = "/mobile/dp/Etv";
+  // {paths:["localVariableDeclarationStatement","localVariableDeclaration","localVariableType","unannType","unannReferenceType","unannClassOrInterfaceType","unannClassType","Identifier",],image:"String",},
+  // {paths:["localVariableDeclarationStatement","localVariableDeclaration","variableDeclaratorList","variableDeclarator","variableDeclaratorId","Identifier",],image:"viewNm",},
+  // {paths:["localVariableDeclarationStatement","localVariableDeclaration","variableDeclaratorList","variableDeclarator","Equals",],image:"=",},
+  // {paths:["localVariableDeclarationStatement","localVariableDeclaration","variableDeclaratorList","variableDeclarator","variableInitializer","expression","ternaryExpression","binaryExpression","unaryExpression","primary","primaryPrefix","literal","StringLiteral",],image:"\"/mobile/dp/Etv\"",},
+  // {paths:["localVariableDeclarationStatement","Semicolon",],image:";",}
 
-  let foundReturn = false;
+  // viewNm = "/mobile/dp/Etv";
+  // {paths:["expressionStatement","statementExpression","expression","ternaryExpression","binaryExpression","unaryExpression","primary","primaryPrefix","fqnOrRefType","fqnOrRefTypePartFirst","fqnOrRefTypePartCommon","Identifier",],image:"viewNm",},
+  // {paths:["expressionStatement","statementExpression","expression","ternaryExpression","binaryExpression","AssignmentOperator",],image:"=",},
+  // {paths:["expressionStatement","statementExpression","expression","ternaryExpression","binaryExpression","expression","ternaryExpression","binaryExpression","unaryExpression","primary","primaryPrefix","literal","StringLiteral",],image:"\"/mobile/dp/Etv\"",},
+  // {paths:["expressionStatement","Semicolon",],image:";",}
+
+  let varFound = false;
+  let equalFound = false;
+  let value = '';
+  const valuesAll: JspView[] = [];
+  for (let i = 0; i < posVar; i++) {
+    const { paths, image } = list[i];
+
+    const declare = !varFound && includes(paths, 'localVariableDeclarationStatement');
+    const assign = !varFound && includes(paths, 'expressionStatement');
+
+    if ((declare || assign) && image === varName) {
+      varFound = true;
+    } else if (varFound && (endsWith(paths, 'Equals') || endsWith(paths, 'AssignmentOperator'))) {
+      equalFound = true;
+    } else if (varFound && equalFound && !endsWith(paths, 'Semicolon')) {
+      // ignore combined value and get last value only (ex: return "b" in "a" + "b")
+      value = image;
+    } else if (endsWith(paths, 'Semicolon')) {
+      if (varFound && equalFound && value) {
+        const valueType = getValueType(value);
+        if (valueType === 'onlyLiteral') {
+          valuesAll.push({ name: trimList(value, ['"']), parsed: true });
+        } else {
+          valuesAll.push({ name: value, parsed: false });
+        }
+      }
+
+      varFound = false;
+      equalFound = false;
+      value = '';
+    }
+  }
+
+  return valuesAll;
+}
+function getJspViews(methodDecls: PathsAndImage[], posLCurly: number, posRCurly: number): JspView[] {
+  let jspViews: JspView[] = [];
+
+  let returnIdx = -1;
   let images: string[] = [];
   const list = methodDecls.filter((v, i) => i > posLCurly && i < posRCurly);
   for (let i = 0; i < list.length; i++) {
     const { paths, image } = list[i];
 
     if (endsWith(paths, 'Return')) {
-      foundReturn = true;
-    }
-    if (foundReturn) {
+      returnIdx = i;
+    } else if (returnIdx !== -1) {
       images.push(image);
 
       if (endsWith(paths, 'Semicolon')) {
-        const m = execImages(/return new ModelAndView \(([^,)]+)/, images, ' ');
+        const m = execImages(/new ModelAndView \(([^,)]+)/, images, ' ');
         if (m) {
           const viewName = m[1].trim();
-          const onlyLiteral = /^"[\w/.]*"$/.test(viewName);
-          const viewName2 = onlyLiteral ? trimList(viewName, '"') : viewName;
-          viewNames.push(viewName2);
+          const valueType = getValueType(viewName);
+
+          if (valueType === 'onlyLiteral') {
+            jspViews.push({ name: trimList(viewName, ['"']), parsed: true });
+          } else if (valueType === 'onlyVariable') {
+            const jspViewsCur = getJspViewsByVariable(list, returnIdx, viewName);
+            if (jspViewsCur.length) {
+              jspViews = jspViews.concat(jspViewsCur);
+            }
+          } else if (valueType === 'other') {
+            jspViews.push({ name: viewName, parsed: false });
+          }
         }
 
-        foundReturn = false;
+        returnIdx = -1;
         images = [];
       }
     }
   }
 
-  return viewNames;
+  return jspViews;
 }
 
 function getMethods(cstSimple: any, pathsAndImageList: PathsAndImage[], vars: VarInfo[]): MethodInfo[] {
@@ -725,7 +519,7 @@ function getMethods(cstSimple: any, pathsAndImageList: PathsAndImage[], vars: Va
   let methodName = '';
   let parameterCount = 0;
   let callers: CallerInfo[] = [];
-  let viewNames: string[] = [];
+  let jspViews: JspView[] = [];
 
   for (let i = 0; i < methodDecls.length; i++) {
     const { paths, image } = methodDecls[i];
@@ -748,9 +542,11 @@ function getMethods(cstSimple: any, pathsAndImageList: PathsAndImage[], vars: Va
       const posLCurly = i;
       const posRCurly = getRCurlyPosition(methodDecls, posLCurly);
       callers = getCallerInfos(cstSimple, methodDecls, vars, posLCurly, posRCurly);
-      viewNames = getViewNames(methodDecls, posLCurly, posRCurly);
+      if (returnType === 'ModelAndView' || returnType === 'View') {
+        jspViews = getJspViews(methodDecls, posLCurly, posRCurly);
+      }
 
-      methods.push({ mapping, isPublic, returnType, name: methodName, parameterCount, callers, viewNames });
+      methods.push({ mapping, isPublic, returnType, name: methodName, parameterCount, callers, jspViews: jspViews });
 
       mapping = { method: '', values: [] };
       isPublic = false;
@@ -801,12 +597,12 @@ export function rowsToFinds(rows: any[]): MethodInfoFind[] {
       name,
       parameterCount,
       callers,
-      viewNames,
+      jspViewFinds,
     } = row;
     const mappingValues2: string[] = JSON.parse(mappingValues);
     const isPublic2 = isPublic === 1;
     const callers2: CallerInfo[] = JSON.parse(callers);
-    const viewNames2: string[] = JSON.parse(viewNames);
+    const jspViewFinds2: JspViewFind[] = JSON.parse(jspViewFinds);
 
     finds.push({
       classPath,
@@ -820,7 +616,7 @@ export function rowsToFinds(rows: any[]): MethodInfoFind[] {
       name,
       parameterCount,
       callers: callers2,
-      viewNames: viewNames2,
+      jspViewFinds: jspViewFinds2,
     });
   }
 
@@ -842,11 +638,11 @@ export function getClassInfoFromDb(rootDir: string, fullPath: string): ClassInfo
 
   const methods: MethodInfo[] = [];
   for (const row of rowsMethod) {
-    const { mapping, isPublic, returnType, name, parameterCount, callers, viewNames } = row;
+    const { mapping, isPublic, returnType, name, parameterCount, callers, jspViews } = row;
     const mapping2: Mapping = JSON.parse(mapping);
     const isPublic2 = isPublic === 1;
     const callers2: CallerInfo[] = JSON.parse(callers);
-    const viewNames2: string[] = JSON.parse(viewNames);
+    const jspViews2: JspView[] = JSON.parse(jspViews);
 
     methods.push({
       mapping: mapping2,
@@ -855,20 +651,11 @@ export function getClassInfoFromDb(rootDir: string, fullPath: string): ClassInfo
       name,
       parameterCount,
       callers: callers2,
-      viewNames: viewNames2,
+      jspViews: jspViews2,
     });
   }
 
   return { classPath, header, methods };
-}
-
-export function getCstSimple(fullPath: string): any {
-  const content = readFileSyncUtf16le(fullPath);
-  const cst = parse(content);
-
-  const pathsAndImages = getPathsAndImageListFromCst(cst);
-  const cstSimple = getSimplifiedCst(pathsAndImages);
-  return cstSimple;
 }
 
 function getCstSimpleFromDbCache(fullPath: string): any {
@@ -891,9 +678,8 @@ export function getClassInfo(fullPath: string): {
   vars: VarInfo[];
   methods: MethodInfo[];
 } {
-  // !!! TODO: uncomment
-  // const cstSimple = getCstSimpleFromDbCache(fullPath);
-  const cstSimple = getCstSimple(fullPath);
+  const cstSimple = getCstSimpleFromDbCache(fullPath);
+  // const cstSimple = getCstSimple(fullPath);
   const classDeclaration = getCstClassDeclaration(cstSimple);
   const pathsAndImageList = getPathsAndImagesFromSimpleCst(classDeclaration);
 
@@ -933,18 +719,20 @@ function getDupMethod(finds: MethodInfoFind[]): string {
   const [name] = foundDup;
   return name;
 }
-function getMethodInfoFinds(classInfosMerged: ClassInfo[]): MethodInfoFind[] {
+function getMethodInfoFinds(jspPaths: string[], classInfosMerged: ClassInfo[]): MethodInfoFind[] {
   let finds: MethodInfoFind[] = [];
 
   for (const classInfo of classInfosMerged) {
     const { classPath, header, methods } = classInfo;
     const { name: className, implementsName, extendsName, mapping: mappingClass } = header;
-    const findsCur = methods.map(({ mapping, isPublic, returnType, name, parameterCount, callers, viewNames }) => {
+    const findsCur = methods.map(({ mapping, isPublic, returnType, name, parameterCount, callers, jspViews }) => {
       const methodRoot = mappingClass.method;
       const mappingRoot = mappingClass.values?.[0] || '';
 
       const mappingMethod = mapping.method || methodRoot;
       const mappingValues = mapping.values.map((value) => `${mappingRoot}${value}`);
+
+      const jspViewFinds = getJspViewFinds(jspViews, jspPaths);
 
       return {
         classPath,
@@ -958,7 +746,7 @@ function getMethodInfoFinds(classInfosMerged: ClassInfo[]): MethodInfoFind[] {
         name,
         parameterCount,
         callers,
-        viewNames,
+        jspViewFinds,
       };
     });
 
@@ -974,8 +762,12 @@ function getMethodInfoFinds(classInfosMerged: ClassInfo[]): MethodInfoFind[] {
   return finds;
 }
 
-export function insertMethodInfoFindKeyName(keyName: string, classInfosMerged: ClassInfo[]): MethodInfoFind[] {
-  const finds = getMethodInfoFinds(classInfosMerged);
+export function insertMethodInfoFindKeyName(
+  keyName: string,
+  jspPaths: string[],
+  classInfosMerged: ClassInfo[]
+): MethodInfoFind[] {
+  const finds = getMethodInfoFinds(jspPaths, classInfosMerged);
 
   tClassInfo.insertMethodInfoFindKeyName(keyName, finds);
 
@@ -993,8 +785,6 @@ export function getFindsByClassPathClassNameFromDb(
   directory: string,
   filePattern: string | RegExp
 ): MethodInfoFind[] {
-  const db = configReader.db();
-
   let fileNameWildcard = '';
   let fileNamePattern = '';
   if (typeof filePattern === 'string') {
@@ -1013,21 +803,21 @@ export function getFindsByClassPathClassNameFromDb(
   return finds;
 }
 
-export function insertRouteInfoKeyName() {
+export function insertRouteTableKeyName() {
   const directoriesDep: string[] = config.path.source.dependency.map(({ service: { directory } }) => directory);
   const directoriesXmlDep: string[] = config.path.source.dependency.map(({ xml }) => xml);
 
   for (let i = 0; i < config.path.source.main.length; i++) {
     const {
       startings: { directory, file },
-      serviceAndXmls,
+      serviceXmlJspDirs,
       keyName,
     } = config.path.source.main[i];
 
     const findsStarting = getFindsByClassPathClassNameFromDb(keyName, directory, file);
 
-    const directories = serviceAndXmls.map(({ service: { directory } }) => directory);
-    const directoriesXml = serviceAndXmls.map(({ xml }) => xml);
+    const directories = [serviceXmlJspDirs.service.directory];
+    const directoriesXml = [serviceXmlJspDirs.xml];
 
     console.log(`getStartingToTables`);
     const startToTables = getStartingToTables(
@@ -1046,7 +836,7 @@ export function insertRouteInfoKeyName() {
     if (!routesCur.length) {
       continue;
     }
-    console.log(`insertRouteInfoKeyName`);
-    tCommon.insertRouteInfoKeyName(keyName, routesCur);
+    console.log(`insertRouteTableKeyName`);
+    tCommon.insertRouteTableKeyName(keyName, routesCur);
   }
 }
