@@ -38,13 +38,15 @@ function insertJspClassXml(
   serviceXmlJspDirs.forEach(({ service: { directory, file }, jspDirectory }) => {
     const initDir = resolve(rootDir, directory);
 
-    let jspFullPaths: string[] = [];
-    const fullDirJsp = resolve(rootDir, jspDirectory);
-    if (existsSync(fullDirJsp)) {
-      jspFullPaths = [...findFiles(fullDirJsp, '*.jsp')];
-    }
-    if (jspFullPaths.length) {
-      jspInfos = insertJspInfo(fullDirJsp, jspFullPaths);
+    if (jspDirectory) {
+      let jspFullPaths: string[] = [];
+      const fullDirJsp = resolve(rootDir, jspDirectory);
+      if (existsSync(fullDirJsp)) {
+        jspFullPaths = [...findFiles(fullDirJsp, '*.jsp')];
+      }
+      if (jspFullPaths.length) {
+        jspInfos = insertJspInfo(fullDirJsp, jspFullPaths);
+      }
     }
 
     for (const fullPath of [...findFiles(initDir, file)]) {
@@ -89,8 +91,10 @@ export function insertToDb() {
   console.log(`insertObjectAndTables`);
   const objectAndTablesAll = insertObjectAndTables(tablesAll);
 
+  console.log(`insertKeyInfo`);
   tCommon.insertKeyInfo(config.path.source.main.map(({ keyName }) => ({ keyName })));
 
+  console.log(`insertJspClassXml`);
   const {
     jspInfos: jspInfosDep,
     classInfos: classInfosDep,
@@ -106,6 +110,7 @@ export function insertToDb() {
 
     const initDir = resolve(rootDir, directory);
 
+    console.log(`insertClassInfo ${directory}`);
     const classInfosStarting: ClassInfo[] = [];
     for (const fullPath of [...findFiles(initDir, file)]) {
       const classInfo = insertClassInfo(rootDir, fullPath);
@@ -114,12 +119,17 @@ export function insertToDb() {
       }
     }
 
-    console.log(`insertClassAndXml ${directory}`);
+    console.log(`insertJspClassXml ${directory}`);
     const {
       jspInfos: jspInfosMain,
       classInfos: classInfosMain,
       xmlInfos: xmlInfosMain,
-    } = insertJspClassXml(rootDir, tablesAll, objectAndTablesAll, [serviceXmlJspDirs]);
+    } = insertJspClassXml(
+      rootDir,
+      tablesAll,
+      objectAndTablesAll,
+      serviceXmlJspDirs.service.directory ? [serviceXmlJspDirs] : []
+    );
 
     const jspPathsCur = [...jspInfosDep, ...jspInfosMain].map(({ jspPath }) => jspPath);
     const classInfosCur = [...classInfosDep, ...classInfosStarting, ...classInfosMain];

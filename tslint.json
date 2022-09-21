@@ -12,13 +12,7 @@
     "member-ordering": [
       false,
       {
-        "order": [
-          "static-field",
-          "static-method",
-          "instance-field",
-          "constructor",
-          "instance-method"
-        ]
+        "order": ["static-field", "static-method", "instance-field", "constructor", "instance-method"]
       }
     ],
     "no-bitwise": false,

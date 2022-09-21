@@ -419,6 +419,29 @@ function getValueType(value: string): 'onlyLiteral' | 'onlyVariable' | 'other' {
   if (onlyVariable) return 'onlyVariable';
   return 'other';
 }
+// function getValueType(list: PathsAndImage[], i: number): { type: 'literal' | 'function' | 'other'; posLast: number } {
+//   const { paths, image } = list[i];
+
+//   if (endsWith(paths, 'StringLiteral')) {
+//     return { type: 'literal', posLast: i };
+//   }
+
+//   if (endsWith(paths, 'Identifier')) {
+//     const { paths: pathsSecond, image: imageSecond } = list[i + 1];
+//     const { paths: pathsThird, image: imageThird } = list[i + 2];
+
+//     // Util.msgOnceAlertView
+//     if (
+//       endsWith(paths, 'fqnOrRefType', 'fqnOrRefTypePartRest', 'fqnOrRefTypePartCommon', 'Identifier') &&
+//       endsWith(pathsSecond, 'fqnOrRefType', 'Dot') &&
+//       endsWith(pathsThird, 'fqnOrRefType', 'fqnOrRefTypePartFirst', 'fqnOrRefTypePartCommon', 'Identifier')
+//     ) {
+//       return { type: 'function', posLast: i + 2 };
+//     }
+//   }
+
+//   return { type: 'other', posLast: i };
+// }
 function getJspViewsByVariable(list: PathsAndImage[], posVar: number, varName: string): JspView[] {
   // String viewNm = "/mobile/dp/Etv";
   // {paths:["localVariableDeclarationStatement","localVariableDeclaration","localVariableType","unannType","unannReferenceType","unannClassOrInterfaceType","unannClassType","Identifier",],image:"String",},
@@ -480,6 +503,7 @@ function getJspViews(methodDecls: PathsAndImage[], posLCurly: number, posRCurly:
     if (endsWith(paths, 'Return')) {
       returnIdx = i;
     } else if (returnIdx !== -1) {
+      // const valueType = getValueType(list, i);
       images.push(image);
 
       if (endsWith(paths, 'Semicolon')) {
@@ -659,18 +683,23 @@ export function getClassInfoFromDb(rootDir: string, fullPath: string): ClassInfo
 }
 
 function getCstSimpleFromDbCache(fullPath: string): any {
-  const path = getDbPath(config.path.source.rootDir, fullPath);
-  const mtime = statSync(fullPath).mtime;
+  try {
+    const path = getDbPath(config.path.source.rootDir, fullPath);
+    const mtime = statSync(fullPath).mtime;
 
-  const cstSimpleFromDb = tCache.selectCstSimpleByMtime(path, mtime);
-  if (cstSimpleFromDb) {
-    return JSON.parse(cstSimpleFromDb);
+    const cstSimpleFromDb = tCache.selectCstSimpleByMtime(path, mtime);
+    if (cstSimpleFromDb) {
+      return JSON.parse(cstSimpleFromDb);
+    }
+
+    const cstSimple = getCstSimple(fullPath);
+    tCache.insertCstSimple(path, mtime, cstSimple);
+
+    return cstSimple;
+  } catch (ex) {
+    console.error(fullPath);
+    throw new Error(ex);
   }
-
-  const cstSimple = getCstSimple(fullPath);
-  tCache.insertCstSimple(path, mtime, cstSimple);
-
-  return cstSimple;
 }
 
 export function getClassInfo(fullPath: string): {
@@ -753,7 +782,7 @@ function getMethodInfoFinds(jspPaths: string[], classInfosMerged: ClassInfo[]): 
     const dupMethod = getDupMethod(findsCur);
     if (dupMethod) {
       // throw new Error(`Found duplicated method: ${foundDup[0]}`);
-      console.log(`Found duplicated method in ${classPath}: ${dupMethod}`);
+      // console.log(`Found duplicated method in ${classPath}: ${dupMethod}`);
     }
 
     finds = finds.concat(findsCur);

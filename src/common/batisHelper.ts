@@ -330,8 +330,8 @@ export function insertObjectAndTables(tables: Set<string>): ObjectAndTables {
   }
 
   const objectAndTablesAll = new Map<string, Set<string>>();
-  objectTypeAndObjectAndTables.forEach((objectAndTablesAll, objectType) => {
-    objectAndTablesAll.forEach((tables, object) => {
+  objectTypeAndObjectAndTables.forEach((objectAndTables, objectType) => {
+    objectAndTables.forEach((tables, object) => {
       objectAndTablesAll.set(object, tables);
     });
   });

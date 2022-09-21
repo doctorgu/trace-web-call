@@ -116,7 +116,7 @@ values
     const nameDest = parse(basename(pathDest)).name;
 
     const sqlDiff = `
-select  s1.tables, s2.tables2
+select  s1.keyName, s1.groupSeq, s1.start, s1.tables, s2.tables2
 from    vStartToTables s1
         inner join
         (
@@ -137,7 +137,6 @@ from    vStartToTables s1
             from    ${nameDest}.vStartToTables
         ) s2        
         on s1.keyName = s2.keyName2
-        and s1.groupSeq = s2.groupSeq2
         and s1.start = s2.start2
 where   s2.start2 is null
   `;
@@ -150,7 +149,6 @@ from    vStartToTables s1
             from    ${nameDest}.vStartToTables
         ) s2        
         on s1.keyName = s2.keyName2
-        and s1.groupSeq = s2.groupSeq2
         and s1.start = s2.start2
 where   s1.start is null;
   `;

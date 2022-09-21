@@ -485,8 +485,10 @@ export function getStartingToJsps(
       };
       routes.push(routeMethod);
 
-      const jsps = getJspsByMethod(jspInfos, jspDirectory, methodInStartings, routes, depth + 1);
-      startToJsps.push({ mappingOrMethod: mappingValues.join(','), jsps, routes });
+      if (jspDirectory) {
+        const jsps = getJspsByMethod(jspInfos, jspDirectory, methodInStartings, routes, depth + 1);
+        startToJsps.push({ mappingOrMethod: mappingValues.join(','), jsps, routes });
+      }
     } else if (startingPoint === 'publicMethod') {
       const classDotMethod = `${className}.${methodName}`;
       let depth = -1;
@@ -498,12 +500,14 @@ export function getStartingToJsps(
       };
       routes.push(routeMethod);
 
-      const jsps = getJspsByMethod(jspInfos, jspDirectory, methodInStartings, routes, depth + 1);
-      startToJsps.push({
-        mappingOrMethod: classDotMethod,
-        jsps,
-        routes,
-      });
+      if (jspDirectory) {
+        const jsps = getJspsByMethod(jspInfos, jspDirectory, methodInStartings, routes, depth + 1);
+        startToJsps.push({
+          mappingOrMethod: classDotMethod,
+          jsps,
+          routes,
+        });
+      }
     }
   }
 

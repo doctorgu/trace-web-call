@@ -17,7 +17,6 @@ export const configJspTest2: Config = {
             xml: '',
             jspDirectory: '',
           },
-
           keyName: 'jspTest2',
         },
       ],
