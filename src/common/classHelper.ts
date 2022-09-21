@@ -3,7 +3,7 @@ import { exec as execProc } from 'child_process';
 import { statSync } from 'fs';
 import { promisify } from 'util';
 
-import { readFileSyncUtf16le, trimList, trimEnd } from './util';
+import { readFileSyncUtf16le, trims, trimEnd, trim } from './util';
 import { SqlTemplate } from '../common/sqliteHelper';
 import { config } from '../config/config';
 import { configReader } from '../config/configReader';
@@ -187,7 +187,7 @@ function getMapping(
     // @RequestMapping({"/abc/abc.do", "/abc/abc2.do"})
     values = images.filter((v) => v !== '{' && v !== '}' && v !== ',').map((v) => v);
   }
-  values = values.map((value) => trimList(value, ['"']));
+  values = values.map((value) => trims(value, ['"']));
 
   return { mapping: { method, values }, posRBrace };
 }
@@ -240,7 +240,7 @@ function getVars(pathsAndImageList: PathsAndImage[]): VarInfo[] {
       if (endsWith(paths, 'typeName', 'Identifier')) {
         annotations.push({ method: image, values: [] });
       } else if (endsWith(paths, 'StringLiteral')) {
-        annotations[annotations.length - 1].values.push(trimList(image, ['"']));
+        annotations[annotations.length - 1].values.push(trims(image, ['"']));
       }
     } else if (includes(paths, 'unannType')) {
       typeName = image;
@@ -373,7 +373,7 @@ function getCallerInfos2(
       i = posRBraceInner;
     }
     if (endsWith(paths, 'StringLiteral') && image) {
-      stringLiteral = trimList(image, ['"']);
+      stringLiteral = trims(image, ['"']);
     }
   }
 
@@ -454,7 +454,7 @@ function getJspViewsByVariable(list: PathsAndImage[], posVar: number, varName: s
       if (varFound && equalFound && value) {
         const valueType = getValueType(value);
         if (valueType === 'onlyLiteral') {
-          valuesAll.push({ name: trimList(value, ['"']), parsed: true });
+          valuesAll.push({ name: trims(value, ['"']), parsed: true });
         } else {
           valuesAll.push({ name: value, parsed: false });
         }
@@ -489,7 +489,7 @@ function getJspViews(methodDecls: PathsAndImage[], posLCurly: number, posRCurly:
           const valueType = getValueType(viewName);
 
           if (valueType === 'onlyLiteral') {
-            jspViews.push({ name: trimList(viewName, ['"']), parsed: true });
+            jspViews.push({ name: trim(viewName, '"'), parsed: true });
           } else if (valueType === 'onlyVariable') {
             const jspViewsCur = getJspViewsByVariable(list, returnIdx, viewName);
             if (jspViewsCur.length) {
