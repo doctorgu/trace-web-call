@@ -397,3 +397,29 @@ export function getFirstPath(path: string): string {
   const paths = path.split(/[\/\\]/);
   return paths[0] || paths[1];
 }
+
+export function getAbsolutePathByDotDot(pathFullEndsWithFile: string, pathSrc: string): string {
+  function getDotDotCount(paths: string[]) {
+    let count = 0;
+    for (let i = 0; i < pathsSrc.length; i++) {
+      if (pathsSrc[i] !== '..') break;
+
+      count++;
+    }
+    return count;
+  }
+
+  const pathsFullNoFile = pathFullEndsWithFile.split(/[\/\\]/);
+  const file = pathsFullNoFile.pop();
+  const isSlash = pathSrc.includes('/');
+  const pathsSrc = isSlash ? pathSrc.split(/\//) : pathSrc.split(/\\/);
+
+  let pathsNew: string[] = [];
+  if (pathsSrc[0] === '.') {
+    pathsNew = [...pathsFullNoFile.slice(0, pathsFullNoFile.length), ...pathsSrc.slice(1)];
+  } else {
+    const count = getDotDotCount(pathsSrc);
+    pathsNew = [...pathsFullNoFile.slice(0, pathsFullNoFile.length - count), ...pathsSrc.slice(count)];
+  }
+  return pathsNew.join(isSlash ? '/' : '\\');
+}

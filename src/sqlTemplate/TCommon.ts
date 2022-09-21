@@ -137,6 +137,7 @@ from    vStartToTables s1
             from    ${nameDest}.vStartToTables
         ) s2        
         on s1.keyName = s2.keyName2
+        and s1.groupSeq = s2.groupSeq2
         and s1.start = s2.start2
 where   s2.start2 is null
   `;
@@ -149,6 +150,7 @@ from    vStartToTables s1
             from    ${nameDest}.vStartToTables
         ) s2        
         on s1.keyName = s2.keyName2
+        and s1.groupSeq = s2.groupSeq2
         and s1.start = s2.start2
 where   s1.start is null;
   `;

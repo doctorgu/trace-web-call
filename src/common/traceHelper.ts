@@ -62,7 +62,7 @@ function getBaseMethods(classInfos: ClassInfo[], extendsNameSub: string): Method
 
   const classBases = classInfos.filter(({ header: { name: className } }) => className === extendsNameSub);
   if (!classBases.length) {
-    console.warn(`Base class: ${extendsNameSub} not exists.`);
+    // console.warn(`Base class: ${extendsNameSub} not exists.`);
     return [];
   }
 

@@ -40,12 +40,12 @@ function insertJspClassXml(
 
     if (jspDirectory) {
       let jspFullPaths: string[] = [];
-      const fullDirJsp = resolve(rootDir, jspDirectory);
-      if (existsSync(fullDirJsp)) {
-        jspFullPaths = [...findFiles(fullDirJsp, '*.jsp')];
+      const fullJspDirectory = resolve(rootDir, jspDirectory);
+      if (existsSync(fullJspDirectory)) {
+        jspFullPaths = [...findFiles(fullJspDirectory, '*.jsp')];
       }
       if (jspFullPaths.length) {
-        jspInfos = insertJspInfo(fullDirJsp, jspFullPaths);
+        jspInfos = insertJspInfo(fullJspDirectory, jspFullPaths);
       }
     }
 

@@ -10,6 +10,7 @@ import {
   getLastPath,
   trimStart,
   getFirstPath,
+  getAbsolutePathByDotDot,
 } from './util';
 import { SqlTemplate } from '../common/sqliteHelper';
 import { config } from '../config/config';
@@ -52,7 +53,7 @@ export function insertJspInfoToDb(jspInfos: JspInfo[]): void {
   tJspInfo.insertJspInfo(jspInfos);
 }
 
-export function getJspIncludes(jspFullPath: string): string[] {
+export function getJspIncludes(fullJspDirectory: string, jspFullPath: string): string[] {
   const content = readFileSyncUtf16le(jspFullPath);
   const contentNoComment = removeCommentJsp(content);
 
@@ -60,22 +61,24 @@ export function getJspIncludes(jspFullPath: string): string[] {
   let m: RegExpExecArray | null;
   const re = /<jsp:include\s+page\s*=\s*"([^"]+)"\s*\/>|<%@\s+include\s+file\s*=\s*"([^"]+)"\s*%>/g;
   while ((m = re.exec(contentNoComment)) !== null) {
-    const jspPath = trimStart(m[1] || m[2], '/');
+    let jspPath = trimStart(m[1] || m[2], '/');
+    if (jspPath.startsWith('../') || jspPath.startsWith('./')) {
+      jspPath = getAbsolutePathByDotDot(jspFullPath, jspPath);
+      jspPath = getJspPath(fullJspDirectory, jspPath);
+    }
 
     includes.push(jspPath);
   }
 
   return includes;
 }
-export function insertJspInfo(fullDirJsp: string, jspFullPaths: string[]): JspInfo[] {
+export function insertJspInfo(fullJspDirectory: string, jspFullPaths: string[]): JspInfo[] {
   const jspInfos: JspInfo[] = [];
 
   for (const jspFullPath of jspFullPaths) {
-    const jspRoot = getLastPath(fullDirJsp);
-    const dbPath = getDbPath(`${fullDirJsp}`, jspFullPath);
-    const jspPath = `${jspRoot}/${dbPath}`;
+    const jspPath = getJspPath(fullJspDirectory, jspFullPath);
 
-    const includes = getJspIncludes(jspFullPath);
+    const includes = getJspIncludes(fullJspDirectory, jspFullPath);
     jspInfos.push({ jspPath, includes });
   }
 
@@ -86,6 +89,12 @@ export function insertJspInfo(fullDirJsp: string, jspFullPaths: string[]): JspIn
 
 export function viewNameToJspPath(jspRoot: string, viewName: string) {
   return `${jspRoot}/${trimStart(`${viewName}`, '/')}.jsp`;
+}
+export function getJspPath(fullJspDirectory: string, jspFullPath: string) {
+  const jspRoot = getLastPath(fullJspDirectory);
+  const dbPath = getDbPath(`${fullJspDirectory}`, jspFullPath);
+  const jspPath = `${jspRoot}/${dbPath}`;
+  return jspPath;
 }
 
 function someJspFromJava(jspPaths: string[], viewName: string) {
