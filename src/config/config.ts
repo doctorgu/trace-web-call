@@ -1,4 +1,4 @@
 import { Config } from './configTypes';
-import { configJspTest } from './configJspTest';
+import { configJspTest2 } from './configJspTest2';
 
-export const config: Config = configJspTest;
+export const config: Config = configJspTest2;

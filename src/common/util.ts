@@ -35,25 +35,29 @@ export function removeCommentJsp(value: string): string {
 
 /*
 --Example
-console.log(trimList('"a"b"', '"') === 'a"b');
-console.log(trimList('""ab"""', '"') === 'ab');
-console.log(trimList('"', '"') === '');
-console.log(trimList('"a', '"') === 'a');
-console.log(trimList('a"', '"') === 'a');
-console.log(trimList('[a]', '[]') === 'a');
-console.log(trimList('{[a]}', '[{}]') === 'a');
+console.log(trims('"a"b"', '"') === 'a"b');
+console.log(trims('""ab"""', '"') === 'ab');
+console.log(trims('"', '"') === '');
+console.log(trims('"a', '"') === 'a');
+console.log(trims('a"', '"') === 'a');
+console.log(trims('[a]', '[]') === 'a');
+console.log(trims('{[a]}', '[{}]') === 'a');
 */
-export function trimList(value: string, finds: string[]): string {
+export function trims(value: string, finds: string[]): string {
   const find2 = escapeRegexp(finds.join(''));
   return value.replace(new RegExp(`^[${find2}]*(.*?)[${find2}]*$`), '$1');
 }
-export function trimStartList(value: string, finds: string[]): string {
+export function trimStarts(value: string, finds: string[]): string {
   const find2 = escapeRegexp(finds.join(''));
   return value.replace(new RegExp(`^[${find2}]*(.*)`), '$1');
 }
-export function trimEndList(value: string, finds: string[]): string {
+export function trimEnds(value: string, finds: string[]): string {
   const find2 = escapeRegexp(finds.join(''));
   return value.replace(new RegExp(`(.*?)[${find2}]*$`), '$1');
+}
+export function trim(value: string, find: string): string {
+  const find2 = escapeRegexp(find);
+  return value.replace(new RegExp(`^(?:${find2})*(.*?)(?:${find2})*$`), '$1');
 }
 export function trimStart(value: string, find: string): string {
   const find2 = escapeRegexp(find);

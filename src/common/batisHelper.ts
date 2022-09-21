@@ -1,9 +1,9 @@
 import { xml2js, Element } from 'xml-js';
 import {
-  trimStartList,
+  trimStarts,
   removeCommentSql,
   removeCommentLiteralSql,
-  trimList,
+  trims,
   readFileSyncUtf16le,
   escapeDollar,
 } from './util';
@@ -153,7 +153,7 @@ export function getViewAndTables(sql: string, tablesAll: Set<string>): ObjectAnd
     /create(\s+or\s+replace)*((\s+no)*(\s+force))*\s+view\s+(?<schemaDot>"?[\w$#]+"?\.)*(?<view>"?[\w$#]+"?)\s+.+?as(?<sql>.+?);/gis;
   while ((m = re.exec(sqlNoComment)) !== null) {
     // const schemaDot = m.groups?.schemaDot || '';
-    const view = trimList(m.groups?.view || '', ['"']);
+    const view = trims(m.groups?.view || '', ['"']);
     const sql = m.groups?.sql || '';
 
     const objectAndSchemaDotObject = getObjectAsUpper(sql);
@@ -173,7 +173,7 @@ export function getFunctionAndTables(sql: string, tablesAll: Set<string>): Objec
     /create(\s+or\s+replace)*(\s+editionable|\s+noneditionable)*\s+function\s+(?<schemaDot>"?[\w$#]+"?\.)*(?<func>"?[\w$#]+"?)\s+.+?return(?<sql>.+?)end(\s+\k<func>)?\s*;/gis;
   while ((m = re.exec(sqlNoComment)) !== null) {
     // const schemaDot = m.groups?.schemaDot || '';
-    const func = trimList(m.groups?.func || '', ['"']);
+    const func = trims(m.groups?.func || '', ['"']);
     const sql = m.groups?.sql || '';
 
     const objectAndSchemaDotObject = getObjectAsUpper(sql);
@@ -193,7 +193,7 @@ export function getProcedureAndTables(sql: string, tablesAll: Set<string>): Obje
     /create(\s+or\s+replace)*\s+procedure\s+(?<schemaDot>"?[\w$#]+"?\.)*(?<procedure>"?[\w$#]+"?)\s+.+?(is|as)(?<sql>.+?)end(\s+\k<procedure>)?\s*;/gis;
   while ((m = re.exec(sqlNoComment)) !== null) {
     // const schemaDot = m.groups?.schemaDot || '';
-    const procedure = trimList(m.groups?.procedure || '', ['"']);
+    const procedure = trims(m.groups?.procedure || '', ['"']);
     const sql = m.groups?.sql || '';
 
     const objectAndSchemaDotObject = getObjectAsUpper(sql);

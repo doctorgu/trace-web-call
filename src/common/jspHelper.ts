@@ -1,9 +1,9 @@
 import { xml2js, Element } from 'xml-js';
 import {
-  trimStartList,
+  trimStarts,
   removeCommentSql,
   removeCommentLiteralSql,
-  trimList,
+  trims,
   readFileSyncUtf16le,
   escapeDollar,
   removeCommentJsp,

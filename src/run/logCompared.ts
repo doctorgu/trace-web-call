@@ -1,4 +1,4 @@
-import { trimEnd, trimEndList } from '../common/util';
+import { trimEnd, trimEnds } from '../common/util';
 import { config } from '../config/config';
 import tCommon from '../sqlTemplate/TCommon';
 

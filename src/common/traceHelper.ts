@@ -1,6 +1,6 @@
 import { existsSync, statSync } from 'fs';
 import { resolve } from 'path';
-import { findFiles, getLastPath, trimEnd, trimStart, trimStartList } from './util';
+import { findFiles, getLastPath, trimEnd, trimStart, trimStarts } from './util';
 import {
   MethodInfo,
   MethodInfoFind,

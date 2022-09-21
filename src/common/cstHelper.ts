@@ -3,7 +3,7 @@ import { exec as execProc } from 'child_process';
 import { statSync } from 'fs';
 import { promisify } from 'util';
 
-import { readFileSyncUtf16le, trimList, trimEnd } from './util';
+import { readFileSyncUtf16le, trims, trimEnd } from './util';
 import { SqlTemplate } from '../common/sqliteHelper';
 import { config } from '../config/config';
 import { configReader } from '../config/configReader';
