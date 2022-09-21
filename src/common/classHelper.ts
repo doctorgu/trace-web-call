@@ -454,7 +454,7 @@ function getJspViewsByVariable(list: PathsAndImage[], posVar: number, varName: s
       if (varFound && equalFound && value) {
         const valueType = getValueType(value);
         if (valueType === 'onlyLiteral') {
-          valuesAll.push({ name: trims(value, ['"']), parsed: true });
+          valuesAll.push({ name: trim(value, '"'), parsed: true });
         } else {
           valuesAll.push({ name: value, parsed: false });
         }
