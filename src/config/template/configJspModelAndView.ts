@@ -1,6 +1,6 @@
-import { Config } from '../configTypes';
+import { ConfigType } from '../ConfigType';
 
-export const configJspModelAndView: Config = {
+export const configJspModelAndView: ConfigType = {
   name: 'JspModelAndView',
   path: {
     source: {

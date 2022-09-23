@@ -1,6 +1,6 @@
-import { Config } from '../configTypes';
+import { ConfigType } from '../ConfigType';
 
-export const configComposite: Config = {
+export const configComposite: ConfigType = {
   name: 'Composite2',
   path: {
     source: {

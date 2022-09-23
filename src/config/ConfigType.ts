@@ -5,7 +5,7 @@ export type StartingPoint = 'map' | 'publicMethod';
 
 export type DirectoryAndFilePattern = { directory: string; file: string | RegExp };
 
-export type Config = {
+export type ConfigType = {
   name: string;
   path: {
     source: {

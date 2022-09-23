@@ -12,7 +12,7 @@ import {
 import { XmlNodeInfoFind, getXmlInfo, ObjectAndTables } from './batisHelper';
 import { config } from '../config/config';
 import { configReader } from '../config/configReader';
-import { StartingPoint } from '../config/configTypes';
+import { StartingPoint } from '../config/ConfigType';
 import tClassInfo from '../sqlTemplate/TClassInfo';
 import tTables from '../sqlTemplate/TTables';
 import tXmlInfo from '../sqlTemplate/TXmlInfo';
@@ -109,9 +109,15 @@ export function getXmlNodeInfoFinds(
   const tablesAll = configReader.tables();
 
   const objectAndTablesAll = new Map<string, Set<string>>();
-  configReader.objectAndTables('view').forEach((tables, object) => objectAndTablesAll.set(object, tables));
-  configReader.objectAndTables('function').forEach((tables, object) => objectAndTablesAll.set(object, tables));
-  configReader.objectAndTables('procedure').forEach((tables, object) => objectAndTablesAll.set(object, tables));
+  configReader
+    .objectAndTables('view')
+    .forEach((tables: Set<string>, object: string) => objectAndTablesAll.set(object, tables));
+  configReader
+    .objectAndTables('function')
+    .forEach((tables: Set<string>, object: string) => objectAndTablesAll.set(object, tables));
+  configReader
+    .objectAndTables('procedure')
+    .forEach((tables: Set<string>, object: string) => objectAndTablesAll.set(object, tables));
 
   const fullPaths = statSync(fullDir).isDirectory() ? [...findFiles(fullDir, filePattern)] : [fullDir];
   for (const fullPath of fullPaths) {

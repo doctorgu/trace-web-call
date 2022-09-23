@@ -18,7 +18,7 @@ import {
 } from '../common/batisHelper';
 import { config } from '../config/config';
 import { configReader } from '../config/configReader';
-import { DirectoryAndFilePattern } from '../config/configTypes';
+import { DirectoryAndFilePattern } from '../config/ConfigType';
 import { mergeExtends } from '../common/traceHelper';
 import { sqlInit } from '../config/sql';
 import tCommon from '../sqlTemplate/TCommon';

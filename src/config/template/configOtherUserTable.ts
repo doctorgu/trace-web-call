@@ -1,6 +1,6 @@
-import { Config } from '../configTypes';
+import { ConfigType } from '../ConfigType';
 
-export const configOtherUserTable: Config = {
+export const configOtherUserTable: ConfigType = {
   name: 'OtherUserTable2',
   path: {
     source: {
