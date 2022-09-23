@@ -1,23 +1,24 @@
-import { Config } from './configTypes';
+import { Config } from '../configTypes';
 
-export const configJspTest2: Config = {
-  name: 'JspTest2',
+export const configJspModelAndView: Config = {
+  name: 'JspModelAndView',
   path: {
     source: {
       rootDir: 'C:/source/trace-web-call/test',
       dependency: [],
       main: [
         {
-          startings: { directory: `jspTest2`, file: 'ReturnTraceTestController.java' },
+          startings: { directory: `jspModelAndView`, file: 'ModelAndViewTestController.java' },
           serviceXmlJspDirs: {
             service: {
-              directory: 'jspTest2',
-              file: 'Util.java',
+              directory: 'jspModelAndView',
+              file: 'ModelAndViewTestController.java',
             },
             xml: '',
-            jspDirectory: '',
+            jspDirectory: 'jspModelAndView',
           },
-          keyName: 'jspTest2',
+
+          keyName: 'jspModelAndView',
         },
       ],
     },

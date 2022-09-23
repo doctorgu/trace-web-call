@@ -1,4 +1,4 @@
-import { Config } from './configTypes';
+import { Config } from '../configTypes';
 
 export const configCompositeTest: Config = {
   name: 'CompositeTest2',

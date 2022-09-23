@@ -1,4 +1,4 @@
-import { Config } from './configTypes';
+import { Config } from '../configTypes';
 
 export const configComposite: Config = {
   name: 'Composite2',

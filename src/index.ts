@@ -23,11 +23,11 @@ function doTest() {
   // --
   // const { methods } = getClassInfo('./test/jspTest/JspTestController.java');
   // const { methods } = getClassInfo('./test/SeparatorTest.java');
-  // const { methods } = getClassInfo('./test/ControlTestController.java');
-  // for (let nMethod = 0; nMethod < methods.length; nMethod++) {
-  //   const { jspViews } = methods[nMethod];
-  //   console.log(jspViews);
-  // }
+  const { methods } = getClassInfo('./test/jspModelAndView/ModelAndViewTestController.java');
+  for (let nMethod = 0; nMethod < methods.length; nMethod++) {
+    const { jspViews } = methods[nMethod];
+    console.log(jspViews);
+  }
   // --
   // const xmls = getXmlNodeInfoFinds('./test', 'IncludeTest.xml');
   // for (let i = 0; i < xmls.length; i++) {

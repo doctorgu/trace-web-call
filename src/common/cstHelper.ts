@@ -3,7 +3,7 @@ import { exec as execProc } from 'child_process';
 import { statSync } from 'fs';
 import { promisify } from 'util';
 
-import { readFileSyncUtf16le, trims, trimEnd } from './util';
+import { readFileSyncUtf16le, trims, trimEnd, findLastIndex } from './util';
 import { SqlTemplate } from '../common/sqliteHelper';
 import { config } from '../config/config';
 import { configReader } from '../config/configReader';
@@ -145,7 +145,7 @@ function moveBinaryOperator(list: (PathsAndImage & { binMoved: boolean })[], pos
     offset++;
   }
 }
-function reorderBinaryOperator(pathsAndImageList: PathsAndImage[]): PathsAndImage[] {
+export function reorderBinaryOperator(pathsAndImageList: PathsAndImage[]): PathsAndImage[] {
   const list: (PathsAndImage & { binMoved: boolean })[] = pathsAndImageList.map(({ paths, image }) => ({
     paths,
     image,
@@ -173,8 +173,11 @@ export function getPathsAndImagesFromSimpleCst(parent: any) {
 
   getPathsAndImageListFromSimpleCst2(parent, paths, pathsAndImageList);
 
-  const pathsAndImageListOrdered = reorderBinaryOperator(pathsAndImageList);
+  // return pathsAndImageList;
 
+  // !!! Has problem that plus inserted between 'getString' and '(' in following
+  // return new ModelAndView("redirect:https://" + ConfigUtil.getString("server.host") + "/p/cob/registMrMember.do", model);
+  const pathsAndImageListOrdered = reorderBinaryOperator(pathsAndImageList);
   return pathsAndImageListOrdered;
 }
 
@@ -262,9 +265,118 @@ export function indexOf(paths: string[], ...finds: Keyword[]): number {
   return indexOf2(paths, finds);
 }
 
-export function execImages(r: RegExp, images: string[], separator: string = '', index: number = 0) {
-  const value = images.filter((v, i) => i >= index).join(separator);
-  return r.exec(value);
+/** skipPlusComma: set to true to solve reorderBinaryOperator bug */
+export function rangeOfImages(
+  blocks: PathsAndImage[],
+  start: number = 0,
+  finds: (string | RegExp)[],
+  skipPlusComma: boolean = false
+): { matches: RegExpExecArray[]; start: number; end: number } | null {
+  const matches: RegExpExecArray[] = [];
+
+  const findFirst = finds[0];
+  const idxFirst = blocks.findIndex(({ image }, i) => {
+    if (i < start) return false;
+
+    if (typeof findFirst === 'string') {
+      if (findFirst !== image) return false;
+    } else {
+      const match = findFirst.exec(image);
+      if (!match) return false;
+    }
+
+    return true;
+  });
+  if (idxFirst === -1) return null;
+
+  let idxBlocks = idxFirst;
+  for (let idxFind = 0; idxFind < finds.length; idxFind++) {
+    const find = finds[idxFind];
+    const { image } = blocks[idxBlocks++];
+    if (skipPlusComma && (image === '+' || image === ',')) {
+      idxFind--;
+      continue;
+    }
+
+    if (typeof find === 'string') {
+      if (find !== image) return null;
+    } else {
+      const match = find.exec(image);
+      if (!match) return null;
+
+      matches.push(match);
+    }
+  }
+
+  return { matches, start: idxFirst, end: idxBlocks - 1 };
+}
+export function lastRangeOfImages(
+  blocks: PathsAndImage[],
+  end: number,
+  finds: (string | RegExp)[],
+  skipPlusComma: boolean = false
+): { matches: RegExpExecArray[]; start: number; end: number } | null {
+  const matches: RegExpExecArray[] = [];
+
+  const findLast = finds[finds.length - 1];
+  const idxLast = findLastIndex(blocks, ({ image }, i) => {
+    if (i > end) return false;
+
+    if (typeof findLast === 'string') {
+      if (findLast !== image) return false;
+    } else {
+      const match = findLast.exec(image);
+      if (!match) return false;
+    }
+
+    return true;
+  });
+  if (idxLast === -1) return null;
+
+  let idxBlocks = idxLast;
+  for (let idxFind = finds.length - 1; idxFind >= 0; idxFind--) {
+    const find = finds[idxFind];
+    const { image } = blocks[idxBlocks--];
+    if (skipPlusComma && (image === '+' || image === ',')) {
+      idxFind++;
+      continue;
+    }
+
+    if (typeof find === 'string') {
+      if (find !== image) return null;
+    } else {
+      const match = find.exec(image);
+      if (!match) return null;
+
+      matches.push(match);
+    }
+  }
+
+  return { matches, start: idxBlocks + 1, end: idxLast };
+}
+
+// export function execImages(r: RegExp, images: string[], separator: string = '', index: number = 0) {
+//   const value = images.filter((v, i) => i >= index).join(separator);
+//   return r.exec(value);
+// }
+export function execImages(
+  r: RegExp,
+  blocks: PathsAndImage[],
+  separator: string = '',
+  start: number = 0
+): { match: RegExpExecArray; start: number; end: number } | null {
+  const images: string[] = [];
+
+  for (let i = start; i < blocks.length; i++) {
+    const { image } = blocks[i];
+    images.push(image);
+    const match = r.exec(images.join(separator));
+    if (match) {
+      return { match, start, end: i };
+    }
+  }
+
+  return null;
 }
 
 export function getRCurlyPosition(methodDecls: PathsAndImage[], posLCurly: number): number {

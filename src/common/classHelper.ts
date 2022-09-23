@@ -26,8 +26,12 @@ import {
   getCstSimple,
   getPathsAndImagesFromSimpleCst,
   indexOf,
+  rangeOfImages,
+  reorderBinaryOperator,
+  lastRangeOfImages,
 } from './cstHelper';
 import { getJspViewFinds, JspView, JspViewFind } from './jspHelper';
+import { configFunc } from '../config/configFunc';
 
 export type Keyword =
   | 'LCurly'
@@ -159,24 +163,25 @@ function getMapping(
     method = trimEnd(mappingName, 'Mapping').toUpperCase();
   }
 
-  const list = pathsAndImages.filter((v, i) => i > posLBrace && i < posRBrace);
-  const images = list.map(({ image }) => image);
-  const posMethod = images.indexOf('method');
+  const blocks = pathsAndImages.filter((v, i) => i > posLBrace && i < posRBrace);
+  const posMethod = blocks.findIndex(({ image }) => image === 'method');
   if (posMethod !== -1) {
-    const m = execImages(/RequestMethod\.(\w+)/, images, '', posMethod);
-    if (m) {
-      method = m[1];
+    const ret = execImages(/RequestMethod\.(\w+)/, blocks, '', posMethod);
+    if (ret) {
+      const { match, start, end } = ret;
+      method = match[1];
     }
   }
 
   let values: string[] = [];
+  const images = blocks.map(({ image }) => image);
   const posValue = images.indexOf('value');
   const posEqual = images.indexOf('=', posValue);
   const posLCurly = images.indexOf('{', posEqual);
   if (posValue !== -1 && posEqual !== -1) {
     if (posLCurly !== -1) {
       // @RequestMapping(value={"/abc/abc5.do","/abc/abc6.do"})
-      const posRCurly = getRCurlyPosition(list, posLCurly);
+      const posRCurly = getRCurlyPosition(blocks, posLCurly);
       values = images.filter((v, i) => i > posLCurly && i < posRCurly && v !== ',').map((v) => v);
     } else {
       // @RequestMapping(value = "/abc/abc2.do")
@@ -412,37 +417,67 @@ function getCallerInfos(
   return callers;
 }
 
-function getValueType(value: string): 'onlyLiteral' | 'onlyVariable' | 'other' {
-  const onlyLiteral = /^"[\w/]*"$/.test(value);
-  const onlyVariable = /^\w+$/.test(value);
-  if (onlyLiteral) return 'onlyLiteral';
-  if (onlyVariable) return 'onlyVariable';
-  return 'other';
+function getValueType(value: string): { type: 'Literal' | 'Variable' | 'Other'; value: string } {
+  const mLiteral = /^"([^"]*)"$/.exec(value);
+  if (mLiteral) {
+    return { type: 'Literal', value: trim(mLiteral[1], '"') };
+  }
+  const mVariable = /^\w+$/.exec(value);
+  if (mVariable) {
+    return { type: 'Variable', value };
+  }
+  return { type: 'Other', value };
 }
-// function getValueType(list: PathsAndImage[], i: number): { type: 'literal' | 'function' | 'other'; posLast: number } {
-//   const { paths, image } = list[i];
+function getFuncValue(blocks: PathsAndImage[], index: number): { value: JspView; end: number } | null {
+  for (const func of configFunc) {
+    const { find, skipPlusComma, replace } = func;
 
-//   if (endsWith(paths, 'StringLiteral')) {
-//     return { type: 'literal', posLast: i };
-//   }
+    const ret = rangeOfImages(blocks, index, find, skipPlusComma);
+    if (ret && ret.start === index) {
+      const { end } = ret;
+      if (typeof replace === 'string') {
+        return { value: { name: replace, parsed: true }, end };
+      } else {
+        const { matches, end } = ret;
+        const replaced = replace(matches);
+        return { value: { name: replaced, parsed: true }, end };
+      }
+    }
+  }
 
-//   if (endsWith(paths, 'Identifier')) {
-//     const { paths: pathsSecond, image: imageSecond } = list[i + 1];
-//     const { paths: pathsThird, image: imageThird } = list[i + 2];
+  return null;
+}
+function getValues(blocks: PathsAndImage[], index: number): { values: JspView[]; end: number } {
+  let index2 = index;
+  let values: JspView[] = [];
 
-//     // Util.msgOnceAlertView
-//     if (
-//       endsWith(paths, 'fqnOrRefType', 'fqnOrRefTypePartRest', 'fqnOrRefTypePartCommon', 'Identifier') &&
-//       endsWith(pathsSecond, 'fqnOrRefType', 'Dot') &&
-//       endsWith(pathsThird, 'fqnOrRefType', 'fqnOrRefTypePartFirst', 'fqnOrRefTypePartCommon', 'Identifier')
-//     ) {
-//       return { type: 'function', posLast: i + 2 };
-//     }
-//   }
+  const { image } = blocks[index2];
 
-//   return { type: 'other', posLast: i };
-// }
-function getJspViewsByVariable(list: PathsAndImage[], posVar: number, varName: string): JspView[] {
+  const ret = getFuncValue(blocks, index2);
+  if (ret) {
+    const { value: valueFunc, end: endFunc } = ret;
+    values.push(valueFunc);
+    return { values, end: endFunc };
+  }
+
+  const { type, value } = getValueType(image);
+  if (type === 'Literal') {
+    if (value) {
+      values.push({ name: value, parsed: true });
+      return { values, end: index2 };
+    }
+  } else if (type === 'Variable') {
+    const valuesSub = getValuesByVariable(blocks, index2, value);
+    if (valuesSub.length) {
+      values = values.concat(valuesSub);
+    }
+    return { values, end: index2 };
+  }
+
+  values.push({ name: value, parsed: false });
+  return { values, end: index2 };
+}
+function getValuesByVariable(blocks: PathsAndImage[], posVar: number, varName: string): JspView[] {
   // String viewNm = "/mobile/dp/Etv";
   // {paths:["localVariableDeclarationStatement","localVariableDeclaration","localVariableType","unannType","unannReferenceType","unannClassOrInterfaceType","unannClassType","Identifier",],image:"String",},
   // {paths:["localVariableDeclarationStatement","localVariableDeclaration","variableDeclaratorList","variableDeclarator","variableDeclaratorId","Identifier",],image:"viewNm",},
@@ -458,10 +493,9 @@ function getJspViewsByVariable(list: PathsAndImage[], posVar: number, varName: s
 
   let varFound = false;
   let equalFound = false;
-  let value = '';
-  const valuesAll: JspView[] = [];
+  let values: JspView[] = [];
   for (let i = 0; i < posVar; i++) {
-    const { paths, image } = list[i];
+    const { paths, image } = blocks[i];
 
     const declare = !varFound && includes(paths, 'localVariableDeclarationStatement');
     const assign = !varFound && includes(paths, 'expressionStatement');
@@ -471,67 +505,166 @@ function getJspViewsByVariable(list: PathsAndImage[], posVar: number, varName: s
     } else if (varFound && (endsWith(paths, 'Equals') || endsWith(paths, 'AssignmentOperator'))) {
       equalFound = true;
     } else if (varFound && equalFound && !endsWith(paths, 'Semicolon')) {
-      // ignore combined value and get last value only (ex: return "b" in "a" + "b")
-      value = image;
-    } else if (endsWith(paths, 'Semicolon')) {
-      if (varFound && equalFound && value) {
-        const valueType = getValueType(value);
-        if (valueType === 'onlyLiteral') {
-          valuesAll.push({ name: trim(value, '"'), parsed: true });
-        } else {
-          valuesAll.push({ name: value, parsed: false });
-        }
+      const { values: valuesSub, end: endSub } = getValues(blocks, i);
+      if (valuesSub.length) {
+        values = values.concat(valuesSub);
+        i = endSub;
       }
-
+    } else if (endsWith(paths, 'Semicolon')) {
       varFound = false;
       equalFound = false;
-      value = '';
     }
   }
 
-  return valuesAll;
+  return values;
 }
-function getJspViews(methodDecls: PathsAndImage[], posLCurly: number, posRCurly: number): JspView[] {
-  let jspViews: JspView[] = [];
+function joinParsed(values: JspView[]): JspView | null {
+  const valuesNoPlus = values.filter(({ name }) => name !== '+');
+  if (!valuesNoPlus.length) return null;
 
-  let returnIdx = -1;
-  let images: string[] = [];
-  const list = methodDecls.filter((v, i) => i > posLCurly && i < posRCurly);
-  for (let i = 0; i < list.length; i++) {
-    const { paths, image } = list[i];
+  const valuesParsed = valuesNoPlus.reduce((sum: JspView[], cur: JspView) => {
+    if (!sum.length) return [cur];
 
-    if (endsWith(paths, 'Return')) {
-      returnIdx = i;
-    } else if (returnIdx !== -1) {
-      // const valueType = getValueType(list, i);
-      images.push(image);
+    const prev = sum[sum.length - 1];
+    if (prev.parsed && cur.parsed) {
+      prev.name += cur.name;
+      return sum;
+    }
 
-      if (endsWith(paths, 'Semicolon')) {
-        const m = execImages(/new ModelAndView \(([^,)]+)/, images, ' ');
-        if (m) {
-          const viewName = m[1].trim();
-          const valueType = getValueType(viewName);
+    return [...sum, cur];
+  }, []);
 
-          if (valueType === 'onlyLiteral') {
-            jspViews.push({ name: trim(viewName, '"'), parsed: true });
-          } else if (valueType === 'onlyVariable') {
-            const jspViewsCur = getJspViewsByVariable(list, returnIdx, viewName);
-            if (jspViewsCur.length) {
-              jspViews = jspViews.concat(jspViewsCur);
-            }
-          } else if (valueType === 'other') {
-            jspViews.push({ name: viewName, parsed: false });
-          }
-        }
+  const parsed = valuesParsed.length === 1 && valuesParsed[0].parsed;
+  if (parsed) {
+    return { name: valuesParsed[0].name, parsed };
+  } else {
+    return { name: valuesParsed.map(({ name }) => name).join(' '), parsed: false };
+  }
+}
+function getValuesInReturn(blocks: PathsAndImage[], posReturn: number): JspView[] {
+  function getModelAndViewRange(
+    blocks: PathsAndImage[],
+    start: number,
+    end: number
+  ): { start: number; end: number } | null {
+    const retMv = rangeOfImages(blocks, start, ['new', 'ModelAndView', '(']);
+    if (!retMv) return null;
 
-        returnIdx = -1;
-        images = [];
+    // new ModelAndView("abc", model);
+    let retRBrace = lastRangeOfImages(blocks, end, [',', /\w+/, ')', ';']);
+    if (!retRBrace) {
+      // new ModelAndView("abc");
+      retRBrace = lastRangeOfImages(blocks, end, [')', ';']);
+    }
+    if (!retRBrace) return null;
+
+    return { start: retMv.end + 1, end: retRBrace.start - 1 };
+  }
+
+  let values: JspView[] = [];
+
+  const posSemicolon = blocks.findIndex(({ paths }, i) => i > posReturn && endsWith(paths, 'Semicolon'));
+  // 1. Keep order
+  const ret = getModelAndViewRange(blocks, posReturn + 1, posSemicolon);
+  // 2.
+  const retFunc = !ret && getFuncValue(blocks, posReturn + 1);
+  if (ret) {
+    const { start, end } = ret;
+    let valuesRet: JspView[] = [];
+    for (let j = start; j <= end; j++) {
+      const { values: valuesSub, end: endSub } = getValues(blocks, j);
+      if (valuesSub.length) {
+        valuesRet = valuesRet.concat(valuesSub);
+        j = endSub;
       }
     }
+    const valueRetJoined = joinParsed(valuesRet);
+    if (valueRetJoined) {
+      values.push(valueRetJoined);
+    }
+  } else if (retFunc) {
+    const { value: valueFunc, end } = retFunc;
+    values.push(valueFunc);
+  } else {
+    const name = blocks
+      .filter((v, i) => i > posReturn && i < posSemicolon)
+      .map(({ image }) => image)
+      .join(' ');
+    values.push({ name, parsed: false });
   }
 
-  return jspViews;
+  const posReturnSub = blocks.findIndex(({ paths }, i) => i > posSemicolon && endsWith(paths, 'Return'));
+  if (posReturnSub !== -1) {
+    const valuesSub = getValuesInReturn(blocks, posReturnSub);
+    if (valuesSub.length) {
+      values = values.concat(valuesSub);
+    }
+  }
+
+  return values;
 }
+function getJspViews(methodDecls: PathsAndImage[], posLCurly: number, posRCurly: number): JspView[] {
+  const methodBlocks = methodDecls.filter((v, i) => i > posLCurly && i < posRCurly);
+
+  const posReturn = methodBlocks.findIndex(({ paths }) => endsWith(paths, 'Return'));
+  if (posReturn === -1) {
+    throw new Error(`No return statement in method block: ${methodBlocks.map(({ image }) => image).join(',')}`);
+  }
+  const jspViews = getValuesInReturn(methodBlocks, posReturn);
+
+  const jspViewsUnique = jspViews.reduce(
+    (prev: JspView[], cur: JspView) => (!prev.some((jspView) => jspView.name === cur.name) ? [...prev, cur] : prev),
+    []
+  );
+  return jspViewsUnique;
+}
+// function getJspViews(methodDecls: PathsAndImage[], posLCurly: number, posRCurly: number): JspView[] {
+//   let jspViews: JspView[] = [];
+
+//   let returnIdx = -1;
+//   let images: string[] = [];
+//   const list = methodDecls.filter((v, i) => i > posLCurly && i < posRCurly);
+//   for (let i = 0; i < list.length; i++) {
+//     const { paths, image } = list[i];
+
+//     if (endsWith(paths, 'Return')) {
+//       returnIdx = i;
+//     } else if (returnIdx !== -1) {
+//       // const valueType = getValueType(list, i);
+//       images.push(image);
+
+//       if (endsWith(paths, 'Semicolon')) {
+//         const m = execImages(/new ModelAndView \(([^,)]+)/, images, ' ');
+//         if (m) {
+//           const viewName = m[1].trim();
+//           if (viewName) {
+//             const valueType = getValueType(viewName);
+
+//             if (valueType === 'onlyLiteral') {
+//               jspViews.push({ name: trim(viewName, '"'), parsed: true });
+//             } else if (valueType === 'onlyVariable') {
+//               const jspViewsCur = getJspViewsByVariable(list, returnIdx, viewName);
+//               if (jspViewsCur.length) {
+//                 jspViews = jspViews.concat(jspViewsCur);
+//               }
+//             } else if (valueType === 'other') {
+//               jspViews.push({ name: viewName, parsed: false });
+//             }
+//           }
+//         }
+
+//         returnIdx = -1;
+//         images = [];
+//       }
+//     }
+//   }
+
+//   const jspViewsUnique = jspViews.reduce(
+//     (prev: JspView[], cur: JspView) => (!prev.some((jspView) => jspView.name === cur.name) ? [...prev, cur] : prev),
+//     []
+//   );
+//   return jspViewsUnique;
+// }
 
 function getMethods(cstSimple: any, pathsAndImageList: PathsAndImage[], vars: VarInfo[]): MethodInfo[] {
   const methodDecls = pathsAndImageList.filter(({ paths, image }) => includes(paths, 'methodDeclaration'));
