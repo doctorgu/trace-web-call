@@ -1,7 +1,7 @@
 import { ConfigType } from '../ConfigType';
 
 export const configJspModelAndView: ConfigType = {
-  name: 'JspModelAndView',
+  name: 'JspModelAndView2',
   path: {
     source: {
       rootDir: 'C:/source/trace-web-call/test',

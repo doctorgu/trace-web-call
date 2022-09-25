@@ -1,5 +1,6 @@
 import { closeSync, openSync, readSync, readFileSync, readdirSync, statSync } from 'fs';
 import { resolve } from 'path';
+import { format } from 'date-fns';
 
 /**
  * Escapes string for use in Javascript regex
@@ -422,4 +423,8 @@ export function getAbsolutePathByDotDot(pathFullEndsWithFile: string, pathSrc: s
     pathsNew = [...pathsFullNoFile.slice(0, pathsFullNoFile.length - count), ...pathsSrc.slice(count)];
   }
   return pathsNew.join(isSlash ? '/' : '\\');
+}
+
+export function logTimeMsg(message: string) {
+  console.log(format(new Date(), 'HH:mm:ss.SSS'), message);
 }

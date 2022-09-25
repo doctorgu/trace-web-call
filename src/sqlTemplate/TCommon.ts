@@ -3,7 +3,7 @@ import { parse, basename } from 'path';
 import { configReader } from '../config/configReader';
 import { ObjectAndTables, ObjectType } from '../common/batisHelper';
 import { escapeDollar } from '../common/util';
-import { SqlTemplate } from '../common/sqliteHelper';
+import { DbRow, SqlTemplate } from '../common/sqliteHelper';
 import { all, exec, get, run } from '../common/sqliteHelper';
 import { RouteJsp, RouteTable, RouteTypeJsp, RouteTypeTable } from '../common/traceHelper';
 
@@ -113,56 +113,90 @@ values
   }
 
   selectCompare(pathDest: string) {
-    const nameDest = parse(basename(pathDest)).name;
+    const dbNameDest = parse(basename(pathDest)).name;
 
-    const sqlDiff = `
-select  s1.keyName, s1.groupSeq, s1.start, s1.tables, s2.tables2
-from    vStartToTables s1
+    const names = [
+      { name: 'table', view: 'vStartToTables', column: 'tables' },
+      { name: 'jsp', view: 'vStartToJsps', column: 'jsps' },
+    ];
+    const sqlDiffMap = new Map<string, string>();
+    const sqlInsertedMap = new Map<string, string>();
+    const sqlDeletedMap = new Map<string, string>();
+
+    for (const { name, view, column } of names) {
+      const sqlDiff = `
+select  s1.keyName, s1.groupSeq, s1.start, s1.${column}, s2.${column}2
+from    ${view} s1
         inner join
         (
-            select  keyName keyName2, groupSeq groupSeq2, start start2, tables tables2
-            from    ${nameDest}.vStartToTables
+            select  keyName keyName2, groupSeq groupSeq2, start start2, ${column} ${column}2
+            from    ${dbNameDest}.${view}
         ) s2        
         on s1.keyName = s2.keyName2
         and s1.groupSeq = s2.groupSeq2
         and s1.start = s2.start2
-where   s1.tables != s2.tables2
+where   s1.${column} != s2.${column}2
   `;
-    const sqlInserted = `
-select  s1.keyName, s1.groupSeq, s1.start, s1.tables
-from    vStartToTables s1
+      sqlDiffMap.set(name, sqlDiff);
+
+      const sqlInserted = `
+select  s1.keyName, s1.groupSeq, s1.start, s1.${column}
+from    ${view} s1
         left join
         (
-            select  keyName keyName2, groupSeq groupSeq2, start start2, tables tables2
-            from    ${nameDest}.vStartToTables
+            select  keyName keyName2, groupSeq groupSeq2, start start2, ${column} ${column}2
+            from    ${dbNameDest}.${view}
         ) s2        
         on s1.keyName = s2.keyName2
         and s1.groupSeq = s2.groupSeq2
         and s1.start = s2.start2
 where   s2.start2 is null
   `;
-    const sqlDeleted = `
-select  s2.keyName2 keyName, s2.groupSeq2 groupSeq, s2.start2 start, s2.tables2 tables
-from    vStartToTables s1
+      sqlInsertedMap.set(name, sqlInserted);
+
+      const sqlDeleted = `
+select  s2.keyName2 keyName, s2.groupSeq2 groupSeq, s2.start2 start, s2.${column}2 ${column}
+from    ${view} s1
         right join
         (
-            select  keyName keyName2, groupSeq groupSeq2, start start2, tables tables2
-            from    ${nameDest}.vStartToTables
+            select  keyName keyName2, groupSeq groupSeq2, start start2, ${column} ${column}2
+            from    ${dbNameDest}.${view}
         ) s2        
         on s1.keyName = s2.keyName2
         and s1.groupSeq = s2.groupSeq2
         and s1.start = s2.start2
 where   s1.start is null;
   `;
+      sqlDeletedMap.set(name, sqlDeleted);
+    }
+
     const db = configReader.db();
     const sqlAttach = `
-attach database '${pathDest}' as ${nameDest}`;
+attach database '${pathDest}' as ${dbNameDest}`;
     exec(db, sqlAttach);
 
-    const diff = all(db, sqlDiff);
-    const inserted = all(db, sqlInserted);
-    const deleted = all(db, sqlDeleted);
-    return { diff, inserted, deleted };
+    const rowsDiffMap = new Map<string, DbRow[]>();
+    const rowsInsertedMap = new Map<string, DbRow[]>();
+    const rowsDeletedMap = new Map<string, DbRow[]>();
+
+    for (const [name, sqlDiff] of sqlDiffMap) {
+      rowsDiffMap.set(name, all(db, sqlDiff));
+    }
+    for (const [name, sqlInserted] of sqlInsertedMap) {
+      rowsInsertedMap.set(name, all(db, sqlInserted));
+    }
+    for (const [name, sqlDeleted] of sqlDeletedMap) {
+      rowsDeletedMap.set(name, all(db, sqlDeleted));
+    }
+
+    return {
+      diffTable: rowsDiffMap.get('table') as DbRow[],
+      insertedTable: rowsInsertedMap.get('table') as DbRow[],
+      deletedTable: rowsDeletedMap.get('table') as DbRow[],
+      diffJsp: rowsDiffMap.get('jsp') as DbRow[],
+      insertedJsp: rowsInsertedMap.get('jsp') as DbRow[],
+      deletedJsp: rowsDeletedMap.get('jsp') as DbRow[],
+    };
   }
 }
 export default new TCommon();

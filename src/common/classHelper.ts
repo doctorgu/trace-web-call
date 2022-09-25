@@ -608,7 +608,8 @@ function getJspViews(methodDecls: PathsAndImage[], posLCurly: number, posRCurly:
 
   const posReturn = methodBlocks.findIndex(({ paths }) => endsWith(paths, 'Return'));
   if (posReturn === -1) {
-    throw new Error(`No return statement in method block: ${methodBlocks.map(({ image }) => image).join(',')}`);
+    // throw new Exception case
+    return [];
   }
   const jspViews = getValuesInReturn(methodBlocks, posReturn);
 

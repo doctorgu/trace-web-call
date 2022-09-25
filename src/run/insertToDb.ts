@@ -1,6 +1,6 @@
 import { existsSync, statSync, unlinkSync } from 'fs';
 import { resolve } from 'path';
-import { findFiles } from '../common/util';
+import { findFiles, logTimeMsg } from '../common/util';
 import {
   ClassInfo,
   getFindsByClassPathClassNameFromDb,
@@ -36,8 +36,6 @@ function insertJspClassXml(
   let jspInfos: JspInfo[] = [];
 
   serviceXmlJspDirs.forEach(({ service: { directory, file }, jspDirectory }) => {
-    const initDir = resolve(rootDir, directory);
-
     if (jspDirectory) {
       let jspFullPaths: string[] = [];
       const fullJspDirectory = resolve(rootDir, jspDirectory);
@@ -49,10 +47,14 @@ function insertJspClassXml(
       }
     }
 
-    for (const fullPath of [...findFiles(initDir, file)]) {
-      const classInfo = insertClassInfo(rootDir, fullPath);
-      if (classInfo) {
-        classInfos.push(classInfo);
+    if (directory) {
+      const initDir = resolve(rootDir, directory);
+
+      for (const fullPath of [...findFiles(initDir, file)]) {
+        const classInfo = insertClassInfo(rootDir, fullPath);
+        if (classInfo) {
+          classInfos.push(classInfo);
+        }
       }
     }
   });
@@ -76,25 +78,25 @@ function insertJspClassXml(
 export function insertToDb() {
   const path = configReader.pathDatabase();
   if (existsSync(path)) {
-    console.log(`Deleting ${path}`);
+    logTimeMsg(`Deleting ${path}`);
     unlinkSync(path);
   }
 
-  console.log(`initDb`);
+  logTimeMsg(`initDb`);
   tCommon.initDb(sqlInit);
 
   const { rootDir } = config.path.source;
 
-  console.log(`insertTablesToDb`);
+  logTimeMsg(`insertTablesToDb`);
   const tablesAll = insertTablesToDb();
 
-  console.log(`insertObjectAndTables`);
+  logTimeMsg(`insertObjectAndTables`);
   const objectAndTablesAll = insertObjectAndTables(tablesAll);
 
-  console.log(`insertKeyInfo`);
+  logTimeMsg(`insertKeyInfo`);
   tCommon.insertKeyInfo(config.path.source.main.map(({ keyName }) => ({ keyName })));
 
-  console.log(`insertJspClassXml`);
+  logTimeMsg(`insertJspClassXml`);
   const {
     jspInfos: jspInfosDep,
     classInfos: classInfosDep,
@@ -108,18 +110,21 @@ export function insertToDb() {
       keyName,
     } = config.path.source.main[i];
 
-    const initDir = resolve(rootDir, directory);
-
-    console.log(`insertClassInfo ${directory}`);
     const classInfosStarting: ClassInfo[] = [];
-    for (const fullPath of [...findFiles(initDir, file)]) {
-      const classInfo = insertClassInfo(rootDir, fullPath);
-      if (classInfo) {
-        classInfosStarting.push(classInfo);
+
+    if (directory) {
+      const initDir = resolve(rootDir, directory);
+
+      logTimeMsg(`insertClassInfo ${directory}`);
+      for (const fullPath of [...findFiles(initDir, file)]) {
+        const classInfo = insertClassInfo(rootDir, fullPath);
+        if (classInfo) {
+          classInfosStarting.push(classInfo);
+        }
       }
     }
 
-    console.log(`insertJspClassXml ${directory}`);
+    logTimeMsg(`insertJspClassXml ${directory}`);
     const {
       jspInfos: jspInfosMain,
       classInfos: classInfosMain,
@@ -134,17 +139,17 @@ export function insertToDb() {
     const jspPathsCur = [...jspInfosDep, ...jspInfosMain].map(({ jspPath }) => jspPath);
     const classInfosCur = [...classInfosDep, ...classInfosStarting, ...classInfosMain];
     const classInfosMerged = mergeExtends(classInfosCur);
-    console.log(`insertMethodInfoFindKeyName ${directory}`);
+    logTimeMsg(`insertMethodInfoFindKeyName ${directory}`);
     insertMethodInfoFindKeyName(keyName, jspPathsCur, classInfosMerged);
 
     const xmlInfosCur = [...xmlInfosDep, ...xmlInfosMain];
-    console.log(`insertXmlInfoFindKeyName ${directory}`);
+    logTimeMsg(`insertXmlInfoFindKeyName ${directory}`);
     insertXmlInfoFindKeyName(keyName, xmlInfosCur);
   }
 
-  console.log(`insertRouteTableKeyName`);
+  logTimeMsg(`insertRouteTableKeyName`);
   insertRouteTableKeyName();
 
-  console.log(`insertRouteJspKeyName`);
+  logTimeMsg(`insertRouteJspKeyName`);
   insertRouteJspKeyName();
 }

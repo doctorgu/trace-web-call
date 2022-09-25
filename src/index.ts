@@ -10,6 +10,7 @@ import { findFiles, readFileSyncUtf16le, removeCommentLiteralSql } from './commo
 import { insertToDb } from './run/insertToDb';
 import { getDbPath } from './common/common';
 import { getJspIncludes } from './common/jspHelper';
+import { logCompared } from './run/logCompared';
 
 function doTest() {
   // const ret = getClassInfo('C:/source/trace-web-call/test/AnnotationTestController.java');
@@ -43,3 +44,4 @@ function doTest() {
 }
 // doTest();
 insertToDb();
+// logCompared();
