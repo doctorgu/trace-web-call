@@ -268,7 +268,8 @@ export function indexOf(paths: string[], ...finds: Keyword[]): number {
 /** skipPlusComma: set to true to solve reorderBinaryOperator bug */
 export function rangeOfImages(
   blocks: PathsAndImage[],
-  start: number = 0,
+  start: number,
+  end: number,
   finds: (string | RegExp)[],
   skipPlusComma: boolean = false
 ): { matches: RegExpExecArray[]; start: number; end: number } | null {
@@ -276,7 +277,7 @@ export function rangeOfImages(
 
   const findFirst = finds[0];
   const idxFirst = blocks.findIndex(({ image }, i) => {
-    if (i < start) return false;
+    if (i < start || i > end) return false;
 
     if (typeof findFirst === 'string') {
       if (findFirst !== image) return false;
@@ -289,10 +290,14 @@ export function rangeOfImages(
   });
   if (idxFirst === -1) return null;
 
-  let idxBlocks = idxFirst;
+  let idxBlocks = idxFirst - 1;
   for (let idxFind = 0; idxFind < finds.length; idxFind++) {
     const find = finds[idxFind];
-    const { image } = blocks[idxBlocks++];
+
+    idxBlocks++;
+    if (idxBlocks > end) return null;
+
+    const { image } = blocks[idxBlocks];
     if (skipPlusComma && (image === '+' || image === ',')) {
       idxFind--;
       continue;
@@ -308,11 +313,11 @@ export function rangeOfImages(
     }
   }
 
-  return { matches, start: idxFirst, end: idxBlocks - 1 };
+  return { matches, start: idxFirst, end: idxBlocks };
 }
 export function lastRangeOfImages(
   blocks: PathsAndImage[],
-  end: number,
+  startFromRtoL: number,
   finds: (string | RegExp)[],
   skipPlusComma: boolean = false
 ): { matches: RegExpExecArray[]; start: number; end: number } | null {
@@ -320,7 +325,7 @@ export function lastRangeOfImages(
 
   const findLast = finds[finds.length - 1];
   const idxLast = findLastIndex(blocks, ({ image }, i) => {
-    if (i > end) return false;
+    if (i > startFromRtoL) return false;
 
     if (typeof findLast === 'string') {
       if (findLast !== image) return false;
