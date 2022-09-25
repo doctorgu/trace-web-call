@@ -425,6 +425,9 @@ export function getAbsolutePathByDotDot(pathFullEndsWithFile: string, pathSrc: s
   return pathsNew.join(isSlash ? '/' : '\\');
 }
 
-export function logTimeMsg(message: string) {
-  console.log(format(new Date(), 'HH:mm:ss.SSS'), message);
+export function logTimeMsg(startTime: number, message: string): number {
+  const curTime = new Date().getTime();
+  const duration = curTime - startTime;
+  console.log(`${(duration / 1000).toFixed(2)}s`, message);
+  return curTime;
 }
