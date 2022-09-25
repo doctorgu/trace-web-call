@@ -31,7 +31,7 @@ import {
   lastRangeOfImages,
 } from './cstHelper';
 import { getJspViewFinds, JspView, JspViewFind } from './jspHelper';
-import { configFunc } from '../config/configFunc';
+import { configConstructor, configFunc, configVar, FuncInfo, FuncType, ignores, ValueType } from '../config/configFunc';
 
 export type Keyword =
   | 'LCurly'
@@ -417,67 +417,172 @@ function getCallerInfos(
   return callers;
 }
 
-function getValueType(value: string): { type: 'Literal' | 'Variable' | 'Other'; value: string } {
-  const mLiteral = /^"([^"]*)"$/.exec(value);
-  if (mLiteral) {
-    return { type: 'Literal', value: trim(mLiteral[1], '"') };
-  }
-  const mVariable = /^\w+$/.exec(value);
-  if (mVariable) {
-    return { type: 'Variable', value };
-  }
-  return { type: 'Other', value };
-}
-function getFuncValue(blocks: PathsAndImage[], index: number): { value: JspView; end: number } | null {
-  for (const func of configFunc) {
-    const { find, skipPlusComma, replace } = func;
+// function getValueType(value: string): { type: 'Literal' | 'Variable' | 'Other'; value: string } {
+//   const mLiteral = /^"([^"]*)"$/.exec(value);
+//   if (mLiteral) {
+//     return { type: 'Literal', value: trim(mLiteral[1], '"') };
+//   }
+//   const mVariable = /^\w+$/.exec(value);
+//   if (mVariable) {
+//     return { type: 'Variable', value };
+//   }
+//   return { type: 'Other', value };
+// }
+function getConstructFuncVarValue(
+  valueType: ValueType,
+  blocks: PathsAndImage[],
+  start: number,
+  posSemicolon: number
+): { type?: FuncType; value: JspView; end: number } | null {
+  const configWhat: FuncInfo[] =
+    (valueType === 'Constructor' && configConstructor) ||
+    (valueType === 'Function' && configFunc) ||
+    (valueType === 'Variable' && configVar) ||
+    configConstructor;
 
-    const ret = rangeOfImages(blocks, index, find, skipPlusComma);
-    if (ret && ret.start === index) {
+  for (const func of configWhat) {
+    const { type, find, skipPlusComma, replace } = func;
+
+    const ret = rangeOfImages(blocks, start, posSemicolon, find, skipPlusComma);
+    if (ret && ret.start === start) {
       const { end } = ret;
       if (typeof replace === 'string') {
-        return { value: { name: replace, parsed: true }, end };
+        return { type, value: { name: replace, parsed: true }, end };
       } else {
         const { matches, end } = ret;
         const replaced = replace(matches);
-        return { value: { name: replaced, parsed: true }, end };
+        return { type, value: { name: replaced, parsed: true }, end };
       }
     }
   }
 
   return null;
 }
-function getValues(blocks: PathsAndImage[], index: number): { values: JspView[]; end: number } {
-  let index2 = index;
-  let values: JspView[] = [];
-
-  const { image } = blocks[index2];
-
-  const ret = getFuncValue(blocks, index2);
-  if (ret) {
-    const { value: valueFunc, end: endFunc } = ret;
-    values.push(valueFunc);
-    return { values, end: endFunc };
+function getValueType(
+  blocks: PathsAndImage[],
+  start: number,
+  end: number
+): { type: ValueType; value: string; end: number } {
+  // new ModelAndView("abc", model);
+  const findsNewClass = ['new', /^\w+$/, '('];
+  const retNew = rangeOfImages(blocks, start, end, findsNewClass, true);
+  if (retNew && retNew.start === start) {
+    const posRBrace = getRBracePosition(blocks, retNew.end);
+    if (posRBrace !== -1) {
+      const start = retNew.start;
+      const end = posRBrace;
+      const value = blocks
+        .filter((v, i) => i >= start && i <= end)
+        .map(({ image }) => image)
+        .join('');
+      return { type: 'Constructor', value, end };
+    }
   }
 
-  const { type, value } = getValueType(image);
-  if (type === 'Literal') {
-    if (value) {
-      values.push({ name: value, parsed: true });
-      return { values, end: index2 };
+  // svc.get(p1, p2);
+  const findsClassDotMethod = [/^\w+$/, '.', /^\w+$/, '('];
+  let retFunc = rangeOfImages(blocks, start, end, findsClassDotMethod, true);
+  if (!retFunc) {
+    // get(p1, p2);
+    const findsMethod = [/^\w+$/, '('];
+    retFunc = rangeOfImages(blocks, start, end, findsMethod, true);
+  }
+  if (retFunc && retFunc.start === start) {
+    const posRBrace = getRBracePosition(blocks, retFunc.end);
+    if (posRBrace !== -1) {
+      const start = retFunc.start;
+      const end = posRBrace;
+      const value = blocks
+        .filter((v, i) => i >= start && i <= end)
+        .map(({ image }) => image)
+        .join('');
+      return { type: 'Function', value, end };
+    }
+  }
+
+  const value = blocks[start].image;
+  const mLiteral = /^"([^"]*)"$/.exec(value);
+  if (mLiteral) {
+    return { type: 'Literal', value: trim(mLiteral[1], '"'), end: start };
+  }
+  const mVariable = /^\w+$/.exec(value);
+  if (mVariable) {
+    return { type: 'Variable', value, end: start };
+  }
+
+  return { type: 'Other', value, end: start };
+}
+function getValues(blocks: PathsAndImage[], start: number, posSemicolon: number): { values: JspView[]; end: number } {
+  const { image } = blocks[start];
+  if (ignores.has(image)) return { values: [], end: -1 };
+
+  const { type, value, end: endMain } = getValueType(blocks, start, posSemicolon);
+  if (type === 'Constructor') {
+    const retConstructor = getConstructFuncVarValue(type, blocks, start, posSemicolon);
+    if (retConstructor) {
+      const { type: typeCon, value: valueCon, end: endCon } = retConstructor;
+      if (typeCon === 'ModelAndViewWithParam') {
+        const posSemicolon = blocks.findIndex(({ paths }, i) => i > start && endsWith(paths, 'Semicolon'));
+
+        // new ModelAndView("abc", model);
+        let retRBrace = lastRangeOfImages(blocks, posSemicolon, [',', /\w+/, ')', ';']);
+        if (!retRBrace) {
+          // new ModelAndView("abc");
+          retRBrace = lastRangeOfImages(blocks, posSemicolon, [')', ';']);
+        }
+        if (!retRBrace) {
+          throw new Error(`ModelAndView right part not found`);
+        }
+
+        const idxStart = endCon + 1;
+        const idxEnd = retRBrace.start + 1;
+        let values: JspView[] = [];
+        for (let j = idxStart; j <= idxEnd; j++) {
+          const { values: valuesSub, end: endSub } = getValues(blocks, j, posSemicolon);
+          if (valuesSub.length) {
+            values = cartesianTwo(values, valuesSub);
+            j = endSub;
+          }
+          // -1 to expose semicolon to getValuesByVariable
+          return { values, end: retRBrace.end - 1 };
+        }
+
+        return { values: valueCon ? [valueCon] : [], end: endCon };
+      } else {
+        return { values: [{ name: value, parsed: false }], end: endMain };
+      }
+    }
+  } else if (type === 'Function') {
+    const retFunc = getConstructFuncVarValue(type, blocks, start, posSemicolon);
+    if (retFunc) {
+      const { value, end } = retFunc;
+      return { values: value ? [value] : [], end };
+    } else {
+      return { values: [{ name: value, parsed: false }], end: endMain };
     }
   } else if (type === 'Variable') {
-    const valuesSub = getValuesByVariable(blocks, index2, value);
-    if (valuesSub.length) {
-      values = values.concat(valuesSub);
+    const retVar = getConstructFuncVarValue(type, blocks, start, posSemicolon);
+    if (retVar) {
+      const { value, end } = retVar;
+      return { values: value ? [value] : [], end };
+    } else {
+      const values = getValuesByVariable(blocks, start, posSemicolon, value);
+      return { values, end: endMain };
     }
-    return { values, end: index2 };
+  } else if (type === 'Literal') {
+    return { values: value ? [{ name: value, parsed: true }] : [], end: endMain };
+  } else if (type === 'Other') {
+    return { values: [{ name: value, parsed: false }], end: endMain };
   }
 
-  values.push({ name: value, parsed: false });
-  return { values, end: index2 };
+  throw new Error(`Wrong type: ${type}`);
 }
-function getValuesByVariable(blocks: PathsAndImage[], posVar: number, varName: string): JspView[] {
+function getValuesByVariable(
+  blocks: PathsAndImage[],
+  posVar: number,
+  posSemicolon: number,
+  varName: string
+): JspView[] {
   // String viewNm = "/mobile/dp/Etv";
   // {paths:["localVariableDeclarationStatement","localVariableDeclaration","localVariableType","unannType","unannReferenceType","unannClassOrInterfaceType","unannClassType","Identifier",],image:"String",},
   // {paths:["localVariableDeclarationStatement","localVariableDeclaration","variableDeclaratorList","variableDeclarator","variableDeclaratorId","Identifier",],image:"viewNm",},
@@ -491,100 +596,70 @@ function getValuesByVariable(blocks: PathsAndImage[], posVar: number, varName: s
   // {paths:["expressionStatement","statementExpression","expression","ternaryExpression","binaryExpression","expression","ternaryExpression","binaryExpression","unaryExpression","primary","primaryPrefix","literal","StringLiteral",],image:"\"/mobile/dp/Etv\"",},
   // {paths:["expressionStatement","Semicolon",],image:";",}
 
-  let varFound = false;
   let equalFound = false;
+  let valuesAll: JspView[] = [];
   let values: JspView[] = [];
   for (let i = 0; i < posVar; i++) {
     const { paths, image } = blocks[i];
+    const { paths: pathsNext, image: imageNext } = blocks[i];
 
-    const declare = !varFound && includes(paths, 'localVariableDeclarationStatement');
-    const assign = !varFound && includes(paths, 'expressionStatement');
+    const declare = !equalFound && includes(paths, 'localVariableDeclarationStatement');
+    const assign = !equalFound && includes(paths, 'expressionStatement');
 
-    if ((declare || assign) && image === varName) {
-      varFound = true;
-    } else if (varFound && (endsWith(paths, 'Equals') || endsWith(paths, 'AssignmentOperator'))) {
+    if (
+      (declare || assign) &&
+      image === varName &&
+      (endsWith(pathsNext, 'Equals') || endsWith(pathsNext, 'AssignmentOperator'))
+    ) {
       equalFound = true;
-    } else if (varFound && equalFound && !endsWith(paths, 'Semicolon')) {
-      const { values: valuesSub, end: endSub } = getValues(blocks, i);
+      i++;
+    } else if (equalFound && !endsWith(paths, 'Semicolon')) {
+      const { values: valuesSub, end: endSub } = getValues(blocks, i, posSemicolon);
       if (valuesSub.length) {
-        values = values.concat(valuesSub);
+        values = cartesianTwo(values, valuesSub);
         i = endSub;
       }
     } else if (endsWith(paths, 'Semicolon')) {
-      varFound = false;
       equalFound = false;
+
+      valuesAll = valuesAll.concat(values);
+      values = [];
     }
   }
 
-  return values;
+  return valuesAll;
 }
-function joinParsed(values: JspView[]): JspView | null {
-  const valuesNoPlus = values.filter(({ name }) => name !== '+');
-  if (!valuesNoPlus.length) return null;
+function cartesianTwo(values: JspView[], valuesSub: JspView[]): JspView[] {
+  const valuesNew: JspView[] = [];
 
-  const valuesParsed = valuesNoPlus.reduce((sum: JspView[], cur: JspView) => {
-    if (!sum.length) return [cur];
-
-    const prev = sum[sum.length - 1];
-    if (prev.parsed && cur.parsed) {
-      prev.name += cur.name;
-      return sum;
-    }
-
-    return [...sum, cur];
-  }, []);
-
-  const parsed = valuesParsed.length === 1 && valuesParsed[0].parsed;
-  if (parsed) {
-    return { name: valuesParsed[0].name, parsed };
-  } else {
-    return { name: valuesParsed.map(({ name }) => name).join(' '), parsed: false };
+  if (values.length === 0) {
+    values.push({ name: '', parsed: true });
   }
+  for (let i = 0; i < values.length; i++) {
+    const valueCur = values[i];
+
+    for (let j = 0; j < valuesSub.length; j++) {
+      const valuesSubCur = valuesSub[j];
+
+      const valueNew = mergeName(valueCur, valuesSubCur);
+      valuesNew.push(valueNew);
+    }
+  }
+
+  return valuesNew;
+}
+function mergeName(value1: JspView, value2: JspView): JspView {
+  const parsed = value1.parsed && value2.parsed;
+  return { name: `${value1.name}${value2.name}`, parsed };
 }
 function getValuesInReturn(blocks: PathsAndImage[], posReturn: number): JspView[] {
-  function getModelAndViewRange(
-    blocks: PathsAndImage[],
-    start: number,
-    end: number
-  ): { start: number; end: number } | null {
-    const retMv = rangeOfImages(blocks, start, ['new', 'ModelAndView', '(']);
-    if (!retMv) return null;
-
-    // new ModelAndView("abc", model);
-    let retRBrace = lastRangeOfImages(blocks, end, [',', /\w+/, ')', ';']);
-    if (!retRBrace) {
-      // new ModelAndView("abc");
-      retRBrace = lastRangeOfImages(blocks, end, [')', ';']);
-    }
-    if (!retRBrace) return null;
-
-    return { start: retMv.end + 1, end: retRBrace.start - 1 };
-  }
-
   let values: JspView[] = [];
 
   const posSemicolon = blocks.findIndex(({ paths }, i) => i > posReturn && endsWith(paths, 'Semicolon'));
-  // 1. Keep order
-  const ret = getModelAndViewRange(blocks, posReturn + 1, posSemicolon);
-  // 2.
-  const retFunc = !ret && getFuncValue(blocks, posReturn + 1);
-  if (ret) {
-    const { start, end } = ret;
-    let valuesRet: JspView[] = [];
-    for (let j = start; j <= end; j++) {
-      const { values: valuesSub, end: endSub } = getValues(blocks, j);
-      if (valuesSub.length) {
-        valuesRet = valuesRet.concat(valuesSub);
-        j = endSub;
-      }
-    }
-    const valueRetJoined = joinParsed(valuesRet);
-    if (valueRetJoined) {
-      values.push(valueRetJoined);
-    }
-  } else if (retFunc) {
-    const { value: valueFunc, end } = retFunc;
-    values.push(valueFunc);
+
+  const { values: valuesSub } = getValues(blocks, posReturn + 1, posSemicolon);
+  if (valuesSub.length) {
+    values = cartesianTwo(values, valuesSub);
   } else {
     const name = blocks
       .filter((v, i) => i > posReturn && i < posSemicolon)
@@ -612,7 +687,6 @@ function getJspViews(methodDecls: PathsAndImage[], posLCurly: number, posRCurly:
     return [];
   }
   const jspViews = getValuesInReturn(methodBlocks, posReturn);
-
   const jspViewsUnique = jspViews.reduce(
     (prev: JspView[], cur: JspView) => (!prev.some((jspView) => jspView.name === cur.name) ? [...prev, cur] : prev),
     []
