@@ -35,6 +35,5 @@ export const configCompositeTest: ConfigType = {
     outputDirectory: './output',
     logDirectory: './output/log',
   },
-
   startingPoint: 'map',
 };

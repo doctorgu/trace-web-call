@@ -1,15 +1,10 @@
-import { parse } from 'java-parser';
-import { exec as execProc } from 'child_process';
 import { statSync } from 'fs';
-import { promisify } from 'util';
 
-import { readFileSyncUtf16le, trims, trimEnd, trim } from './util';
-import { SqlTemplate } from '../common/sqliteHelper';
+import { trims, trimEnd, trim } from './util';
 import { config } from '../config/config';
-import { configReader } from '../config/configReader';
-import { runinsertToDbFirst } from './message';
+import { runInsertToDbFirst } from './message';
 import { getDbPath } from './common';
-import { getStartingToTables, RouteTable } from './traceHelper';
+import { getStartingToTables } from './traceHelper';
 import tClassInfo from '../sqlTemplate/TClassInfo';
 import tCommon from '../sqlTemplate/TCommon';
 import tCache from '../sqlTemplate/TCache';
@@ -23,7 +18,6 @@ import {
   includes,
   includes2,
   execImages,
-  getCstSimple,
   getPathsAndImagesFromSimpleCst,
   indexOf,
   rangeOfImages,
@@ -32,6 +26,7 @@ import {
 } from './cstHelper';
 import { getJspViewFinds, JspView, JspViewFind } from './jspHelper';
 import { configConstructor, configFunc, configVar, FuncInfo, FuncType, ignores, ValueType } from '../config/configFunc';
+import { getCstSimple, PathsAndImage } from './cstSimpleHelper';
 
 export type Keyword =
   | 'LCurly'
@@ -81,11 +76,6 @@ export type Keyword =
   | 'localVariableDeclarationStatement'
   | 'Equals'
   | 'AssignmentOperator';
-
-export type PathsAndImage = {
-  paths: string[];
-  image: string;
-};
 
 export type Mapping = {
   method: string;
@@ -860,7 +850,7 @@ export function getClassInfoFromDb(rootDir: string, fullPath: string): ClassInfo
 
   const rowHeader = tClassInfo.selectHeaderInfo(classPath);
   if (!rowHeader) {
-    throw new Error(runinsertToDbFirst);
+    throw new Error(runInsertToDbFirst);
   }
 
   const rowsMethod = tClassInfo.selectMethodInfo(classPath);
@@ -890,7 +880,7 @@ export function getClassInfoFromDb(rootDir: string, fullPath: string): ClassInfo
   return { classPath, header, methods };
 }
 
-function getCstSimpleFromDbCache(fullPath: string): any {
+function getCstSimpleFromDb(fullPath: string): any {
   try {
     const path = getDbPath(config.path.source.rootDir, fullPath);
     const mtime = statSync(fullPath).mtime;
@@ -915,7 +905,7 @@ export function getClassInfo(fullPath: string): {
   vars: VarInfo[];
   methods: MethodInfo[];
 } {
-  const cstSimple = getCstSimpleFromDbCache(fullPath);
+  const cstSimple = getCstSimpleFromDb(fullPath);
   // const cstSimple = getCstSimple(fullPath);
   const classDeclaration = getCstClassDeclaration(cstSimple);
   const pathsAndImageList = getPathsAndImagesFromSimpleCst(classDeclaration);

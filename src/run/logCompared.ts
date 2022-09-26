@@ -6,7 +6,20 @@ export function logCompared() {
   // Composite2 -> Composite
   const nameDest = config.name.substring(0, config.name.length - 1);
   const pathDest = `${config.path.databaseDirectory}/${nameDest}.db`;
-  const { diffTable, insertedTable, deletedTable, diffJsp, insertedJsp, deletedJsp } = tCommon.selectCompare(pathDest);
+  const {
+    diffTable,
+    insertedTable,
+    deletedTable,
+    diffJsp,
+    insertedJsp,
+    deletedJsp,
+    diffTableSql,
+    insertedTableSql,
+    deletedTableSql,
+    diffJspSql,
+    insertedJspSql,
+    deletedJspSql,
+  } = tCommon.selectCompare(pathDest);
   if (
     !diffTable.length &&
     !insertedTable.length &&
@@ -20,64 +33,22 @@ export function logCompared() {
   }
 
   if (diffTable.length) {
-    console.log(
-      'diffTable',
-      JSON.stringify(
-        diffTable.filter((v, i) => i <= 5),
-        null,
-        '  '
-      )
-    );
+    console.log('diffTable', diffTable.length, diffTableSql);
   }
   if (insertedTable.length) {
-    console.log(
-      'insertedTable',
-      JSON.stringify(
-        insertedTable.filter((v, i) => i <= 5),
-        null,
-        '  '
-      )
-    );
+    console.log('insertedTable', insertedTable.length, insertedTableSql);
   }
   if (deletedTable.length) {
-    console.log(
-      'deletedTable',
-      JSON.stringify(
-        deletedTable.filter((v, i) => i <= 5),
-        null,
-        '  '
-      )
-    );
+    console.log('deletedTable', deletedTable.length, deletedTableSql);
   }
 
   if (diffJsp.length) {
-    console.log(
-      'diffJsp',
-      JSON.stringify(
-        diffJsp.filter((v, i) => i <= 5),
-        null,
-        '  '
-      )
-    );
+    console.log('diffJsp', diffJsp.length, diffJspSql);
   }
   if (insertedJsp.length) {
-    console.log(
-      'insertedJsp',
-      JSON.stringify(
-        insertedJsp.filter((v, i) => i <= 5),
-        null,
-        '  '
-      )
-    );
+    console.log('insertedJsp', insertedJsp.length, insertedJspSql);
   }
   if (deletedJsp.length) {
-    console.log(
-      'deletedJsp',
-      JSON.stringify(
-        deletedJsp.filter((v, i) => i <= 5),
-        null,
-        '  '
-      )
-    );
+    console.log('deletedJsp', deletedJsp.length, deletedJspSql);
   }
 }

@@ -3,7 +3,6 @@ import { resolve } from 'path';
 import { findFiles, logTimeMsg } from '../common/util';
 import {
   ClassInfo,
-  getFindsByClassPathClassNameFromDb,
   insertClassInfo,
   insertMethodInfoFindKeyName,
   insertRouteTableKeyName,
@@ -15,6 +14,9 @@ import {
   insertXmlInfoXmlNodeInfo,
   XmlInfo,
   insertXmlInfoFindKeyName,
+  getTablesFromDb,
+  getObjectTypeAndObjectAndTablesFromDb,
+  getObjectAndTablesFromDb,
 } from '../common/batisHelper';
 import { config } from '../config/config';
 import { configReader } from '../config/configReader';
@@ -88,11 +90,21 @@ export function insertToDb() {
 
   const { rootDir } = config.path.source;
 
-  const tablesAll = insertTablesToDb();
-  startTime = logTimeMsg(startTime, `insertTablesToDb`);
+  let tablesAll = getTablesFromDb();
+  if (tablesAll.size) {
+    startTime = logTimeMsg(startTime, `insertTablesToDb skipped`);
+  } else {
+    tablesAll = insertTablesToDb();
+    startTime = logTimeMsg(startTime, `insertTablesToDb`);
+  }
 
-  const objectAndTablesAll = insertObjectAndTables(tablesAll);
-  startTime = logTimeMsg(startTime, `insertObjectAndTables`);
+  let objectAndTablesAll = getObjectAndTablesFromDb();
+  if (objectAndTablesAll.size) {
+    startTime = logTimeMsg(startTime, `insertObjectAndTables skipped`);
+  } else {
+    objectAndTablesAll = insertObjectAndTables(tablesAll);
+    startTime = logTimeMsg(startTime, `insertObjectAndTables`);
+  }
 
   tCommon.insertKeyInfo(config.path.source.main.map(({ keyName }) => ({ keyName })));
   startTime = logTimeMsg(startTime, `insertKeyInfo`);
@@ -102,7 +114,7 @@ export function insertToDb() {
     classInfos: classInfosDep,
     xmlInfos: xmlInfosDep,
   } = insertJspClassXml(rootDir, tablesAll, objectAndTablesAll, config.path.source.dependency);
-  startTime = logTimeMsg(startTime, `insertJspClassXml`);
+  startTime = logTimeMsg(startTime, `insertJspClassXml Dependency`);
 
   for (let i = 0; i < config.path.source.main.length; i++) {
     const {
@@ -121,7 +133,7 @@ export function insertToDb() {
           classInfosStarting.push(classInfo);
         }
       }
-      startTime = logTimeMsg(startTime, `insertClassInfo ${directory}`);
+      startTime = logTimeMsg(startTime, `insertClassInfo Starting ${directory}`);
     }
 
     const {
@@ -134,7 +146,7 @@ export function insertToDb() {
       objectAndTablesAll,
       serviceXmlJspDirs.service.directory ? [serviceXmlJspDirs] : []
     );
-    startTime = logTimeMsg(startTime, `insertJspClassXml ${directory}`);
+    startTime = logTimeMsg(startTime, `insertJspClassXml Main ${directory}`);
 
     const jspPathsCur = [...jspInfosDep, ...jspInfosMain].map(({ jspPath }) => jspPath);
     const classInfosCur = [...classInfosDep, ...classInfosStarting, ...classInfosMain];

@@ -1,24 +1,6 @@
-import { parse } from 'java-parser';
-import { exec as execProc } from 'child_process';
-import { statSync } from 'fs';
-import { promisify } from 'util';
-
-import { readFileSyncUtf16le, trims, trimEnd, findLastIndex } from './util';
-import { SqlTemplate } from '../common/sqliteHelper';
-import { config } from '../config/config';
-import { configReader } from '../config/configReader';
-import { runinsertToDbFirst } from './message';
-import { getDbPath } from './common';
-import { getStartingToTables, RouteTable } from './traceHelper';
-import tClassInfo from '../sqlTemplate/TClassInfo';
-import tCommon from '../sqlTemplate/TCommon';
-import tCache from '../sqlTemplate/TCache';
+import { findLastIndex } from './util';
 import { Keyword } from './classHelper';
-
-export type PathsAndImage = {
-  paths: string[];
-  image: string;
-};
+import { PathsAndImage } from './cstSimpleHelper';
 
 export function getProperty(parent: any, paths: string[]): any {
   const kvList = Object.entries(parent);
@@ -46,30 +28,6 @@ export function getValue(parent: any, pathDotSeparated: string): string {
   if (prop === null) return '';
 
   return prop;
-}
-
-function getSimplifiedCst(pathsAndImageList: PathsAndImage[]) {
-  const treeNew: any = {};
-  for (let i = 0; i < pathsAndImageList.length; i++) {
-    const { paths, image } = pathsAndImageList[i];
-
-    let child = treeNew;
-    for (let i = 0; i < paths.length - 1; i++) {
-      const path = paths[i];
-
-      if (!(path in child)) {
-        const nextPathIsIndex = !isNaN(parseInt(paths[i + 1]));
-        if (nextPathIsIndex) {
-          child[path] = [];
-        } else {
-          child[path] = {};
-        }
-      }
-      child = child[path];
-    }
-    child[paths[paths.length - 1]] = image;
-  }
-  return treeNew;
 }
 
 function getOpeningPosition(
@@ -179,42 +137,6 @@ export function getPathsAndImagesFromSimpleCst(parent: any) {
   // return new ModelAndView("redirect:https://" + ConfigUtil.getString("server.host") + "/p/cob/registMrMember.do", model);
   const pathsAndImageListOrdered = reorderBinaryOperator(pathsAndImageList);
   return pathsAndImageListOrdered;
-}
-
-function getPathsAndImageListFromCst2(parent: any, paths: string[], pathsAndImageList: PathsAndImage[]): void {
-  const children = parent.children;
-  // All leaf property name which has value is always 'image', so do not add 'image' to paths
-  if ('image' in parent) {
-    const image = parent.image;
-    pathsAndImageList.push({ paths, image });
-    return;
-  }
-  if (!children) {
-    throw new Error(`No children in ${paths.join('.')}`);
-  }
-
-  const kvList = Object.entries(children);
-  for (let i = 0; i < kvList.length; i++) {
-    const [key, value] = kvList[i];
-
-    const prop = children[key];
-
-    if (Array.isArray(value) && value.length) {
-      const useIndex = value.length > 1;
-      for (let i = 0; i < value.length; i++) {
-        const pathsNew = [...paths];
-        pathsNew.push(key);
-        if (useIndex) pathsNew.push(i.toString());
-        getPathsAndImageListFromCst2(prop[i], pathsNew, pathsAndImageList);
-      }
-    }
-  }
-}
-function getPathsAndImageListFromCst(parent: any) {
-  const paths: string[] = [];
-  const pathsAndImageList: PathsAndImage[] = [];
-  getPathsAndImageListFromCst2(parent, paths, pathsAndImageList);
-  return pathsAndImageList;
 }
 
 export function endsWith2(paths: string[], finds: Keyword[]): boolean {
@@ -420,13 +342,4 @@ export function getRBracePosition(pathsAndImages: PathsAndImage[], posLBrace: nu
   }
 
   throw new Error(`RBrace not found after ${posLBrace} index.`);
-}
-
-export function getCstSimple(fullPath: string): any {
-  const content = readFileSyncUtf16le(fullPath);
-  const cst = parse(content);
-
-  const pathsAndImages = getPathsAndImageListFromCst(cst);
-  const cstSimple = getSimplifiedCst(pathsAndImages);
-  return cstSimple;
 }

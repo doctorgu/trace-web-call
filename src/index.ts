@@ -4,7 +4,7 @@ import { writeFileSync } from 'fs';
 import { resolve } from 'path';
 import { config } from './config/config';
 import { getClassInfo, getFindsByClassPathClassNameFromDb } from './common/classHelper';
-import { getCstSimple } from './common/cstHelper';
+import { getCstSimple } from './common/cstSimpleHelper';
 import { getXmlNodeInfoFinds, getStartingToTables, RouteTable } from './common/traceHelper';
 import { findFiles, readFileSyncUtf16le, removeCommentLiteralSql } from './common/util';
 import { insertToDb } from './run/insertToDb';

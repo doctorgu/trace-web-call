@@ -1,7 +1,4 @@
 export const sqlInit = `
-drop table if exists Tables;
-drop table if exists ObjectAndTables;
-
 drop table if exists XmlInfo;
 drop table if exists XmlNodeInfo;
 drop table if exists XmlNodeInfoFind;
@@ -21,20 +18,6 @@ drop view if exists vStartToTables;
 drop view if exists vJspViews;
 
 -- strict removed because SQLiteStudio does not support it.
-
-create table Tables (
-    name text not null primary key,
-    insertTime timestamp not null default current_timestamp
-);
-
-create table ObjectAndTables (
-    objectType text not null,
-    object text not null primary key,
-    tables text not null,
-    insertTime timestamp not null default current_timestamp
-);
-create index IxObjectAndTables1 on ObjectAndTables (objectType);
-
 
 create table KeyInfo (
     keyName text not null primary key,
@@ -126,6 +109,15 @@ create table MethodInfoFind (
 create index IxMethodInfoFind1 on MethodInfoFind (keyName, name, parameterCount, className, implementsName);
 create index IxMethodInfoFind2 on MethodInfoFind (keyName, classPath);
 
+
+create table JspInfo (
+    jspPath text not null,
+    includes text not null,
+    insertTime timestamp not null default current_timestamp,
+    primary key (jspPath)
+);
+
+
 create table RouteTable (
     keyName text not null,
     groupSeq int not null,
@@ -154,13 +146,6 @@ create table RouteJsp (
     valueJsp text not null,
     insertTime timestamp not null default current_timestamp,
     primary key (keyName, groupSeq, seq)
-);
-
-create table JspInfo (
-    jspPath text not null,
-    includes text not null,
-    insertTime timestamp not null default current_timestamp,
-    primary key (jspPath)
 );
 
 

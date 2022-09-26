@@ -67,6 +67,5 @@ export const configComposite: ConfigType = {
     outputDirectory: './output',
     logDirectory: './output/log',
   },
-
   startingPoint: 'map',
 };

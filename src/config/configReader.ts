@@ -1,8 +1,13 @@
 import { existsSync, statSync, readdirSync } from 'fs';
 import betterSqlite3 from 'better-sqlite3';
 import { readFileSyncUtf16le, regexpSqlite, testWildcardFileName, testWildcardFileNameSqlite } from '../common/util';
-import { getTablesFromDb, ObjectType, ObjectAndTables, getObjectAndTablesFromDb } from '../common/batisHelper';
-import { runinsertToDbFirst } from '../common/message';
+import {
+  getTablesFromDb,
+  ObjectType,
+  ObjectAndTables,
+  getObjectTypeAndObjectAndTablesFromDb,
+} from '../common/batisHelper';
+import { runInsertToDbFirst } from '../common/message';
 import { config } from './config';
 import { sqlCacheInit } from './sqlCache';
 
@@ -63,7 +68,7 @@ export const configReader = {
 
     const tablesDb = getTablesFromDb();
     if (!tablesDb.size) {
-      throw new Error(runinsertToDbFirst);
+      throw new Error(runInsertToDbFirst);
     }
 
     _tables = tablesDb;
@@ -74,12 +79,7 @@ export const configReader = {
       return _objectTypeAndObjectAndTables;
     }
 
-    const objectTypes: ObjectType[] = ['view', 'function', 'procedure'];
-    for (const objectType of objectTypes) {
-      const objectAndTablesDb = getObjectAndTablesFromDb(objectType);
-      _objectTypeAndObjectAndTables.set(objectType, objectAndTablesDb);
-    }
-
+    _objectTypeAndObjectAndTables = getObjectTypeAndObjectAndTablesFromDb();
     return _objectTypeAndObjectAndTables;
   },
   objectAndTables: (objectType: ObjectType): ObjectAndTables => {

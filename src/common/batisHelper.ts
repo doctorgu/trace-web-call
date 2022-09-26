@@ -6,12 +6,13 @@ import {
   trims,
   readFileSyncUtf16le,
   escapeDollar,
+  findFiles,
 } from './util';
 import { config } from '../config/config';
 import { readdirSync, existsSync, statSync } from 'fs';
 import { resolve } from 'path';
 import { getDbPath } from './common';
-import tTables from '../sqlTemplate/TTables';
+import tCache from '../sqlTemplate/TCache';
 import tXmlInfo from '../sqlTemplate/TXmlInfo';
 
 export type XmlNodeInfo = {
@@ -35,15 +36,44 @@ export type ObjectAndTables = Map<string, Set<string>>;
 export type ObjectType = 'view' | 'function' | 'procedure';
 
 export function getTablesFromDb(): Set<string> {
-  const rows = tTables.selectTables();
+  const path = config.path.data.tables;
+  const rows = tCache.selectTables(path);
   const tables = new Set(rows.map(({ name }) => name));
   return tables;
 }
 
-export function getObjectAndTablesFromDb(objectType: ObjectType): ObjectAndTables {
-  const rows = tTables.selectObjectAndTables(objectType);
-  const objectAndTables = new Map(rows.map(({ object, tables }) => [object, new Set<string>(JSON.parse(tables))]));
-  return objectAndTables;
+export function getObjectTypeAndObjectAndTablesFromDb(): Map<ObjectType, ObjectAndTables> {
+  const rowsView = tCache.selectObjectAndTables(config.path.data.views, 'view');
+  const rowsFunction = tCache.selectObjectAndTables(config.path.data.views, 'function');
+  const rowsProcedure = tCache.selectObjectAndTables(config.path.data.views, 'procedure');
+
+  const objectAndTablesView = new Map<string, Set<string>>(
+    rowsView.map(({ object, tables }) => [object, new Set<string>(JSON.parse(tables))])
+  );
+  const objectAndTablesFunction = new Map<string, Set<string>>(
+    rowsFunction.map(({ object, tables }) => [object, new Set<string>(JSON.parse(tables))])
+  );
+  const objectAndTablesProcedure = new Map<string, Set<string>>(
+    rowsProcedure.map(({ object, tables }) => [object, new Set<string>(JSON.parse(tables))])
+  );
+
+  const objectTypeAndObjectAndTables = new Map<ObjectType, ObjectAndTables>();
+  objectTypeAndObjectAndTables.set('view', objectAndTablesView);
+  objectTypeAndObjectAndTables.set('function', objectAndTablesFunction);
+  objectTypeAndObjectAndTables.set('procedure', objectAndTablesProcedure);
+
+  return objectTypeAndObjectAndTables;
+}
+
+export function getObjectAndTablesFromDb(): ObjectAndTables {
+  const objectTypeAndObjectAndTables = getObjectTypeAndObjectAndTablesFromDb();
+
+  let objectAndTablesAll = new Map<string, Set<string>>();
+  objectTypeAndObjectAndTables.forEach((objectAndTables) => {
+    objectAndTablesAll = new Map<string, Set<string>>([...objectAndTablesAll, ...objectAndTables]);
+  });
+
+  return objectAndTablesAll;
 }
 
 export function getObjectAndTablesByObjectType(objectType: ObjectType, tables: Set<string>): ObjectAndTables {
@@ -68,20 +98,13 @@ export function getObjectAndTablesByObjectType(objectType: ObjectType, tables: S
   if (!existsSync(path)) {
     objectTypeAndObjectAndTables.set(objectType, objectAndTables);
   } else {
-    if (statSync(path).isDirectory()) {
-      const files = readdirSync(path);
-      files.forEach((file) => {
-        const value = readFileSyncUtf16le(resolve(path, file));
-        const objectAndTablesCur = getObjectAndTables(value, tables, objectType);
-        objectAndTablesCur.forEach((tables, object) => {
-          objectAndTables.set(object, tables);
-        });
+    const fullPaths = statSync(path).isDirectory() ? [...findFiles(path)] : [path];
+    for (const fullPath of fullPaths) {
+      const value = readFileSyncUtf16le(fullPath);
+      const objectAndTablesCur = getObjectAndTables(value, tables, objectType);
+      objectAndTablesCur.forEach((tables, object) => {
+        objectAndTables.set(object, tables);
       });
-
-      objectTypeAndObjectAndTables.set(objectType, objectAndTables);
-    } else {
-      const value = readFileSyncUtf16le(path);
-      const objectAndTables = getObjectAndTables(value, tables, objectType);
 
       objectTypeAndObjectAndTables.set(objectType, objectAndTables);
     }
@@ -94,12 +117,12 @@ function getObjectAsUpper(sql: string): Map<string, string> {
   const objectAndSchemaDotObject = new Map<string, string>();
 
   let m: RegExpExecArray | null;
-  const re = /(?<schemaDot>\w+\.)*(?<table>\w+)/g;
+  const re = /(?<schemaDot>\w+\.)*(?<object>\w+)/g;
   while ((m = re.exec(sql)) !== null) {
     const schemaDot = m.groups?.schemaDot?.toUpperCase() || '';
-    const table = m.groups?.table.toUpperCase() || '';
+    const object = m.groups?.object.toUpperCase() || '';
 
-    objectAndSchemaDotObject.set(table, `${schemaDot}${table}`);
+    objectAndSchemaDotObject.set(object, `${schemaDot}${object}`);
   }
 
   return objectAndSchemaDotObject;
@@ -131,19 +154,6 @@ function getObjects(
   return { tables, objectAndTables };
 }
 
-export function getObjectAndTables(sql: string, tablesAll: Set<string>, objectType: ObjectType): ObjectAndTables {
-  switch (objectType) {
-    case 'view':
-      return getViewAndTables(sql, tablesAll);
-    case 'function':
-      return getFunctionAndTables(sql, tablesAll);
-    case 'procedure':
-      return getProcedureAndTables(sql, tablesAll);
-    default:
-      throw new Error(`Wrong objectType: ${objectType}`);
-  }
-}
-
 export function getViewAndTables(sql: string, tablesAll: Set<string>): ObjectAndTables {
   const sqlNoComment = removeCommentLiteralSql(sql);
 
@@ -163,7 +173,6 @@ export function getViewAndTables(sql: string, tablesAll: Set<string>): ObjectAnd
 
   return objectAndTables;
 }
-
 export function getFunctionAndTables(sql: string, tablesAll: Set<string>): ObjectAndTables {
   const sqlNoComment = removeCommentLiteralSql(sql);
 
@@ -183,7 +192,6 @@ export function getFunctionAndTables(sql: string, tablesAll: Set<string>): Objec
 
   return objectAndTables;
 }
-
 export function getProcedureAndTables(sql: string, tablesAll: Set<string>): ObjectAndTables {
   const sqlNoComment = removeCommentLiteralSql(sql);
 
@@ -202,6 +210,18 @@ export function getProcedureAndTables(sql: string, tablesAll: Set<string>): Obje
   }
 
   return objectAndTables;
+}
+export function getObjectAndTables(sql: string, tablesAll: Set<string>, objectType: ObjectType): ObjectAndTables {
+  switch (objectType) {
+    case 'view':
+      return getViewAndTables(sql, tablesAll);
+    case 'function':
+      return getFunctionAndTables(sql, tablesAll);
+    case 'procedure':
+      return getProcedureAndTables(sql, tablesAll);
+    default:
+      throw new Error(`Wrong objectType: ${objectType}`);
+  }
 }
 
 function getTextCdataFromElement(elem: Element): string {
@@ -286,29 +306,18 @@ export function insertTablesToDb(): Set<string> {
 
   const path = config.path.data.tables;
 
-  if (statSync(path).isDirectory()) {
+  const fullPaths = statSync(path).isDirectory() ? [...findFiles(path)] : [path];
+  for (const fullPath of fullPaths) {
     let values: string[] = [];
 
-    const files = readdirSync(path);
-    files.forEach((file) => {
-      const value = readFileSyncUtf16le(resolve(path, file));
-      values = values.concat(value.split(/\r*\n/));
-    });
+    const value = readFileSyncUtf16le(fullPath);
+    values = values.concat(value.split(/\r*\n/));
 
     tablesNew = new Set(values.filter((v) => !!v).map((v) => v.toUpperCase()));
-  } else {
-    const value = readFileSyncUtf16le(path);
-    tablesNew = new Set(
-      value
-        .split(/\r*\n/)
-        .filter((v) => !!v)
-        .map((v) => v.toUpperCase())
-    );
   }
-
   if (!tablesNew.size) return tablesNew;
 
-  tTables.insertTables(tablesNew);
+  tCache.insertTables(path, tablesNew);
 
   return tablesNew;
 }
@@ -326,7 +335,12 @@ export function insertObjectAndTables(tables: Set<string>): ObjectAndTables {
     0
   );
   if (count) {
-    tTables.insertObjectAndTables(objectTypeAndObjectAndTables);
+    const objectTypeAndPath = new Map<ObjectType, string>([
+      ['view', config.path.data.views],
+      ['function', config.path.data.functions],
+      ['procedure', config.path.data.procedures],
+    ]);
+    tCache.insertObjectAndTables(objectTypeAndPath, objectTypeAndObjectAndTables);
   }
 
   const objectAndTablesAll = new Map<string, Set<string>>();

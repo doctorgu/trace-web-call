@@ -14,7 +14,7 @@ import { config } from '../config/config';
 import { configReader } from '../config/configReader';
 import { StartingPoint } from '../config/ConfigType';
 import tClassInfo from '../sqlTemplate/TClassInfo';
-import tTables from '../sqlTemplate/TTables';
+import tCache from '../sqlTemplate/TCache';
 import tXmlInfo from '../sqlTemplate/TXmlInfo';
 import { filterJspFromJsp, getJspInfoFromDb, JspInfo, viewNameToJspPath } from './jspHelper';
 

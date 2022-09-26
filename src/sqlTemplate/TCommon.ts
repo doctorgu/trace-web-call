@@ -1,10 +1,9 @@
 import betterSqlite3 from 'better-sqlite3';
 import { parse, basename } from 'path';
 import { configReader } from '../config/configReader';
-import { ObjectAndTables, ObjectType } from '../common/batisHelper';
 import { escapeDollar } from '../common/util';
 import { DbRow, SqlTemplate } from '../common/sqliteHelper';
-import { all, exec, get, run } from '../common/sqliteHelper';
+import { all, exec, run } from '../common/sqliteHelper';
 import { RouteJsp, RouteTable, RouteTypeJsp, RouteTypeTable } from '../common/traceHelper';
 
 class TCommon {
@@ -196,6 +195,13 @@ attach database '${pathDest}' as ${dbNameDest}`;
       diffJsp: rowsDiffMap.get('jsp') as DbRow[],
       insertedJsp: rowsInsertedMap.get('jsp') as DbRow[],
       deletedJsp: rowsDeletedMap.get('jsp') as DbRow[],
+
+      diffTableSql: sqlDiffMap.get('table'),
+      insertedTableSql: sqlInsertedMap.get('table'),
+      deletedTableSql: sqlDeletedMap.get('table'),
+      diffJspSql: sqlDiffMap.get('jsp'),
+      insertedJspSql: sqlInsertedMap.get('jsp'),
+      deletedJspSql: sqlDeletedMap.get('jsp'),
     };
   }
 }
