@@ -1,11 +1,11 @@
 import { configReader } from '../config/configReader';
 import betterSqlite3 from 'better-sqlite3';
-import { all, pluck, exec, SqlTemplate } from '../common/sqliteHelper';
+import { all, pluck, exec, SqlTemplate, DbRow } from '../common/sqliteHelper';
 import { JspInfo } from '../common/jspHelper';
 import { escapeDollar } from '../common/util';
 
 class TJspInfo {
-  selectJspInfo(): { [key: string]: any }[] {
+  selectJspInfo(): DbRow[] {
     const sql = `
 select  jspPath, includes
 from    JspInfo

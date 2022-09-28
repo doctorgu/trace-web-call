@@ -36,8 +36,14 @@ create table XmlNodeInfo (
     id text not null,
     tagName text not null,
     params text not null,
-    tables text not null,
-    objectAndTables text not null,
+
+    objects text not null,
+    tablesInsert text not null,
+    tablesUpdate text not null,
+    tablesDelete text not null,
+    tablesOther text not null,
+    selectExists int not null check (selectExists in (0, 1)),
+
     insertTime timestamp not null default current_timestamp,
     primary key (xmlPath, id),
     foreign key (xmlPath) references XmlInfo (xmlPath) on update cascade on delete cascade
@@ -50,8 +56,14 @@ create table XmlNodeInfoFind (
     namespaceId text not null,
     tagName text not null,
     params text not null,
-    tables text not null,
-    objectAndTables text not null,
+
+    objects text not null,
+    tablesInsert text not null,
+    tablesUpdate text not null,
+    tablesDelete text not null,
+    tablesOther text not null,
+    selectExists int not null check (selectExists in (0, 1)),
+
     insertTime timestamp not null default current_timestamp,
     primary key (keyName, id, xmlPath),
     foreign key (keyName) references KeyInfo (keyName) on update cascade on delete cascade
@@ -127,10 +139,17 @@ create table RouteTable (
     valueMapping text not null,
     valueMethod text not null,
     valueXml text not null,
-    valueTable text not null,
     valueView text not null,
     valueFunction text not null,
     valueProcedure text not null,
+
+    objects text not null,
+    tablesInsert text not null,
+    tablesUpdate text not null,
+    tablesDelete text not null,
+    tablesOther text not null,
+    selectExists int not null check (selectExists in (0, 1)),
+    
     insertTime timestamp not null default current_timestamp,
     primary key (keyName, groupSeq, seq)
 );
@@ -154,104 +173,128 @@ as
 select  r.keyName, r.groupSeq, r.seq, min(r.depth) depth, min(r.routeType) routeType,
         ifnull(
             case routeType
-            when 'mapping' then group_concat(jMapping.value, ',')
-            when 'method' then group_concat(r.valueMethod, ',')
-            when 'xml' then group_concat(r.valueXml, ',')
-            when 'table' then group_concat(jTable.value, ',')
-            when 'view' then
-                group_concat(
-                    case when jView.key = 'object' then
-                        jView.value
-                    else
-                        '(' || ifnull((select group_concat(value) from json_each(jView.value)), '') || ')'
-                    end, ''
-                )
-            when 'function' then
-                group_concat(
-                    case when jFunction.key = 'object' then
-                        jFunction.value
-                    else
-                        '(' || ifnull((select group_concat(value) from json_each(jFunction.value)), '') || ')'
-                    end, ''
-                )
-            when 'procedure' then
-                group_concat(
-                    case when jProcedure.key = 'object' then
-                        jProcedure.value
-                    else
-                        '(' || ifnull((select group_concat(value) from json_each(jProcedure.value)), '') || ')'
-                    end, ''
-                )
+            when 'mapping' then group_concat(jMapping.value)
+            when 'method' then group_concat(r.valueMethod)
+            when 'xml' then group_concat(r.valueXml)
+            when 'view' then group_concat(r.valueView)
+            when 'function' then group_concat(r.valueFunction)
+            when 'procedure' then group_concat(r.valueProcedure)
             end
         , ''
-        ) value
+        ) value,
+
+        ifnull(
+            case when routeType in ('xml', 'view', 'function', 'procedure') then
+                group_concat(jObjects.value)
+            end
+        , '') objects,
+        ifnull(
+            case when routeType in ('xml', 'view', 'function', 'procedure') then
+                group_concat(jTablesInsert.value)
+            end
+        , '') tablesInsert,
+        ifnull(
+            case when routeType in ('xml', 'view', 'function', 'procedure') then
+                group_concat(jTablesUpdate.value)
+            end
+        , '') tablesUpdate,
+        ifnull(
+            case when routeType in ('xml', 'view', 'function', 'procedure') then
+                group_concat(jTablesDelete.value)
+            end
+        , '') tablesDelete,
+        ifnull(
+            case when routeType in ('xml', 'view', 'function', 'procedure') then
+                group_concat(jTablesOther.value)
+            end
+        , '') tablesOther,
+        ifnull(
+            case when routeType in ('xml', 'view', 'function', 'procedure') then
+                group_concat(jSelectExists.value)
+            end
+        , '') selectExists
+
 from    RouteTable r
         left join json_each(r.valueMapping) jMapping
-        left join json_each(r.valueTable) jTable
-        left join json_each(r.valueView) jView
-        left join json_each(r.valueFunction) jFunction
-        left join json_each(r.valueProcedure) jProcedure
+        left join json_each(r.objects) jObjects
+        left join json_each(r.tablesInsert) jTablesInsert
+        left join json_each(r.tablesUpdate) jTablesUpdate
+        left join json_each(r.tablesDelete) jTablesDelete
+        left join json_each(r.tablesOther) jTablesOther
+        left join json_each(r.selectExists) jSelectExists
+
 group by r.keyName, r.groupSeq, r.seq;
+
 
 create view vRouteTableTxt
 as
-select  keyName, groupSeq, seq,
-        case when seq = 0 then char(13) else '' end
-        || substring('         ' || routeType, -9)
+select  keyName, groupSeq, seq, depth, routeType, value,
+        substring('         ' || routeType, -9)
         || ': ' ||
         case when depth > 0 then
             replace(substring(printf('%0' || (depth * 4) || 'd', 0) || '+-- ', 5), '0', ' ')
         else
             ''
         end
-        || value output
+        || value output,
+        objects, tablesInsert, tablesUpdate, tablesDelete, tablesOther, selectExists
 from    vRouteTable;
+
 
 create view vStartToTables
 as
+with 
+R4 as
+(
+    select  keyName, groupSeq, seq,
+            jInsert.value tablesInsert, jUpdate.value tablesUpdate, jDelete.value tablesDelete, jOther.value tablesOther
+    from    RouteTable r
+            left join json_each(r.tablesInsert) jInsert
+            left join json_each(r.tablesUpdate) jUpdate
+            left join json_each(r.tablesDelete) jDelete
+            left join json_each(r.tablesOther) jOther
+    where   routeType in ('xml', 'view', 'function', 'procedure')
+),
+AllTables as
+(
+    select  keyName, groupSeq, seq, tablesInsert tables
+    from    R4
+    union all
+    select  keyName, groupSeq, seq, tablesUpdate tables
+    from    R4
+    union all
+    select  keyName, groupSeq, seq, tablesDelete tables
+    from    R4
+    union all
+    select  keyName, groupSeq, seq, tablesOther tables
+    from    R4
+)
 select  keyName, groupSeq, group_concat(start) start, group_concat(distinct tables) tables
 from    (
         select  r.keyName, r.groupSeq,
         
-                case routeType 
+                case r.routeType 
                 when 'mapping' then jMapping.value
                 when 'method' then r.valueMethod
                 end start,
         
-                case routeType
-                when 'table' then jTable.value
-                when 'view' then jView.value
-                when 'function' then jFunction.value
-                when 'procedure' then jProcedure.value
+                case when routeType in ('xml', 'view', 'function', 'procedure') then
+                    a.tables
                 end tables
+
         from    RouteTable r
                 left join json_each(r.valueMapping) jMapping
-                left join json_each(r.valueTable) jTable
-                left join json_each(r.valueView, '$.tables') jView
-                left join json_each(r.valueFunction, '$.tables') jFunction
-                left join json_each(r.valueProcedure, '$.tables') jProcedure
-        where   r.seq = 0 and r.routeType in ('mapping', 'method')
-                or r.routeType in ('table', 'view', 'function', 'procedure')
+                left join AllTables a
+                on r.keyName = a.keyName
+                and r.groupSeq = a.groupSeq
+                and r.seq = a.seq
+
+        where   (r.seq = 0 and r.routeType in ('mapping', 'method'))
+                or r.routeType in ('xml', 'view', 'function', 'procedure')
         order by r.keyName, r.groupSeq, tables
         )
 group by keyName, groupSeq;
 
-
-create view vRouteJsp
-as
-select  r.keyName, r.groupSeq, r.seq, min(r.depth) depth, min(r.routeType) routeType,
-        ifnull(
-            case routeType
-            when 'mapping' then group_concat(jMapping.value, ',')
-            when 'method' then group_concat(r.valueMethod, ',')
-            when 'jsp' then group_concat(jJsp.value, ',')
-            end
-        , ''
-        ) value
-from    RouteJsp r
-        left join json_each(r.valueMapping) jMapping
-        left join json_each(r.valueJsp) jJsp
-group by r.keyName, r.groupSeq, r.seq;
 
 create view vRouteJspTxt
 as
@@ -266,6 +309,7 @@ select  keyName, groupSeq, seq,
         end
         || value output
 from    vRouteJsp;
+
 
 create view vStartToJsps
 as

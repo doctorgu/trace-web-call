@@ -1,4 +1,4 @@
-import { all, exec, get, pluck, run } from '../common/sqliteHelper';
+import { all, DbRow, exec, get, pluck, run } from '../common/sqliteHelper';
 import { escapeDollar } from '../common/util';
 import { SqlTemplate } from '../common/sqliteHelper';
 import { configReader } from '../config/configReader';
@@ -24,7 +24,7 @@ where   classPath = @classPath
     return get(configReader.db(), sql, { classPath });
   }
 
-  selectMethodInfo(classPath: string): any[] {
+  selectMethodInfo(classPath: string): DbRow[] {
     const sql = `
 select  mapping, isPublic, returnType, name, parameterCount, callers, jspViews
 from    MethodInfo
@@ -33,7 +33,7 @@ where   classPath = @classPath
     return all(configReader.db(), sql, { classPath });
   }
 
-  selectMethodInfoFindByKeyName(keyName: string): any[] {
+  selectMethodInfoFindByKeyName(keyName: string): DbRow[] {
     const sql = `
 select  classPath, className, implementsName, extendsName, mappingMethod, mappingValues, isPublic, returnType, name, parameterCount, callers, jspViewFinds
 from    MethodInfoFind
@@ -47,7 +47,7 @@ where   keyName = @keyName
     classPathLike: string,
     fileNameWildcard: string,
     fileNamePattern: string
-  ): any[] {
+  ): DbRow[] {
     const sql = `
 select  classPath, className, implementsName, extendsName, mappingMethod, mappingValues, isPublic, returnType, name, parameterCount, callers, jspViewFinds
 from    MethodInfoFind
@@ -71,7 +71,7 @@ where   keyName = @keyName
     classPathsLike: string[],
     typeName: string,
     classNameThis: string
-  ): any[] {
+  ): DbRow[] {
     const sql = `
 select  classPath, className, implementsName, extendsName, mappingMethod, mappingValues, isPublic, returnType, name, parameterCount, callers, jspViewFinds
 from    MethodInfoFind

@@ -1,5 +1,5 @@
 import { XmlInfo, XmlNodeInfo, XmlNodeInfoFind } from '../common/batisHelper';
-import { all, exec, get, run } from '../common/sqliteHelper';
+import { all, DbRow, exec, get, run } from '../common/sqliteHelper';
 import { escapeDollar } from '../common/util';
 import { SqlTemplate } from '../common/sqliteHelper';
 import { configReader } from '../config/configReader';
@@ -15,9 +15,10 @@ where   xmlPath = @xmlPath
     return get(configReader.db(), sql, { xmlPath });
   }
 
-  selectXmlNodeInfo(xmlPath: string): any[] {
+  selectXmlNodeInfo(xmlPath: string): DbRow[] {
     const sql = `
-select  id, tagName, params, tables, objectAndTables
+select  id, tagName, params,
+        objects, tablesInsert, tablesUpdate, tablesDelete, tablesOther, selectExists
 from    XmlNodeInfo
 where   xmlPath = @xmlPath
 `;
@@ -26,14 +27,16 @@ where   xmlPath = @xmlPath
 
   selectXmlNodeInfoFindByNamespaceId(keyName: string, xmlPathsLike: string[], id: string): any {
     const sql = `
-select  xmlPath, id, tagName, params, tables, objectAndTables
+select  xmlPath, id, tagName, params,
+        objects, tablesInsert, tablesUpdate, tablesDelete, tablesOther, selectExists
 from    XmlNodeInfoFind
 where   keyName = @keyName
         and id = @id
         and
         (${xmlPathsLike.map((xmlPathLike) => `xmlPath like '${xmlPathLike}' || '%'`).join(' or ')})
 union all
-select  xmlPath, id, tagName, params, tables, objectAndTables
+select  xmlPath, id, tagName, params,
+        objects, tablesInsert, tablesUpdate, tablesDelete, tablesOther, selectExists
 from    XmlNodeInfoFind
 where   keyName = @keyName
         and namespaceId = @id
@@ -45,14 +48,20 @@ limit 1
   }
 
   insertXmlInfoXmlNodeInfo(xmlPath: string, namespace: string, nodes: XmlNodeInfo[]): betterSqlite3.Database {
-    const nodesJson = nodes.map((node) => ({
-      xmlPath,
-      id: node.id,
-      tagName: node.tagName,
-      params: JSON.stringify([...node.params]),
-      tables: JSON.stringify([...node.tables]),
-      objectAndTables: JSON.stringify([...node.objectAndTables].map(([object, tables]) => [object, [...tables]])),
-    }));
+    const nodesJson = nodes.map(
+      ({ id, tagName, params, objects, tablesInsert, tablesUpdate, tablesDelete, tablesOther, selectExists }) => ({
+        xmlPath,
+        id,
+        tagName,
+        params: JSON.stringify([...params]),
+        objects: JSON.stringify([...objects]),
+        tablesInsert: JSON.stringify([...tablesInsert]),
+        tablesUpdate: JSON.stringify([...tablesUpdate]),
+        tablesDelete: JSON.stringify([...tablesDelete]),
+        tablesOther: JSON.stringify([...tablesOther]),
+        selectExists: selectExists ? 1 : 0,
+      })
+    );
 
     const sqlTmpXml = `
 insert into XmlInfo
@@ -66,11 +75,14 @@ values
     if (nodesJson.length) {
       const sqlTmpXmlNode = `
 insert into XmlNodeInfo
-  (xmlPath, id, tagName, params, tables, objectAndTables)
+  (
+    xmlPath, id, tagName, params,
+    objects, tablesInsert, tablesUpdate, tablesDelete, tablesOther, selectExists
+  )
 values      
   {values}
 `;
-      const sqlTmpValues = `({xmlPath}, {id}, {tagName}, {params}, {tables}, {objectAndTables})`;
+      const sqlTmpValues = `({xmlPath}, {id}, {tagName}, {params}, {objects}, {tablesInsert}, {tablesUpdate}, {tablesDelete}, {tablesOther}, {selectExists})`;
       const sqlValues = new SqlTemplate(sqlTmpValues).replaceAlls(
         nodesJson.map((node) => node),
         ','
@@ -89,26 +101,49 @@ ${sqlXmlNode};
     if (!finds.length) return { changes: 0, lastInsertRowid: 0 };
 
     const findsJson = finds
-      .map(({ xmlPath, namespaceId, id, tagName, params, tables, objectAndTables }) => {
-        return {
+      .map(
+        ({
+          xmlPath,
+          namespaceId,
+          id,
+          tagName,
+          params,
+          objects,
+          tablesInsert,
+          tablesUpdate,
+          tablesDelete,
+          tablesOther,
+          selectExists,
+        }) => ({
           keyName,
           xmlPath,
           namespaceId,
           id,
           tagName,
           params: JSON.stringify([...params]),
-          tables: JSON.stringify([...tables]),
-          objectAndTables: JSON.stringify([...objectAndTables].map(([object, tables]) => [object, [...tables]])),
-        };
-      })
+          objects: JSON.stringify([...objects]),
+          tablesInsert: JSON.stringify([...tablesInsert]),
+          tablesUpdate: JSON.stringify([...tablesUpdate]),
+          tablesDelete: JSON.stringify([...tablesDelete]),
+          tablesOther: JSON.stringify([...tablesOther]),
+          selectExists: selectExists ? 1 : 0,
+        })
+      )
       .flat();
 
     const sqlTmp = `
 insert into XmlNodeInfoFind
-  (keyName, xmlPath, namespaceId, id, tagName, params, tables, objectAndTables)
+  (
+    keyName, xmlPath, namespaceId, id, tagName, params,
+    objects, tablesInsert, tablesUpdate, tablesDelete, tablesOther, selectExists
+  )
 values
   {values}`;
-    const sqlTmpValues = `({keyName}, {xmlPath}, {namespaceId}, {id}, {tagName}, {params}, {tables}, {objectAndTables})`;
+    const sqlTmpValues = `
+  (
+    {keyName}, {xmlPath}, {namespaceId}, {id}, {tagName}, {params},
+    {objects}, {tablesInsert}, {tablesUpdate}, {tablesDelete}, {tablesOther}, {selectExists}
+  )`;
     const sqlValues = new SqlTemplate(sqlTmpValues).replaceAlls(findsJson, ',\n');
     const sql = sqlTmp.replace('{values}', escapeDollar(sqlValues));
 

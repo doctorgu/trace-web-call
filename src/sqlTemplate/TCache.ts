@@ -1,13 +1,13 @@
-import { all, exec, get, pluck, run } from '../common/sqliteHelper';
+import { all, DbRow, exec, get, pluck, run } from '../common/sqliteHelper';
 import { escapeDollar } from '../common/util';
 import { SqlTemplate } from '../common/sqliteHelper';
 import { configReader } from '../config/configReader';
 import { HeaderInfo, MethodInfo, MethodInfoFind } from '../common/classHelper';
 import betterSqlite3 from 'better-sqlite3';
-import { ObjectAndTables, ObjectType } from '../common/batisHelper';
+import { ObjectInfo, ObjectType } from '../common/batisHelper';
 
 class TCache {
-  selectTables(path: string): any[] {
+  selectTables(path: string): DbRow[] {
     const sql = `
 select  name
 from    Tables
@@ -27,51 +27,103 @@ values
     return exec(configReader.dbCache(), sql);
   }
 
-  selectObjectAndTables(path: string, objectType: ObjectType): any[] {
+  selectObjects(path: string, type: ObjectType): DbRow[] {
     const sql = `
-select  object, tables
-from    ObjectAndTables
+select  type, name,
+        objects,
+        tablesInsert, tablesUpdate, tablesDelete, tablesOther,
+        selectExists
+from    Objects
 where   path = @path
-        and objectType = @objectType
+        and type = @type
 order by object
 `;
-    return all(configReader.dbCache(), sql, { path, objectType });
+    return all(configReader.dbCache(), sql, { path, type });
   }
 
-  insertObjectAndTables(
-    objectTypeAndPath: Map<ObjectType, string>,
-    objectTypeAndObjectAndTables: Map<ObjectType, ObjectAndTables>
-  ): betterSqlite3.Database {
+  selectObjectsNameType(typeAndPath: Map<ObjectType, string>): DbRow[] {
+    const sql = `
+select  name, type
+from    Objects
+where   (path = @pathView or path = @pathFunction or path = @pathProcedure)
+`;
+    return all(configReader.dbCache(), sql, {
+      pathView: typeAndPath.get('view'),
+      pathFunction: typeAndPath.get('function'),
+      pathProcedure: typeAndPath.get('procedure'),
+    });
+  }
+
+  selectObjectsDeep(typeAndPath: Map<ObjectType, string>, names: Set<string>): DbRow[] {
+    const sql = `
+with recursive Objs as
+(
+    select  path, type, name,
+            objects, tablesInsert, tablesUpdate, tablesDelete, tablesOther, selectExists, 0 depth
+    from    Objects
+    where   (path = @pathView or path = @pathFunction or path = @pathProcedure)
+            and name in (
+                select  value
+                from    json_each(@names)
+            )
+
+    union all
+
+    select  c.path, c.type, c.name,
+            c.objects, c.tablesInsert, c.tablesUpdate, c.tablesDelete, c.tablesOther, c.selectExists, p.depth + 1 depth
+    from    Objects c
+            inner join Objs p
+            on p.path = c.path
+            and p.objects like '%"' || c.name || '"%'
+)
+select  type, name,
+        objects, tablesInsert, tablesUpdate, tablesDelete, tablesOther, selectExists, depth
+from    Objs
+`;
+    return all(configReader.dbCache(), sql, {
+      pathView: typeAndPath.get('view'),
+      pathFunction: typeAndPath.get('function'),
+      pathProcedure: typeAndPath.get('procedure'),
+      names: JSON.stringify([...names]),
+    });
+  }
+
+  insertObjects(typeAndPath: Map<ObjectType, string>, objectInfos: ObjectInfo[]): betterSqlite3.Database {
     const sqlTmp = `
-insert into objectAndTables
+insert into Objects
   (
-    path, objectType,
-    object, objectParent, 
+    path,
+    type, name,
     objects,
-    tables, tablesInsert, tablesUpdate, tablesDelete, tablesSelect
+    tablesInsert, tablesUpdate, tablesDelete, tablesOther,
+    selectExists
   )
 values
   {values}
 `;
     const sqlTmpValues = `
   (
-    {path}, {objectType},
-    {object}, {objectParent},
+    {path},
+    {type}, {name},
     {objects},
-    {tables}, {tablesInsert}, {tablesUpdate}, {tablesDelete}, {tablesSelect}
+    {tablesInsert}, {tablesUpdate}, {tablesDelete}, {tablesOther},
+    {selectExists}
   )
 `;
 
-    const params = [...objectTypeAndObjectAndTables]
-      .map(([objectType, objectAndTables]) => {
-        return [...objectAndTables].map(([object, tables]) => ({
-          path: objectTypeAndPath.get(objectType),
-          objectType,
-          object,
-          tables: JSON.stringify([...tables]),
-        }));
+    const params = objectInfos.map(
+      ({ type, name, objects, tablesInsert, tablesUpdate, tablesDelete, tablesOther, selectExists }) => ({
+        path: typeAndPath.get(type),
+        type,
+        name,
+        objects: JSON.stringify([...objects]),
+        tablesInsert: JSON.stringify([...tablesInsert]),
+        tablesUpdate: JSON.stringify([...tablesUpdate]),
+        tablesDelete: JSON.stringify([...tablesDelete]),
+        tablesOther: JSON.stringify([...tablesOther]),
+        selectExists: selectExists ? 1 : 0,
       })
-      .flat();
+    );
     const sqlValues = new SqlTemplate(sqlTmpValues).replaceAlls(params, ',\n');
     const sql = sqlTmp.replace('{values}', escapeDollar(sqlValues));
 
@@ -100,9 +152,14 @@ values
     const sql = `
 delete
 from    Tables;
+`;
+    return exec(configReader.dbCache(), sql);
+  }
 
+  truncateObjects() {
+    const sql = `
 delete
-from    ObjectAndTables;
+from    Objects;
 `;
     return exec(configReader.dbCache(), sql);
   }

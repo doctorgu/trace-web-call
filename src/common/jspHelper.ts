@@ -129,10 +129,10 @@ export function insertRouteJspKeyName() {
     const findsStarting = getFindsByClassPathClassNameFromDb(keyName, directory, file);
 
     console.log(`getStartingToTables`);
-    const startToTables = getStartingToJsps(findsStarting, serviceXmlJspDirs.jspDirectory, config.startingPoint);
+    const routesAll = getStartingToJsps(findsStarting, serviceXmlJspDirs.jspDirectory, config.startingPoint);
 
-    const routesCur = startToTables
-      .map(({ routes }, i) => {
+    const routesCur = routesAll
+      .map((routes, i) => {
         return routes.map((route) => ({ groupSeq: i, ...route }));
       })
       .flat();

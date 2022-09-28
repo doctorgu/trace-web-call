@@ -1,18 +1,13 @@
 import { existsSync, statSync, readdirSync } from 'fs';
 import betterSqlite3 from 'better-sqlite3';
 import { readFileSyncUtf16le, regexpSqlite, testWildcardFileName, testWildcardFileNameSqlite } from '../common/util';
-import {
-  getTablesFromDb,
-  ObjectType,
-  ObjectAndTables,
-  getObjectTypeAndObjectAndTablesFromDb,
-} from '../common/batisHelper';
+import { getTablesFromDb, ObjectType } from '../common/batisHelper';
 import { runInsertToDbFirst } from '../common/message';
 import { config } from './config';
 import { sqlCacheInit } from './sqlCache';
+import { cacheReader } from '../common/cacheReader';
 
 let _tables = new Set<string>();
-let _objectTypeAndObjectAndTables = new Map<ObjectType, ObjectAndTables>();
 
 let _db: betterSqlite3.Database | null = null;
 let _dbCache: betterSqlite3.Database | null = null;
@@ -61,55 +56,13 @@ export const configReader = {
 
     return _dbCache;
   },
-  tables: (): Set<string> => {
-    if (_tables.size) {
-      return _tables;
-    }
 
-    const tablesDb = getTablesFromDb();
-    if (!tablesDb.size) {
-      throw new Error(runInsertToDbFirst);
-    }
-
-    _tables = tablesDb;
-    return _tables;
-  },
-  objectTypeAndObjectAndTables: (): Map<ObjectType, ObjectAndTables> => {
-    if (_objectTypeAndObjectAndTables.size) {
-      return _objectTypeAndObjectAndTables;
-    }
-
-    _objectTypeAndObjectAndTables = getObjectTypeAndObjectAndTablesFromDb();
-    return _objectTypeAndObjectAndTables;
-  },
-  objectAndTables: (objectType: ObjectType): ObjectAndTables => {
-    const objectTypeAndObjectAndTables = configReader.objectTypeAndObjectAndTables();
-
-    const objectAndTables = objectTypeAndObjectAndTables.get(objectType);
-    if (!objectAndTables) return new Map<string, Set<string>>();
-
-    return objectAndTables;
-  },
-  tablesInObject: () => {
-    const tablesNew = configReader.tables();
-
-    configReader.objectAndTables('view').forEach((tablesCur) => {
-      tablesCur.forEach((t) => tablesNew.add(t));
-    });
-    configReader.objectAndTables('function').forEach((tablesCur) => {
-      tablesCur.forEach((t) => tablesNew.add(t));
-    });
-    configReader.objectAndTables('procedure').forEach((tablesCur) => {
-      tablesCur.forEach((t) => tablesNew.add(t));
-    });
-
-    return tablesNew;
-  },
-  objectType: (objectName: string) => {
-    for (const [objectType, objectAndCache] of configReader.objectTypeAndObjectAndTables()) {
-      if (objectAndCache.has(objectName)) return objectType;
-    }
-
-    throw new Error(`No objectName: ${objectName} in objectTypeAndObjectAndTablesCache`);
+  objectTypeAndPath: () => {
+    const objectTypeAndPath = new Map<ObjectType, string>([
+      ['view', config.path.data.views],
+      ['function', config.path.data.functions],
+      ['procedure', config.path.data.procedures],
+    ]);
+    return objectTypeAndPath;
   },
 };

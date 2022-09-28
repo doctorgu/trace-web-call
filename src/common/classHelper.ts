@@ -4,7 +4,7 @@ import { trims, trimEnd, trim } from './util';
 import { config } from '../config/config';
 import { runInsertToDbFirst } from './message';
 import { getDbPath } from './common';
-import { getStartingToTables } from './traceHelper';
+import { getStartingToObjects } from './traceHelper';
 import tClassInfo from '../sqlTemplate/TClassInfo';
 import tCommon from '../sqlTemplate/TCommon';
 import tCache from '../sqlTemplate/TCache';
@@ -407,17 +407,6 @@ function getCallerInfos(
   return callers;
 }
 
-// function getValueType(value: string): { type: 'Literal' | 'Variable' | 'Other'; value: string } {
-//   const mLiteral = /^"([^"]*)"$/.exec(value);
-//   if (mLiteral) {
-//     return { type: 'Literal', value: trim(mLiteral[1], '"') };
-//   }
-//   const mVariable = /^\w+$/.exec(value);
-//   if (mVariable) {
-//     return { type: 'Variable', value };
-//   }
-//   return { type: 'Other', value };
-// }
 function getConstructFuncVarValue(
   valueType: ValueType,
   blocks: PathsAndImage[],
@@ -683,53 +672,6 @@ function getJspViews(methodDecls: PathsAndImage[], posLCurly: number, posRCurly:
   );
   return jspViewsUnique;
 }
-// function getJspViews(methodDecls: PathsAndImage[], posLCurly: number, posRCurly: number): JspView[] {
-//   let jspViews: JspView[] = [];
-
-//   let returnIdx = -1;
-//   let images: string[] = [];
-//   const list = methodDecls.filter((v, i) => i > posLCurly && i < posRCurly);
-//   for (let i = 0; i < list.length; i++) {
-//     const { paths, image } = list[i];
-
-//     if (endsWith(paths, 'Return')) {
-//       returnIdx = i;
-//     } else if (returnIdx !== -1) {
-//       // const valueType = getValueType(list, i);
-//       images.push(image);
-
-//       if (endsWith(paths, 'Semicolon')) {
-//         const m = execImages(/new ModelAndView \(([^,)]+)/, images, ' ');
-//         if (m) {
-//           const viewName = m[1].trim();
-//           if (viewName) {
-//             const valueType = getValueType(viewName);
-
-//             if (valueType === 'onlyLiteral') {
-//               jspViews.push({ name: trim(viewName, '"'), parsed: true });
-//             } else if (valueType === 'onlyVariable') {
-//               const jspViewsCur = getJspViewsByVariable(list, returnIdx, viewName);
-//               if (jspViewsCur.length) {
-//                 jspViews = jspViews.concat(jspViewsCur);
-//               }
-//             } else if (valueType === 'other') {
-//               jspViews.push({ name: viewName, parsed: false });
-//             }
-//           }
-//         }
-
-//         returnIdx = -1;
-//         images = [];
-//       }
-//     }
-//   }
-
-//   const jspViewsUnique = jspViews.reduce(
-//     (prev: JspView[], cur: JspView) => (!prev.some((jspView) => jspView.name === cur.name) ? [...prev, cur] : prev),
-//     []
-//   );
-//   return jspViewsUnique;
-// }
 
 function getMethods(cstSimple: any, pathsAndImageList: PathsAndImage[], vars: VarInfo[]): MethodInfo[] {
   const methodDecls = pathsAndImageList.filter(({ paths, image }) => includes(paths, 'methodDeclaration'));
@@ -768,7 +710,7 @@ function getMethods(cstSimple: any, pathsAndImageList: PathsAndImage[], vars: Va
         jspViews = getJspViews(methodDecls, posLCurly, posRCurly);
       }
 
-      methods.push({ mapping, isPublic, returnType, name: methodName, parameterCount, callers, jspViews: jspViews });
+      methods.push({ mapping, isPublic, returnType, name: methodName, parameterCount, callers, jspViews });
 
       mapping = { method: '', values: [] };
       isPublic = false;
@@ -1047,7 +989,7 @@ export function insertRouteTableKeyName() {
     const directoriesXml = [serviceXmlJspDirs.xml];
 
     console.log(`getStartingToTables`);
-    const startToTables = getStartingToTables(
+    const routesAll = getStartingToObjects(
       keyName,
       findsStarting,
       directories.concat(directoriesDep),
@@ -1055,8 +997,8 @@ export function insertRouteTableKeyName() {
       config.startingPoint
     );
 
-    const routesCur = startToTables
-      .map(({ routes }, i) => {
+    const routesCur = routesAll
+      .map((routes, i) => {
         return routes.map((route) => ({ groupSeq: i, ...route }));
       })
       .flat();

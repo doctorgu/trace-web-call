@@ -1,5 +1,3 @@
-import { ObjectType, ObjectAndTables } from '../common/batisHelper';
-
 export type OutputType = 'txt' | 'csv';
 export type StartingPoint = 'map' | 'publicMethod';
 

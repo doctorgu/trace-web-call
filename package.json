@@ -16,7 +16,8 @@
     "insertToDb2": "node -e \"require('./dist/run/insertToDb').insertToDb()\"",
     "logGitCount": "tsc && node -e \"require('./dist/run/logGitCount').logGitCount()\"",
     "truncateCstSimple": "tsc && node -e \"require('./dist/run/truncate').truncateCstSimple()\"",
-    "truncateTables": "tsc && node -e \"require('./dist/run/truncate').truncateTables()\""
+    "truncateTables": "tsc && node -e \"require('./dist/run/truncate').truncateTables()\"",
+    "truncateObjects": "tsc && node -e \"require('./dist/run/truncate').truncateObjects()\""
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.0"

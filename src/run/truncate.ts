@@ -6,3 +6,6 @@ export function truncateCstSimple() {
 export function truncateTables() {
   tCache.truncateTables();
 }
+export function truncateObjects() {
+  tCache.truncateObjects();
+}

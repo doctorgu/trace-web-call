@@ -5,7 +5,7 @@ import { resolve } from 'path';
 import { config } from './config/config';
 import { getClassInfo, getFindsByClassPathClassNameFromDb } from './common/classHelper';
 import { getCstSimple } from './common/cstSimpleHelper';
-import { getXmlNodeInfoFinds, getStartingToTables, RouteTable } from './common/traceHelper';
+import { getXmlNodeInfoFinds, getStartingToObjects, RouteTable } from './common/traceHelper';
 import { findFiles, readFileSyncUtf16le, removeCommentLiteralSql } from './common/util';
 import { insertToDb } from './run/insertToDb';
 import { getDbPath } from './common/common';
@@ -35,12 +35,6 @@ function doTest() {
   //   const { namespace, id, tagName, params, tables } = xmls[i];
   //   console.log(namespace, id, tagName, params, tables);
   // }
-  // const viewSql = readFileSyncUtf16le(`${config.path.test}/viewTest.sql`);
-  // const tables = new Set<string>(['TAB1', 'TAB2', 'TAB3', 'TAB4', 'TAB5', 'TAB6', 'TAB7', 'TAB8', 'TAB9']);
-  // const objectAndTables = getObjectAndTables(viewSql, tables);
-  // const tablesUsed = objectAndTables.map(({ tables }) => [...tables]).flat();
-  // // ['TAB1', 'TAB2', 'TAB3', 'TAB4', 'TAB6', 'TAB7', 'TAB8']
-  // console.log(tablesUsed);
 }
 // doTest();
 insertToDb();
