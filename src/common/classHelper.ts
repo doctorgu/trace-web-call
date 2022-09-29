@@ -514,7 +514,7 @@ function getValues(blocks: PathsAndImage[], start: number, posSemicolon: number)
         }
 
         const idxStart = endCon + 1;
-        const idxEnd = retRBrace.start + 1;
+        const idxEnd = retRBrace.start - 1;
         let values: JspView[] = [];
         for (let j = idxStart; j <= idxEnd; j++) {
           const { values: valuesSub, end: endSub } = getValues(blocks, j, posSemicolon);
