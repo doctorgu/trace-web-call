@@ -41,9 +41,12 @@ order by object
     return all(configReader.dbCache(), sql, { path, type });
   }
 
-  selectObjectsNameType(typeAndPath: Map<ObjectType, string>): DbRow[] {
+  selectObjectsAll(typeAndPath: Map<ObjectType, string>): DbRow[] {
     const sql = `
-select  name, type
+select  type, name,
+        objects,
+        tablesInsert, tablesUpdate, tablesDelete, tablesOther,
+        selectExists
 from    Objects
 where   (path = @pathView or path = @pathFunction or path = @pathProcedure)
 `;

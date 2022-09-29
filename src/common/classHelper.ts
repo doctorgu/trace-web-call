@@ -522,14 +522,14 @@ function getValues(blocks: PathsAndImage[], start: number, posSemicolon: number)
             values = cartesianTwo(values, valuesSub);
             j = endSub;
           }
-          // -1 to expose semicolon to getValuesByVariable
-          return { values, end: retRBrace.end - 1 };
         }
-
-        return { values: valueCon ? [valueCon] : [], end: endCon };
+        // -1 to expose semicolon to getValuesByVariable
+        return { values, end: retRBrace.end - 1 };
       } else {
-        return { values: [{ name: value, parsed: false }], end: endMain };
+        return { values: valueCon ? [valueCon] : [], end: endCon };
       }
+    } else {
+      return { values: [{ name: value, parsed: false }], end: endMain };
     }
   } else if (type === 'Function') {
     const retFunc = getConstructFuncVarValue(type, blocks, start, posSemicolon);
@@ -580,7 +580,7 @@ function getValuesByVariable(
   let values: JspView[] = [];
   for (let i = 0; i < posVar; i++) {
     const { paths, image } = blocks[i];
-    const { paths: pathsNext, image: imageNext } = blocks[i];
+    const { paths: pathsNext, image: imageNext } = blocks[i + 1];
 
     const declare = !equalFound && includes(paths, 'localVariableDeclarationStatement');
     const assign = !equalFound && includes(paths, 'expressionStatement');

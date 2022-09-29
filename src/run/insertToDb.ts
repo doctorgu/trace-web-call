@@ -14,8 +14,9 @@ import {
   XmlInfo,
   insertXmlInfoFindKeyName,
   getTablesFromDb,
-  getObjectNameTypesFromDb,
+  getNameObjectsAllFromDb,
   ObjectType,
+  ObjectInfo,
 } from '../common/batisHelper';
 import { config } from '../config/config';
 import { configReader } from '../config/configReader';
@@ -29,7 +30,7 @@ import { insertJspInfo, insertJspInfoToDb, insertRouteJspKeyName, JspInfo } from
 function insertJspClassXml(
   rootDir: string,
   tablesAll: Set<string>,
-  objectNameTypesAll: Map<string, ObjectType>,
+  nameObjectsAll: Map<string, ObjectInfo>,
   serviceXmlJspDirs: { service: DirectoryAndFilePattern; xml: string; jspDirectory: string }[]
 ): { jspInfos: JspInfo[]; classInfos: ClassInfo[]; xmlInfos: XmlInfo[] } {
   const classInfos: ClassInfo[] = [];
@@ -64,7 +65,7 @@ function insertJspClassXml(
     if (existsSync(fullDir)) {
       const fullPaths = statSync(fullDir).isDirectory() ? [...findFiles(fullDir, '*.xml')] : [fullDir];
       for (const fullPath of fullPaths) {
-        const xmlInfo = insertXmlInfoXmlNodeInfo(rootDir, fullPath, tablesAll, objectNameTypesAll);
+        const xmlInfo = insertXmlInfoXmlNodeInfo(rootDir, fullPath, tablesAll, nameObjectsAll);
         if (xmlInfo) {
           xmlInfos.push(xmlInfo);
         }
@@ -97,11 +98,11 @@ export function insertToDb() {
     startTime = logTimeMsg(startTime, `insertTablesToDb`);
   }
 
-  let objectNameTypesAll = getObjectNameTypesFromDb();
-  if (objectNameTypesAll.size) {
+  let nameObjectsAll = getNameObjectsAllFromDb();
+  if (nameObjectsAll.size) {
     startTime = logTimeMsg(startTime, `insertObjects skipped`);
   } else {
-    objectNameTypesAll = insertObjects(tablesAll);
+    nameObjectsAll = insertObjects(tablesAll);
     startTime = logTimeMsg(startTime, `insertObjects`);
   }
 
@@ -112,7 +113,7 @@ export function insertToDb() {
     jspInfos: jspInfosDep,
     classInfos: classInfosDep,
     xmlInfos: xmlInfosDep,
-  } = insertJspClassXml(rootDir, tablesAll, objectNameTypesAll, config.path.source.dependency);
+  } = insertJspClassXml(rootDir, tablesAll, nameObjectsAll, config.path.source.dependency);
   startTime = logTimeMsg(startTime, `insertJspClassXml Dependency`);
 
   for (let i = 0; i < config.path.source.main.length; i++) {
@@ -142,7 +143,7 @@ export function insertToDb() {
     } = insertJspClassXml(
       rootDir,
       tablesAll,
-      objectNameTypesAll,
+      nameObjectsAll,
       serviceXmlJspDirs.service.directory ? [serviceXmlJspDirs] : []
     );
     startTime = logTimeMsg(startTime, `insertJspClassXml Main ${directory}`);

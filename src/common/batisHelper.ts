@@ -6,6 +6,9 @@ import { getDbPath } from './common';
 import tCache from '../sqlTemplate/TCache';
 import tXmlInfo from '../sqlTemplate/TXmlInfo';
 import { configReader } from '../config/configReader';
+import { appendFileSync } from 'fs';
+import { resolve } from 'path';
+import { format } from 'date-fns';
 
 export type ObjectChild = {
   objects: Set<string>;
@@ -18,6 +21,14 @@ export type ObjectChild = {
   selectExists: boolean;
 };
 export type ObjectInfo = { type: ObjectType; name: string } & ObjectChild;
+export type IudExistsSchemaDotSql = {
+  tablesInsert: Set<string>;
+  tablesUpdate: Set<string>;
+  tablesDelete: Set<string>;
+  selectExists: boolean;
+  schemaDotObjects: Set<string>;
+  sql: string;
+};
 
 export type XmlNodeInfo = {
   id: string;
@@ -44,15 +55,24 @@ export function getTablesFromDb(): Set<string> {
   return tables;
 }
 
-export function getObjectNameTypesFromDb(): Map<string, ObjectType> {
-  let nameTypes = new Map<string, ObjectType>();
+export function getNameObjectsAllFromDb(): Map<string, ObjectInfo> {
+  let nameObjectsAll = new Map<string, ObjectInfo>();
 
-  const rows = tCache.selectObjectsNameType(configReader.objectTypeAndPath());
-  for (const { name, type } of rows) {
-    nameTypes.set(name, type);
+  const rows = tCache.selectObjectsAll(configReader.objectTypeAndPath());
+  for (const { type, name, objects, tablesInsert, tablesUpdate, tablesDelete, tablesOther, selectExists } of rows) {
+    nameObjectsAll.set(name, {
+      type,
+      name,
+      objects: new Set<string>(JSON.parse(objects)),
+      tablesInsert: new Set<string>(JSON.parse(tablesInsert)),
+      tablesUpdate: new Set<string>(JSON.parse(tablesUpdate)),
+      tablesDelete: new Set<string>(JSON.parse(tablesDelete)),
+      tablesOther: new Set<string>(JSON.parse(tablesOther)),
+      selectExists: selectExists === 1,
+    });
   }
 
-  return nameTypes;
+  return nameObjectsAll;
 }
 
 export function getObjectNameTypeSqls(objectType: ObjectType): Map<string, { type: ObjectType; sql: string }> {
@@ -139,20 +159,19 @@ function getObjectTypeAndName(
 
   return { type, name };
 }
-function getObjectChild(sql: string, tablesAll: Set<string>, objectNameTypesAll: Map<string, ObjectType>): ObjectChild {
+function getTablesIudFromSql(sql: string): IudExistsSchemaDotSql {
   const tablesInsert = new Set<string>();
   const tablesUpdate = new Set<string>();
   const tablesDelete = new Set<string>();
-  const tablesOther = new Set<string>();
-  const objects = new Set<string>();
   let selectExists = false;
+  const schemaDotObjects = new Set<string>();
 
   const re = /(?<schemaDot>"?[\w$#]+"?\.)?(?<object>"?[\w$#]+"?)/g;
 
-  let prevType: IudType | 'NONE' = 'NONE';
+  let prevType: IudType | 'MERGE' | 'SET' | 'NONE' = 'NONE';
 
   let m: RegExpExecArray | null;
-  while ((m = re.exec(sql)) !== null) {
+  while ((m = re.exec(sql)) != null) {
     const schemaDot = m.groups?.schemaDot?.toUpperCase() || '';
     const object = m.groups?.object.toUpperCase() || '';
     const schemaDotObject = `${schemaDot}${object}`;
@@ -163,6 +182,21 @@ function getObjectChild(sql: string, tablesAll: Set<string>, objectNameTypesAll:
       case 'DELETE':
         prevType = object;
         continue;
+      case 'MERGE':
+        prevType = object;
+        continue;
+      case 'INTO':
+        if (prevType === 'INSERT' || prevType === 'MERGE') {
+          continue;
+        }
+        break;
+      case 'SET':
+        // MERGE INTO...SET case
+        if (prevType === 'UPDATE') {
+          prevType = 'NONE';
+          continue;
+        }
+        break;
       case 'FROM':
         if (prevType === 'DELETE') {
           continue;
@@ -173,39 +207,187 @@ function getObjectChild(sql: string, tablesAll: Set<string>, objectNameTypesAll:
         continue;
     }
 
-    const ret = getObjectTypeAndName(schemaDotObject, object, tablesAll, objectNameTypesAll);
-    if (!ret) continue;
-
-    const { type, name } = ret;
-
     if (prevType !== 'NONE') {
-      if (type === 'table') {
-        switch (prevType) {
-          case 'INSERT':
-            tablesInsert.add(name);
-            break;
-          case 'UPDATE':
-            tablesUpdate.add(name);
-            break;
-          case 'DELETE':
-            tablesDelete.add(name);
-            break;
-        }
-      } else {
-        throw new Error(`No table name after ${prevType}`);
+      switch (prevType) {
+        case 'INSERT':
+          tablesInsert.add(schemaDotObject);
+          break;
+        case 'UPDATE':
+          tablesUpdate.add(schemaDotObject);
+          break;
+        case 'DELETE':
+          tablesDelete.add(schemaDotObject);
+          break;
+        case 'MERGE':
+          tablesInsert.add(schemaDotObject);
+          tablesUpdate.add(schemaDotObject);
+          break;
       }
     } else {
-      if (type === 'table') {
-        tablesOther.add(name);
-      } else {
-        objects.add(name);
-      }
+      schemaDotObjects.add(schemaDotObject);
     }
 
     prevType = 'NONE';
   }
 
-  return { objects, tablesInsert, tablesUpdate, tablesDelete, tablesOther, selectExists };
+  return { tablesInsert, tablesUpdate, tablesDelete, selectExists, schemaDotObjects, sql };
+}
+function appendLog(
+  prepend: string,
+  schemaDotObject: string,
+  name: string,
+  type: ObjectType | 'xml',
+  typeIudSub: { type: ObjectType; iud: IudExistsSchemaDotSql } | undefined,
+  sql: string
+) {
+  const dateTime = format(new Date(), 'yyyy-MM-dd HH:mm:ss');
+  const body = `schemaDotObject: ${schemaDotObject}, name: ${name}, type: ${type}, typeSub: ${typeIudSub?.type},
+sql: ${sql}`;
+  const log = `==================================================
+${dateTime} ${prepend} ${body}
+
+`;
+  appendFileSync(resolve(config.path.logDirectory, 'getObjectChild.log'), log);
+  // console.log(log);
+}
+function getTablesIud(
+  tables: Set<string>,
+  tablesAll: Set<string>,
+  nameTypeIudsAll: Map<string, { type: ObjectType; iud: IudExistsSchemaDotSql }> | null,
+  nameObjectsAll: Map<string, ObjectInfo> | null,
+  typeForLog: ObjectType | 'xml',
+  nameForLog: string,
+  sqlForLog: string
+): Set<string> {
+  const tablesNew = new Set<string>();
+  for (const schemaDotObject of tables) {
+    const object = schemaDotObject.includes('.') ? schemaDotObject.split('.')[1] : schemaDotObject;
+
+    const table = (tablesAll.has(schemaDotObject) && schemaDotObject) || (tablesAll.has(object) && object);
+    if (table) {
+      tablesNew.add(table);
+      continue;
+    }
+
+    let tableFound: string | undefined = '';
+    let typeIudSub = undefined;
+    if (nameTypeIudsAll) {
+      typeIudSub = nameTypeIudsAll.get(schemaDotObject) || nameTypeIudsAll.get(object);
+      if (!typeIudSub) {
+        appendLog('Table or objects not exists in IUD', schemaDotObject, nameForLog, typeForLog, typeIudSub, sqlForLog);
+        continue;
+      }
+      if (typeIudSub.type !== 'view') {
+        appendLog('Object is not table or view in IUD', schemaDotObject, nameForLog, typeForLog, typeIudSub, sqlForLog);
+        continue;
+      }
+
+      const sqlView = typeIudSub.iud.sql;
+      const { schemaDotObjects: schemaDotObjectsView, selectExists: selectExistsView } = getTablesIudFromSql(sqlView);
+      tableFound = [...schemaDotObjectsView].find((schemaDotObject) => {
+        const object = schemaDotObject.includes('.') ? schemaDotObject.split('.')[1] : schemaDotObject;
+        return (tablesAll.has(schemaDotObject) && schemaDotObject) || (tablesAll.has(object) && object);
+      });
+    } else if (nameObjectsAll) {
+      const objectsFound = nameObjectsAll.get(schemaDotObject) || nameObjectsAll.get(object);
+      if (!objectsFound) {
+        appendLog('Table or objects not exists in IUD', schemaDotObject, nameForLog, typeForLog, undefined, sqlForLog);
+        continue;
+      }
+      if (objectsFound.type !== 'view') {
+        appendLog('Object is not table or view in IUD', schemaDotObject, nameForLog, typeForLog, undefined, sqlForLog);
+        continue;
+      }
+
+      const { tablesOther } = objectsFound;
+      tableFound = (tablesOther.has(schemaDotObject) && schemaDotObject) || (tablesOther.has(object) && object) || '';
+    }
+
+    if (!tableFound) {
+      appendLog('Table not exists inside view', schemaDotObject, nameForLog, typeForLog, typeIudSub, sqlForLog);
+      continue;
+    }
+
+    tablesNew.add(tableFound);
+  }
+
+  return tablesNew;
+}
+function getObjectChild(
+  iud: IudExistsSchemaDotSql,
+  tablesAll: Set<string>,
+  nameTypeIudsAll: Map<string, { type: ObjectType; iud: IudExistsSchemaDotSql }> | null,
+  nameObjectsAll: Map<string, ObjectInfo> | null,
+  typeForLog: ObjectType | 'xml',
+  nameForLog: string,
+  sqlForLog: string
+): ObjectChild {
+  const { tablesInsert, tablesUpdate, tablesDelete, selectExists, schemaDotObjects, sql } = iud;
+  // If inserted to view, change to table inside of view
+  const tablesInsertNew = getTablesIud(
+    tablesInsert,
+    tablesAll,
+    nameTypeIudsAll,
+    nameObjectsAll,
+    typeForLog,
+    nameForLog,
+    sqlForLog
+  );
+  const tablesUpdateNew = getTablesIud(
+    tablesUpdate,
+    tablesAll,
+    nameTypeIudsAll,
+    nameObjectsAll,
+    typeForLog,
+    nameForLog,
+    sqlForLog
+  );
+  const tablesDeleteNew = getTablesIud(
+    tablesDelete,
+    tablesAll,
+    nameTypeIudsAll,
+    nameObjectsAll,
+    typeForLog,
+    nameForLog,
+    sqlForLog
+  );
+
+  const tablesOtherNew = new Set<string>();
+  const objectsNew = new Set<string>();
+  for (const schemaDotObject of schemaDotObjects) {
+    const object = schemaDotObject.includes('.') ? schemaDotObject.split('.')[1] : schemaDotObject;
+
+    const tableNew = (tablesAll.has(schemaDotObject) && schemaDotObject) || (tablesAll.has(object) && object);
+    if (tableNew) {
+      tablesOtherNew.add(tableNew);
+      continue;
+    }
+
+    if (nameTypeIudsAll) {
+      const objectNew =
+        (nameTypeIudsAll.get(schemaDotObject) && schemaDotObject) || (nameTypeIudsAll.get(object) && object);
+      if (objectNew) {
+        objectsNew.add(objectNew);
+        continue;
+      }
+    } else if (nameObjectsAll) {
+      const objectNew =
+        (nameObjectsAll.get(schemaDotObject) && schemaDotObject) || (nameObjectsAll.get(object) && object);
+      if (objectNew) {
+        objectsNew.add(objectNew);
+        continue;
+      }
+    }
+  }
+
+  return {
+    objects: objectsNew,
+    tablesInsert: tablesInsertNew,
+    tablesUpdate: tablesUpdateNew,
+    tablesDelete: tablesDeleteNew,
+    tablesOther: tablesOtherNew,
+    selectExists,
+  };
 }
 
 function getTextCdataFromElement(elem: Element): string {
@@ -269,7 +451,7 @@ export function getXmlInfoFromDb(xmlPath: string): XmlInfo | null {
 }
 
 export function insertTablesToDb(): Set<string> {
-  let tablesNew = new Set<string>();
+  let tablesAll = new Set<string>();
 
   const path = config.path.data.tables;
 
@@ -280,42 +462,52 @@ export function insertTablesToDb(): Set<string> {
     const value = readFileSyncUtf16le(fullPath);
     values = values.concat(value.split(/\r*\n/));
 
-    tablesNew = new Set(values.filter((v) => !!v).map((v) => v.toUpperCase()));
+    const tables = new Set(values.filter((v) => !!v).map((v) => v.toUpperCase()));
+    tablesAll = new Set([...tablesAll, ...tables]);
   }
-  if (!tablesNew.size) return tablesNew;
+  if (!tablesAll.size) return tablesAll;
 
-  tCache.insertTables(path, tablesNew);
+  tCache.insertTables(path, tablesAll);
 
-  return tablesNew;
+  return tablesAll;
 }
 
-export function insertObjects(tablesAll: Set<string>): Map<string, ObjectType> {
+export function insertObjects(tablesAll: Set<string>): Map<string, ObjectInfo> {
   let nameTypeSqlsAll = new Map<string, { type: ObjectType; sql: string }>();
   const objectTypes: ObjectType[] = ['view', 'function', 'procedure'];
   for (const objectType of objectTypes) {
     const nameTypeSqls = getObjectNameTypeSqls(objectType);
     nameTypeSqlsAll = new Map<string, { type: ObjectType; sql: string }>([...nameTypeSqlsAll, ...nameTypeSqls]);
   }
-  const nameTypesAll = new Map<string, ObjectType>([...nameTypeSqlsAll].map(([name, { type }]) => [name, type]));
 
-  let objectInfos: ObjectInfo[] = [];
-  for (const [name, { type, sql }] of nameTypeSqlsAll) {
-    const objectChild = getObjectChild(sql, tablesAll, nameTypesAll);
-    objectInfos.push({ type, name, ...objectChild });
+  const nameTypeIudsAll = new Map(
+    [...nameTypeSqlsAll].map(([name, { type, sql }]) => {
+      const iud = getTablesIudFromSql(sql);
+      return [name, { type, iud }];
+    })
+  );
+
+  const objectsAll: ObjectInfo[] = [];
+  const nameObjectsAll = new Map<string, ObjectInfo>();
+  for (const [name, { type, iud }] of nameTypeIudsAll) {
+    const { sql } = iud;
+    const objectChild = getObjectChild(iud, tablesAll, nameTypeIudsAll, null, type, name, sql);
+    const object = { type, name, ...objectChild };
+    objectsAll.push(object);
+    nameObjectsAll.set(name, object);
+  }
+  if (objectsAll.length) {
+    tCache.insertObjects(configReader.objectTypeAndPath(), objectsAll);
   }
 
-  if (objectInfos.length) {
-    tCache.insertObjects(configReader.objectTypeAndPath(), objectInfos);
-  }
-
-  return nameTypesAll;
+  return nameObjectsAll;
 }
 
 export function insertXmlInfoXmlNodeInfo(
   rootDir: string,
   fullPath: string,
   tablesAll: Set<string>,
-  objectNameTypesAll: Map<string, ObjectType>
+  nameObjectsAll: Map<string, ObjectInfo>
 ): XmlInfo | null {
   const xmlPath = getDbPath(rootDir, fullPath);
 
@@ -382,10 +574,15 @@ export function insertXmlInfoXmlNodeInfo(
       console.error(`${id} has ${ex}`);
     }
 
+    const iud = getTablesIudFromSql(sql);
     const { objects, tablesInsert, tablesUpdate, tablesDelete, tablesOther, selectExists } = getObjectChild(
-      `${sqlInclude}\n${sql}`,
+      iud,
       tablesAll,
-      objectNameTypesAll
+      null,
+      nameObjectsAll,
+      'xml',
+      id,
+      `${sqlInclude}\n${sql}`
     );
 
     nodes.push({ id, tagName, params, objects, tablesInsert, tablesUpdate, tablesDelete, tablesOther, selectExists });
