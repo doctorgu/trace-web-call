@@ -618,9 +618,9 @@ function cartesianTwo(values: JspView[], valuesSub: JspView[]): JspView[] {
     const valueCur = values[i];
 
     for (let j = 0; j < valuesSub.length; j++) {
-      const valuesSubCur = valuesSub[j];
+      const valueSubCur = valuesSub[j];
 
-      const valueNew = mergeName(valueCur, valuesSubCur);
+      const valueNew = mergeName(valueCur, valueSubCur);
       valuesNew.push(valueNew);
     }
   }
