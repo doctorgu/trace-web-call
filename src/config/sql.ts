@@ -244,30 +244,23 @@ from    vRouteTable;
 create view vStartToTables
 as
 with 
-R4 as
-(
-    select  keyName, groupSeq, seq,
-            jInsert.value tablesInsert, jUpdate.value tablesUpdate, jDelete.value tablesDelete, jOther.value tablesOther
-    from    RouteTable r
-            left join json_each(r.tablesInsert) jInsert
-            left join json_each(r.tablesUpdate) jUpdate
-            left join json_each(r.tablesDelete) jDelete
-            left join json_each(r.tablesOther) jOther
-    where   routeType in ('xml', 'view', 'function', 'procedure')
-),
 AllTables as
 (
-    select  keyName, groupSeq, seq, tablesInsert tables
-    from    R4
+    select  keyName, groupSeq, seq, jtables.value tables
+    from    RouteTable r
+            inner join json_each(r.tablesInsert) jtables
     union all
-    select  keyName, groupSeq, seq, tablesUpdate tables
-    from    R4
+    select  keyName, groupSeq, seq, jtables.value tables
+    from    RouteTable r
+            inner join json_each(r.tablesUpdate) jtables
     union all
-    select  keyName, groupSeq, seq, tablesDelete tables
-    from    R4
+    select  keyName, groupSeq, seq, jtables.value tables
+    from    RouteTable r
+            inner join json_each(r.tablesDelete) jtables
     union all
-    select  keyName, groupSeq, seq, tablesOther tables
-    from    R4
+    select  keyName, groupSeq, seq, jtables.value tables
+    from    RouteTable r
+            inner join json_each(r.tablesOther) jtables
 )
 select  keyName, groupSeq, group_concat(start) start, group_concat(distinct tables) tables
 from    (
