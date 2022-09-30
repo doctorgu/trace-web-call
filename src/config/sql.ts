@@ -241,28 +241,33 @@ select  keyName, groupSeq, seq, depth, routeType, value,
 from    vRouteTable;
 
 
-create view vStartToTables
+create view vStartToTableObject
 as
 with 
 AllTables as
 (
-    select  keyName, groupSeq, seq, jtables.value tables
+    select  keyName, groupSeq, seq, 'I' type, r.selectExists, jtables.value tables
     from    RouteTable r
             inner join json_each(r.tablesInsert) jtables
     union all
-    select  keyName, groupSeq, seq, jtables.value tables
+    select  keyName, groupSeq, seq, 'U' type, r.selectExists, jtables.value tables
     from    RouteTable r
             inner join json_each(r.tablesUpdate) jtables
     union all
-    select  keyName, groupSeq, seq, jtables.value tables
+    select  keyName, groupSeq, seq, 'D' type, r.selectExists, jtables.value tables
     from    RouteTable r
             inner join json_each(r.tablesDelete) jtables
     union all
-    select  keyName, groupSeq, seq, jtables.value tables
+    select  keyName, groupSeq, seq, 'O' type, r.selectExists, jtables.value tables
     from    RouteTable r
             inner join json_each(r.tablesOther) jtables
 )
-select  keyName, groupSeq, group_concat(start) start, group_concat(distinct tables) tables
+select  keyName, groupSeq, group_concat(start) start,
+        group_concat(distinct tables) tables,
+        group_concat(distinct valueView) views,
+        group_concat(distinct valueFunction) functions,
+        group_concat(distinct valueProcedure) procedures,
+        group_concat(distinct type) types
 from    (
         select  r.keyName, r.groupSeq,
         
@@ -271,9 +276,21 @@ from    (
                 when 'method' then r.valueMethod
                 end start,
         
-                case when routeType in ('xml', 'view', 'function', 'procedure') then
+                case when r.routeType in ('xml', 'view', 'function', 'procedure') then
                     a.tables
-                end tables
+                end tables,
+
+                case when r.routeType in ('xml', 'view', 'function', 'procedure') then
+                    case when a.type = 'O' then
+                        case when a.selectExists = 1 then 'S' end
+                    else
+                        a.type
+                    end
+                end type,
+
+                nullif(r.valueView) valueView,
+                nullif(r.valueFunction) valueFunction,
+                nullif(r.valueProcedure) valueProcedure
 
         from    RouteTable r
                 left join json_each(r.valueMapping) jMapping
