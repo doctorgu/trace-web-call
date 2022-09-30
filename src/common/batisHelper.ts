@@ -171,7 +171,7 @@ function getTablesIudFromSql(sql: string): IudExistsSchemaDotSql {
   let prevType: IudType | 'MERGE' | 'SET' | 'NONE' = 'NONE';
 
   let m: RegExpExecArray | null;
-  while ((m = re.exec(sql)) != null) {
+  while ((m = re.exec(sql)) !== null) {
     const schemaDot = m.groups?.schemaDot?.toUpperCase() || '';
     const object = m.groups?.object.toUpperCase() || '';
     const schemaDotObject = `${schemaDot}${object}`;
