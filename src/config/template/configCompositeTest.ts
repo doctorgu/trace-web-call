@@ -26,10 +26,12 @@ export const configCompositeTest: ConfigType = {
       ],
     },
     data: {
+      users: './data/users.txt',
       tables: './data/tables',
       views: './data/views',
       functions: './data/functions',
       procedures: './data/procedures',
+      packages: './data/packages',
     },
     databaseDirectory: './data/databases',
     outputDirectory: './output',

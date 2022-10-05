@@ -1,5 +1,5 @@
 import { xml2js, Element } from 'xml-js';
-import { removeCommentSql, removeCommentLiteralSql, readFileSyncUtf16le, findFiles, trim } from './util';
+import { removeCommentSql, removeCommentLiteralSql, readFileSyncUtf16le, findFiles, trim, trimEnd } from './util';
 import { config } from '../config/config';
 import { existsSync, statSync } from 'fs';
 import { getDbPath } from './common';
@@ -48,6 +48,13 @@ export type XmlInfo = {
 export type ObjectType = 'table' | 'view' | 'function' | 'procedure';
 export type IudType = 'INSERT' | 'UPDATE' | 'DELETE';
 
+export function getUsersFromDb(): Set<string> {
+  const path = config.path.data.users;
+  const rows = tCache.selectUsers(path);
+  const tables = new Set(rows.map(({ name }) => name));
+  return tables;
+}
+
 export function getTablesFromDb(): Set<string> {
   const path = config.path.data.tables;
   const rows = tCache.selectTables(path);
@@ -75,22 +82,57 @@ export function getNameObjectsAllFromDb(): Map<string, ObjectInfo> {
   return nameObjectsAll;
 }
 
-export function getObjectNameTypeSqls(objectType: ObjectType): Map<string, { type: ObjectType; sql: string }> {
-  function getNameTypeSqls(type: ObjectType, sql: string): Map<string, { type: ObjectType; sql: string }> {
-    const sqlNoComment = removeCommentLiteralSql(sql);
+export function getObjectNameTypeSqls(
+  objectType: ObjectType | 'package'
+): Map<string, { type: ObjectType; sql: string }> {
+  function getFunctionProcedure(sqlNoComment: string): Map<string, { type: ObjectType; sql: string }> {
+    const rePackage =
+      /create(\s+or\s+replace)?\s+package\s+body\s+(?<schemaDot>"?[\w$#]+"?\.)?(?<object>"?[\w$#]+"?)\s+(is|as)(?<sql>.+?)end(\s+\k<object>)?\s*;/gis;
+    let m: RegExpExecArray | null;
 
-    const res = new Map<ObjectType, RegExp>([
-      [
-        'view',
-        /create(\s+or\s+replace)*((\s+no)*(\s+force))*\s+view\s+(?<schemaDot>"?[\w$#]+"?\.)?(?<object>"?[\w$#]+"?)\s+.+?as(?<sql>.+?);/gis,
-      ],
+    const resFuncProc: [ObjectType, RegExp][] = [
       [
         'function',
-        /create(\s+or\s+replace)*(\s+editionable|\s+noneditionable)*\s+function\s+(?<schemaDot>"?[\w$#]+"?\.)?(?<object>"?[\w$#]+"?)\s+.+?return(?<sql>.+?)end(\s+\k<object>)?\s*;/gis,
+        /\s+function\s+(?<schemaDot>"?[\w$#]+"?\.)?(?<object>"?[\w$#]+"?)\s+.+?return(?<sql>.+?)end(\s+\k<object>)?\s*;/gis,
       ],
       [
         'procedure',
-        /create(\s+or\s+replace)*\s+procedure\s+(?<schemaDot>"?[\w$#]+"?\.)?(?<object>"?[\w$#]+"?)\s+.+?(is|as)(?<sql>.+?)end(\s+\k<object>)?\s*;/gis,
+        /\s+procedure\s+(?<schemaDot>"?[\w$#]+"?\.)?(?<object>"?[\w$#]+"?)\s+.+?(is|as)(?<sql>.+?)end(\s+\k<object>)?\s*;/gis,
+      ],
+    ];
+
+    let nameTypeSqlsAll = new Map<string, { type: ObjectType; sql: string }>();
+    while ((m = rePackage.exec(sqlNoComment)) !== null) {
+      const sqlPackage = m.groups?.sql || '';
+
+      for (const [typeFuncProc, reFuncProc] of resFuncProc) {
+        let m: RegExpExecArray | null;
+        const nameTypeSqls = new Map<string, { type: ObjectType; sql: string }>();
+        while ((m = reFuncProc.exec(sqlPackage)) !== null) {
+          // const schemaDot = m.groups?.schemaDot || '';
+          const object = trim(m.groups?.object || '', '"').toUpperCase();
+          const sqlFuncProc = m.groups?.sql || '';
+          nameTypeSqls.set(object, { type: typeFuncProc, sql: sqlFuncProc });
+          nameTypeSqlsAll = new Map<string, { type: ObjectType; sql: string }>([...nameTypeSqlsAll, ...nameTypeSqls]);
+        }
+      }
+    }
+
+    return nameTypeSqlsAll;
+  }
+  function getNameTypeSqls(type: ObjectType, sqlNoComment: string): Map<string, { type: ObjectType; sql: string }> {
+    const res = new Map<ObjectType, RegExp>([
+      [
+        'view',
+        /create(\s+or\s+replace)?((\s+no)?(\s+force))?\s+view\s+(?<schemaDot>"?[\w$#]+"?\.)?(?<object>"?[\w$#]+"?)\s+.+?as(?<sql>.+?);/gis,
+      ],
+      [
+        'function',
+        /create(\s+or\s+replace)?(\s+editionable|\s+noneditionable)?\s+function\s+(?<schemaDot>"?[\w$#]+"?\.)?(?<object>"?[\w$#]+"?)\s+.+?return(?<sql>.+?)end(\s+\k<object>)?\s*;/gis,
+      ],
+      [
+        'procedure',
+        /create(\s+or\s+replace)?\s+procedure\s+(?<schemaDot>"?[\w$#]+"?\.)?(?<object>"?[\w$#]+"?)\s+.+?(is|as)(?<sql>.+?)end(\s+\k<object>)?\s*;/gis,
       ],
     ]);
     let m: RegExpExecArray | null;
@@ -100,9 +142,8 @@ export function getObjectNameTypeSqls(objectType: ObjectType): Map<string, { typ
     const nameTypeSqls = new Map<string, { type: ObjectType; sql: string }>();
     while ((m = re.exec(sqlNoComment)) !== null) {
       // const schemaDot = m.groups?.schemaDot || '';
-      const object = trim(m.groups?.object || '', '"');
+      const object = trim(m.groups?.object || '', '"').toUpperCase();
       const sql = m.groups?.sql || '';
-
       nameTypeSqls.set(object, { type, sql });
     }
 
@@ -122,6 +163,9 @@ export function getObjectNameTypeSqls(objectType: ObjectType): Map<string, { typ
     case 'procedure':
       path = config.path.data.procedures;
       break;
+    case 'package':
+      path = config.path.data.packages;
+      break;
     default:
       throw new Error(`Wrong objectType: ${objectType}`);
   }
@@ -130,8 +174,17 @@ export function getObjectNameTypeSqls(objectType: ObjectType): Map<string, { typ
     const fullPaths = statSync(path).isDirectory() ? [...findFiles(path)] : [path];
     for (const fullPath of fullPaths) {
       const sql = readFileSyncUtf16le(fullPath);
-      const nameTypeSqls = getNameTypeSqls(objectType, sql);
-      nameTypeSqlsAll = new Map<string, { type: ObjectType; sql: string }>([...nameTypeSqlsAll, ...nameTypeSqls]);
+      const sqlNoComment = removeCommentLiteralSql(sql);
+      if (objectType === 'package') {
+        const nameTypeSqlsFuncProc = getFunctionProcedure(sqlNoComment);
+        nameTypeSqlsAll = new Map<string, { type: ObjectType; sql: string }>([
+          ...nameTypeSqlsAll,
+          ...nameTypeSqlsFuncProc,
+        ]);
+      } else {
+        const nameTypeSqls = getNameTypeSqls(objectType, sqlNoComment);
+        nameTypeSqlsAll = new Map<string, { type: ObjectType; sql: string }>([...nameTypeSqlsAll, ...nameTypeSqls]);
+      }
     }
   }
 
@@ -159,22 +212,36 @@ function getObjectTypeAndName(
 
   return { type, name };
 }
-function getTablesIudFromSql(sql: string): IudExistsSchemaDotSql {
+function getTablesIudFromSql(usersAll: Set<string>, sql: string): IudExistsSchemaDotSql {
   const tablesInsert = new Set<string>();
   const tablesUpdate = new Set<string>();
   const tablesDelete = new Set<string>();
   let selectExists = false;
   const schemaDotObjects = new Set<string>();
 
-  const re = /(?<schemaDot>"?[\w$#]+"?\.)?(?<object>"?[\w$#]+"?)/g;
+  const re = /(?<userDot>"?[\w$#]+"?\.)?(?<schemaDot>"?[\w$#]+"?\.)?(?<object>"?[\w$#]+"?)/g;
 
   let prevType: IudType | 'MERGE' | 'SET' | 'NONE' = 'NONE';
 
   let m: RegExpExecArray | null;
   while ((m = re.exec(sql)) !== null) {
+    const userDot = m.groups?.userDot?.toUpperCase() || '';
     const schemaDot = m.groups?.schemaDot?.toUpperCase() || '';
     const object = m.groups?.object.toUpperCase() || '';
-    const schemaDotObject = `${schemaDot}${object}`;
+
+    let schemaDotObject = '';
+    if (userDot && schemaDot && object) {
+      const isUser = usersAll.has(trimEnd(userDot, '.'));
+      if (!isUser) {
+        throw new Error(`First part is not user in ${userDot}${schemaDot}${object}`);
+      }
+
+      schemaDotObject = `${schemaDot}${object}`;
+    } else if (userDot && object) {
+      schemaDotObject = `${userDot}${object}`;
+    } else if (object) {
+      schemaDotObject = `${object}`;
+    }
 
     switch (object) {
       case 'INSERT':
@@ -187,6 +254,11 @@ function getTablesIudFromSql(sql: string): IudExistsSchemaDotSql {
         continue;
       case 'INTO':
         if (prevType === 'INSERT' || prevType === 'MERGE') {
+          continue;
+        }
+        break;
+      case 'ALL':
+        if (prevType === 'INSERT') {
           continue;
         }
         break;
@@ -252,6 +324,7 @@ ${dateTime} ${prepend} ${body}
 }
 function getTablesIud(
   tables: Set<string>,
+  usersAll: Set<string>,
   tablesAll: Set<string>,
   nameTypeIudsAll: Map<string, { type: ObjectType; iud: IudExistsSchemaDotSql }> | null,
   nameObjectsAll: Map<string, ObjectInfo> | null,
@@ -283,7 +356,10 @@ function getTablesIud(
       }
 
       const sqlView = typeIudSub.iud.sql;
-      const { schemaDotObjects: schemaDotObjectsView, selectExists: selectExistsView } = getTablesIudFromSql(sqlView);
+      const { schemaDotObjects: schemaDotObjectsView, selectExists: selectExistsView } = getTablesIudFromSql(
+        usersAll,
+        sqlView
+      );
       tableFound = [...schemaDotObjectsView].find((schemaDotObject) => {
         const object = schemaDotObject.includes('.') ? schemaDotObject.split('.')[1] : schemaDotObject;
         return (tablesAll.has(schemaDotObject) && schemaDotObject) || (tablesAll.has(object) && object);
@@ -315,6 +391,7 @@ function getTablesIud(
 }
 function getObjectChild(
   iud: IudExistsSchemaDotSql,
+  usersAll: Set<string>,
   tablesAll: Set<string>,
   nameTypeIudsAll: Map<string, { type: ObjectType; iud: IudExistsSchemaDotSql }> | null,
   nameObjectsAll: Map<string, ObjectInfo> | null,
@@ -326,6 +403,7 @@ function getObjectChild(
   // If inserted to view, change to table inside of view
   const tablesInsertNew = getTablesIud(
     tablesInsert,
+    usersAll,
     tablesAll,
     nameTypeIudsAll,
     nameObjectsAll,
@@ -335,6 +413,7 @@ function getObjectChild(
   );
   const tablesUpdateNew = getTablesIud(
     tablesUpdate,
+    usersAll,
     tablesAll,
     nameTypeIudsAll,
     nameObjectsAll,
@@ -344,6 +423,7 @@ function getObjectChild(
   );
   const tablesDeleteNew = getTablesIud(
     tablesDelete,
+    usersAll,
     tablesAll,
     nameTypeIudsAll,
     nameObjectsAll,
@@ -450,6 +530,28 @@ export function getXmlInfoFromDb(xmlPath: string): XmlInfo | null {
   return { xmlPath, namespace, nodes };
 }
 
+export function insertUsersToDb(): Set<string> {
+  let usersAll = new Set<string>();
+
+  const path = config.path.data.users;
+
+  const fullPaths = statSync(path).isDirectory() ? [...findFiles(path)] : [path];
+  for (const fullPath of fullPaths) {
+    let values: string[] = [];
+
+    const value = readFileSyncUtf16le(fullPath);
+    values = values.concat(value.split(/\r*\n/));
+
+    const users = new Set(values.filter((v) => !!v).map((v) => v.toUpperCase()));
+    usersAll = new Set([...usersAll, ...users]);
+  }
+  if (!usersAll.size) return usersAll;
+
+  tCache.insertUsers(path, usersAll);
+
+  return usersAll;
+}
+
 export function insertTablesToDb(): Set<string> {
   let tablesAll = new Set<string>();
 
@@ -472,9 +574,9 @@ export function insertTablesToDb(): Set<string> {
   return tablesAll;
 }
 
-export function insertObjects(tablesAll: Set<string>): Map<string, ObjectInfo> {
+export function insertObjects(usersAll: Set<string>, tablesAll: Set<string>): Map<string, ObjectInfo> {
   let nameTypeSqlsAll = new Map<string, { type: ObjectType; sql: string }>();
-  const objectTypes: ObjectType[] = ['view', 'function', 'procedure'];
+  const objectTypes: (ObjectType | 'package')[] = ['view', 'function', 'procedure', 'package'];
   for (const objectType of objectTypes) {
     const nameTypeSqls = getObjectNameTypeSqls(objectType);
     nameTypeSqlsAll = new Map<string, { type: ObjectType; sql: string }>([...nameTypeSqlsAll, ...nameTypeSqls]);
@@ -482,7 +584,7 @@ export function insertObjects(tablesAll: Set<string>): Map<string, ObjectInfo> {
 
   const nameTypeIudsAll = new Map(
     [...nameTypeSqlsAll].map(([name, { type, sql }]) => {
-      const iud = getTablesIudFromSql(sql);
+      const iud = getTablesIudFromSql(usersAll, sql);
       return [name, { type, iud }];
     })
   );
@@ -491,7 +593,7 @@ export function insertObjects(tablesAll: Set<string>): Map<string, ObjectInfo> {
   const nameObjectsAll = new Map<string, ObjectInfo>();
   for (const [name, { type, iud }] of nameTypeIudsAll) {
     const { sql } = iud;
-    const objectChild = getObjectChild(iud, tablesAll, nameTypeIudsAll, null, type, name, sql);
+    const objectChild = getObjectChild(iud, usersAll, tablesAll, nameTypeIudsAll, null, type, name, sql);
     const object = { type, name, ...objectChild };
     objectsAll.push(object);
     nameObjectsAll.set(name, object);
@@ -506,6 +608,7 @@ export function insertObjects(tablesAll: Set<string>): Map<string, ObjectInfo> {
 export function insertXmlInfoXmlNodeInfo(
   rootDir: string,
   fullPath: string,
+  usersAll: Set<string>,
   tablesAll: Set<string>,
   nameObjectsAll: Map<string, ObjectInfo>
 ): XmlInfo | null {
@@ -574,9 +677,10 @@ export function insertXmlInfoXmlNodeInfo(
       console.error(`${id} has ${ex}`);
     }
 
-    const iud = getTablesIudFromSql(sql);
+    const iud = getTablesIudFromSql(usersAll, sql);
     const { objects, tablesInsert, tablesUpdate, tablesDelete, tablesOther, selectExists } = getObjectChild(
       iud,
+      usersAll,
       tablesAll,
       null,
       nameObjectsAll,

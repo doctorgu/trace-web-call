@@ -1,9 +1,17 @@
 export const sqlCacheInit = `
+drop table if exists Users;
 drop table if exists Tables;
 drop table if exists Objects;
 
 drop table if exists CstSimple;
 
+
+create table Users (
+    path text not null,
+    name text not null,
+    insertTime timestamp not null default current_timestamp,
+    primary key (path, name)
+);
 
 create table Tables (
     path text not null,

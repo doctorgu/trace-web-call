@@ -1,22 +1,20 @@
 import { promisify } from 'util';
 import { exec } from 'child_process';
-import { readdirSync, copyFileSync, unlinkSync, existsSync } from 'fs';
-import { basename } from 'path';
+import { readdirSync, copyFileSync, rmSync, existsSync, mkdirSync } from 'fs';
+import { resolve, dirname, basename } from 'path';
+import { config } from '../config/config';
+import { getDbPath } from '../common/common';
+import { emptyDirectory } from '../common/util';
 
 const runExec = promisify(exec);
 
 export async function copyModifiedUntracked() {
-  const destPath = `D:/Temp/trace-web-call`;
+  const rootDirDest = `D:/Temp/trace-web-call`;
   const path7Z = `"C:/Program Files/7-Zip/7Z"`;
   const destZipFile = `trace-web-call.pdf`;
 
-  console.log(`Deleting all in ${destPath}...`);
-  const destFiles = readdirSync(destPath);
-  for (let i = 0; i < destFiles.length; i++) {
-    const destFile = destFiles[i];
-    // console.log(`${destPath}/${destFile}`);
-    unlinkSync(`${destPath}/${destFile}`);
-  }
+  console.log(`Deleting all in ${rootDirDest}...`);
+  emptyDirectory(rootDirDest);
 
   // diff --name-only: Modified
   // (To supress 'warning: LF will be replaced by CRLF in yarn.lock.' -> git config--global core.safecrlf false)
@@ -30,22 +28,26 @@ export async function copyModifiedUntracked() {
   const paths = stdoutGit.split(/\n/).filter((path) => !!path);
 
   console.log(`Copying ${paths.length} count...`);
-  for (let i = 0; i < paths.length; i++) {
-    const path = paths[i];
+  for (const path of paths) {
+    const fullPathSrc = resolve(process.cwd(), path);
+    const subPath = getDbPath(process.cwd(), fullPathSrc);
+    const fullPathDest = `${rootDirDest}/${subPath}`;
+    const fullDirDest = dirname(fullPathDest);
 
-    const exists = existsSync(path);
-    if (!exists) {
-      console.log(`*** deleted: ${path}`);
+    if (!existsSync(fullPathSrc)) {
+      console.log(`*** deleted: ${fullPathSrc}`);
       continue;
     }
-    // const cmd = `copy ${path.replace(/\//g, '\\')} ${destPath}\\${basename(path)}`;
-    // const ret = await runExec(cmd);
 
-    copyFileSync(`${path}`, `${destPath}/${basename(path)}`);
+    if (!existsSync(fullDirDest)) {
+      mkdirSync(fullDirDest, { recursive: true });
+    }
+
+    copyFileSync(fullPathSrc, fullPathDest);
   }
 
   console.log(`Zipping ${paths.length} count...`);
-  const cmdZip = `${path7Z} a -tzip ${destPath}/${destZipFile} ${destPath}/*.*`;
+  const cmdZip = `${path7Z} a -r ${rootDirDest}/${destZipFile} ${rootDirDest}/*.*`;
   const { stdout: stdoutZip, stderr: stderrZip } = await runExec(cmdZip);
   if (stderrZip) {
     throw new Error(`${stderrZip}`);

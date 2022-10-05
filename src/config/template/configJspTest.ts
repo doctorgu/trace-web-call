@@ -23,10 +23,12 @@ export const configJspTest: ConfigType = {
       ],
     },
     data: {
+      users: './data/users.txt',
       tables: './test/OtherUserTables.txt',
       views: '',
       functions: '',
       procedures: '',
+      packages: '',
     },
     databaseDirectory: './data/databases',
     outputDirectory: './test/output',

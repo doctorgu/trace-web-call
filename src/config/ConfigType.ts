@@ -24,10 +24,12 @@ export type ConfigType = {
       }[];
     };
     data: {
+      users: './data/users.txt';
       tables: string;
       views: string;
       functions: string;
       procedures: string;
+      packages: string;
     };
     databaseDirectory: string;
     outputDirectory: string;

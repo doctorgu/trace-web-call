@@ -1,5 +1,5 @@
-import { closeSync, openSync, readSync, readFileSync, readdirSync, statSync } from 'fs';
-import { resolve } from 'path';
+import { rmSync, unlinkSync, closeSync, openSync, readSync, readFileSync, readdirSync, statSync } from 'fs';
+import { resolve, join } from 'path';
 import { format } from 'date-fns';
 
 /**
@@ -423,6 +423,14 @@ export function getAbsolutePathByDotDot(pathFullEndsWithFile: string, pathSrc: s
     pathsNew = [...pathsFullNoFile.slice(0, pathsFullNoFile.length - count), ...pathsSrc.slice(count)];
   }
   return pathsNew.join(isSlash ? '/' : '\\');
+}
+
+export function emptyDirectory(directory: string) {
+  const files = readdirSync(directory);
+  for (const file of files) {
+    rmSync(join(directory, file), { recursive: true, force: true });
+    // unlinkSync(join(directory, file));
+  }
 }
 
 export function logTimeMsg(startTime: number, message: string): number {

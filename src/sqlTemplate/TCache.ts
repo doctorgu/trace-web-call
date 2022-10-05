@@ -7,6 +7,26 @@ import betterSqlite3 from 'better-sqlite3';
 import { ObjectInfo, ObjectType } from '../common/batisHelper';
 
 class TCache {
+  selectUsers(path: string): DbRow[] {
+    const sql = `
+select  name
+from    Users
+where   path = @path
+order by name
+  `;
+    return all(configReader.dbCache(), sql, { path });
+  }
+
+  insertUsers(path: string, users: Set<string>): betterSqlite3.Database {
+    const sql = `
+insert into Users
+  (path, name)
+values
+  ${[...users].map((user) => `('${path}', '${user}')`).join(',')}
+  `;
+    return exec(configReader.dbCache(), sql);
+  }
+
   selectTables(path: string): DbRow[] {
     const sql = `
 select  name
@@ -149,6 +169,14 @@ insert into CstSimple
 values
   (@path, datetime(@mtime), @cstSimple)`;
     return run(configReader.dbCache(), sql, { path, mtime: mtime.toISOString(), cstSimple: JSON.stringify(cstSimple) });
+  }
+
+  truncateUsers() {
+    const sql = `
+delete
+from    Users;
+`;
+    return exec(configReader.dbCache(), sql);
   }
 
   truncateTables() {
