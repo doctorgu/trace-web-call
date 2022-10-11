@@ -38,4 +38,5 @@ export const configCompositeTest: ConfigType = {
     logDirectory: './output/log',
   },
   startingPoint: 'map',
+  defaultOwner: '',
 };

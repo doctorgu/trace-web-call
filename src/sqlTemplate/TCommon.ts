@@ -136,7 +136,7 @@ values
     const dbNameDest = parse(basename(pathDest)).name;
 
     const names = [
-      { name: 'table', view: 'vStartToTables', column: 'tables' },
+      { name: 'table', view: 'vStartToTableObject', column: 'tables' },
       { name: 'jsp', view: 'vStartToJsps', column: 'jsps' },
     ];
     const sqlDiffMap = new Map<string, string>();

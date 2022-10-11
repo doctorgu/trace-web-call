@@ -96,8 +96,8 @@ with recursive Objs as
             c.objects, c.tablesInsert, c.tablesUpdate, c.tablesDelete, c.tablesOther, c.selectExists, p.depth + 1 depth
     from    Objects c
             inner join Objs p
-            on p.path = c.path
-            and p.objects like '%"' || c.name || '"%'
+            on p.objects like '%"' || c.name || '"%'
+    where   (c.path = @pathView or c.path = @pathFunction or c.path = @pathProcedure)
 )
 select  type, name,
         objects, tablesInsert, tablesUpdate, tablesDelete, tablesOther, selectExists, depth

@@ -70,4 +70,5 @@ export const configComposite: ConfigType = {
     logDirectory: './output/log',
   },
   startingPoint: 'map',
+  defaultOwner: '',
 };

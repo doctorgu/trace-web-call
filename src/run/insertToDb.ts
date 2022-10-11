@@ -33,7 +33,9 @@ function insertJspClassXml(
   rootDir: string,
   usersAll: Set<string>,
   tablesAll: Set<string>,
+  tablesAllNoSchema: Set<string>,
   nameObjectsAll: Map<string, ObjectInfo>,
+  nameObjectsAllNoSchema: Map<string, ObjectInfo>,
   serviceXmlJspDirs: { service: DirectoryAndFilePattern; xml: string; jspDirectory: string }[]
 ): { jspInfos: JspInfo[]; classInfos: ClassInfo[]; xmlInfos: XmlInfo[] } {
   const classInfos: ClassInfo[] = [];
@@ -68,7 +70,15 @@ function insertJspClassXml(
     if (existsSync(fullDir)) {
       const fullPaths = statSync(fullDir).isDirectory() ? [...findFiles(fullDir, '*.xml')] : [fullDir];
       for (const fullPath of fullPaths) {
-        const xmlInfo = insertXmlInfoXmlNodeInfo(rootDir, fullPath, usersAll, tablesAll, nameObjectsAll);
+        const xmlInfo = insertXmlInfoXmlNodeInfo(
+          rootDir,
+          fullPath,
+          usersAll,
+          tablesAll,
+          tablesAllNoSchema,
+          nameObjectsAll,
+          nameObjectsAllNoSchema
+        );
         if (xmlInfo) {
           xmlInfos.push(xmlInfo);
         }
@@ -101,19 +111,23 @@ export function insertToDb() {
     startTime = logTimeMsg(startTime, `insertUsersToDb`);
   }
 
-  let tablesAll = getTablesFromDb();
+  let { tables: tablesAll, tablesNoSchema: tablesAllNoSchema } = getTablesFromDb();
   if (tablesAll.size) {
     startTime = logTimeMsg(startTime, `insertTablesToDb skipped`);
   } else {
-    tablesAll = insertTablesToDb();
+    const ret = insertTablesToDb();
+    tablesAll = ret.tables;
+    tablesAllNoSchema = ret.tablesNoSchema;
     startTime = logTimeMsg(startTime, `insertTablesToDb`);
   }
 
-  let nameObjectsAll = getNameObjectsAllFromDb();
+  let { nameObjects: nameObjectsAll, nameObjectsNoSchema: nameObjectsAllNoSchema } = getNameObjectsAllFromDb();
   if (nameObjectsAll.size) {
     startTime = logTimeMsg(startTime, `insertObjects skipped`);
   } else {
-    nameObjectsAll = insertObjects(usersAll, tablesAll);
+    const ret = insertObjects(usersAll, tablesAll, tablesAllNoSchema);
+    nameObjectsAll = ret.nameObjects;
+    nameObjectsAllNoSchema = ret.nameObjectsNoSchema;
     startTime = logTimeMsg(startTime, `insertObjects`);
   }
 
@@ -124,7 +138,15 @@ export function insertToDb() {
     jspInfos: jspInfosDep,
     classInfos: classInfosDep,
     xmlInfos: xmlInfosDep,
-  } = insertJspClassXml(rootDir, usersAll, tablesAll, nameObjectsAll, config.path.source.dependency);
+  } = insertJspClassXml(
+    rootDir,
+    usersAll,
+    tablesAll,
+    tablesAllNoSchema,
+    nameObjectsAll,
+    nameObjectsAllNoSchema,
+    config.path.source.dependency
+  );
   startTime = logTimeMsg(startTime, `insertJspClassXml Dependency`);
 
   for (let i = 0; i < config.path.source.main.length; i++) {
@@ -155,7 +177,9 @@ export function insertToDb() {
       rootDir,
       usersAll,
       tablesAll,
+      tablesAllNoSchema,
       nameObjectsAll,
+      nameObjectsAllNoSchema,
       serviceXmlJspDirs.service.directory ? [serviceXmlJspDirs] : []
     );
     startTime = logTimeMsg(startTime, `insertJspClassXml Main ${directory}`);

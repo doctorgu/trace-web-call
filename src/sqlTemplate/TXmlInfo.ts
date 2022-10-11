@@ -83,10 +83,7 @@ values
   {values}
 `;
       const sqlTmpValues = `({xmlPath}, {id}, {tagName}, {params}, {objects}, {tablesInsert}, {tablesUpdate}, {tablesDelete}, {tablesOther}, {selectExists})`;
-      const sqlValues = new SqlTemplate(sqlTmpValues).replaceAlls(
-        nodesJson.map((node) => node),
-        ','
-      );
+      const sqlValues = new SqlTemplate(sqlTmpValues).replaceAlls(nodesJson, ',\n');
       sqlXmlNode = sqlTmpXmlNode.replace('{values}', escapeDollar(sqlValues));
     }
 

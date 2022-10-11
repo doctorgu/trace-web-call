@@ -14,7 +14,7 @@ drop table if exists JspInfo;
 
 drop view if exists vRouteTable;
 drop view if exists vRouteTableTxt;
-drop view if exists vStartToTables;
+drop view if exists vStartToTableObject;
 drop view if exists vJspViews;
 
 -- strict removed because SQLiteStudio does not support it.
@@ -173,44 +173,44 @@ as
 select  r.keyName, r.groupSeq, r.seq, min(r.depth) depth, min(r.routeType) routeType,
         ifnull(
             case routeType
-            when 'mapping' then group_concat(jMapping.value)
-            when 'method' then group_concat(r.valueMethod)
-            when 'xml' then group_concat(r.valueXml)
-            when 'view' then group_concat(r.valueView)
-            when 'function' then group_concat(r.valueFunction)
-            when 'procedure' then group_concat(r.valueProcedure)
+            when 'mapping' then group_concat(distinct jMapping.value)
+            when 'method' then group_concat(distinct r.valueMethod)
+            when 'xml' then group_concat(distinct r.valueXml)
+            when 'view' then group_concat(distinct r.valueView)
+            when 'function' then group_concat(distinct r.valueFunction)
+            when 'procedure' then group_concat(distinct r.valueProcedure)
             end
         , ''
         ) value,
 
         ifnull(
             case when routeType in ('xml', 'view', 'function', 'procedure') then
-                group_concat(jObjects.value)
+                group_concat(distinct jObjects.value)
             end
         , '') objects,
         ifnull(
             case when routeType in ('xml', 'view', 'function', 'procedure') then
-                group_concat(jTablesInsert.value)
+                group_concat(distinct jTablesInsert.value)
             end
         , '') tablesInsert,
         ifnull(
             case when routeType in ('xml', 'view', 'function', 'procedure') then
-                group_concat(jTablesUpdate.value)
+                group_concat(distinct jTablesUpdate.value)
             end
         , '') tablesUpdate,
         ifnull(
             case when routeType in ('xml', 'view', 'function', 'procedure') then
-                group_concat(jTablesDelete.value)
+                group_concat(distinct jTablesDelete.value)
             end
         , '') tablesDelete,
         ifnull(
             case when routeType in ('xml', 'view', 'function', 'procedure') then
-                group_concat(jTablesOther.value)
+                group_concat(distinct jTablesOther.value)
             end
         , '') tablesOther,
         ifnull(
             case when routeType in ('xml', 'view', 'function', 'procedure') then
-                group_concat(jSelectExists.value)
+                group_concat(distinct jSelectExists.value)
             end
         , '') selectExists
 

@@ -35,4 +35,5 @@ export const configJspModelAndView: ConfigType = {
     logDirectory: './test/output',
   },
   startingPoint: 'map',
+  defaultOwner: '',
 };

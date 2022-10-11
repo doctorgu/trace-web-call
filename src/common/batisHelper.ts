@@ -1,5 +1,13 @@
 import { xml2js, Element } from 'xml-js';
-import { removeCommentSql, removeCommentLiteralSql, readFileSyncUtf16le, findFiles, trim, trimEnd } from './util';
+import {
+  removeCommentSql,
+  removeCommentLiteralSql,
+  readFileSyncUtf16le,
+  findFiles,
+  trim,
+  trimEnd,
+  isSqlKeyword,
+} from './util';
 import { config } from '../config/config';
 import { existsSync, statSync } from 'fs';
 import { getDbPath } from './common';
@@ -21,14 +29,16 @@ export type ObjectChild = {
   selectExists: boolean;
 };
 export type ObjectInfo = { type: ObjectType; name: string } & ObjectChild;
+
 export type IudExistsSchemaDotSql = {
   tablesInsert: Set<string>;
   tablesUpdate: Set<string>;
   tablesDelete: Set<string>;
   selectExists: boolean;
-  schemaDotObjects: Set<string>;
+  names: Set<string>;
   sql: string;
 };
+export type IudExistsSchemaDotSql2 = { type: ObjectType; name: string } & IudExistsSchemaDotSql;
 
 export type XmlNodeInfo = {
   id: string;
@@ -48,26 +58,81 @@ export type XmlInfo = {
 export type ObjectType = 'table' | 'view' | 'function' | 'procedure';
 export type IudType = 'INSERT' | 'UPDATE' | 'DELETE';
 
+function appendLog(
+  prepend: string,
+  schemaDotObject: string,
+  name: string,
+  type: ObjectType | 'xml',
+  typeIudSub: IudExistsSchemaDotSql2 | undefined,
+  sql: string
+) {
+  const dateTime = format(new Date(), 'yyyy-MM-dd HH:mm:ss');
+  const body = `schemaDotObject: ${schemaDotObject}, name: ${name}, type: ${type}, typeSub: ${typeIudSub?.type},
+sql: ${sql}`;
+  const log = `==================================================
+${dateTime} ${prepend} ${body}
+
+`;
+  appendFileSync(resolve(config.path.logDirectory, 'getObjectChild.log'), log);
+  // console.log(log);
+}
+function appendLogOwner(userDot: string, schemaDot: string, object: string, name: string, sql: string) {
+  const dateTime = format(new Date(), 'yyyy-MM-dd HH:mm:ss');
+  const body = `userDot: ${userDot}, schemaDot: ${schemaDot}, object: ${object},
+sql: ${sql}`;
+  const log = `==================================================
+${dateTime} ${name} ${body}
+
+`;
+  appendFileSync(resolve(config.path.logDirectory, 'owner.log'), log);
+  // console.log(log);
+}
+
+function getNameNoSchema(name: string): string {
+  const names = name.split('.');
+  if (names.length > 1) {
+    return names.filter((v, i) => i > 0).join('.');
+  }
+  return name;
+}
+
 export function getUsersFromDb(): Set<string> {
   const path = config.path.data.users;
   const rows = tCache.selectUsers(path);
-  const tables = new Set(rows.map(({ name }) => name));
-  return tables;
+  const users = new Set(rows.map(({ name }) => name));
+  return users;
 }
 
-export function getTablesFromDb(): Set<string> {
+export function getTablesFromDb(): { tables: Set<string>; tablesNoSchema: Set<string> } {
   const path = config.path.data.tables;
   const rows = tCache.selectTables(path);
   const tables = new Set(rows.map(({ name }) => name));
-  return tables;
+  const tablesNoSchema = new Set(rows.map(({ name }) => getNameNoSchema(name)));
+  return { tables, tablesNoSchema };
 }
 
-export function getNameObjectsAllFromDb(): Map<string, ObjectInfo> {
-  let nameObjectsAll = new Map<string, ObjectInfo>();
+export function getNameObjectsAllFromDb(): {
+  nameObjects: Map<string, ObjectInfo>;
+  nameObjectsNoSchema: Map<string, ObjectInfo>;
+} {
+  let nameObjects = new Map<string, ObjectInfo>();
+  let nameObjectsNoSchema = new Map<string, ObjectInfo>();
 
   const rows = tCache.selectObjectsAll(configReader.objectTypeAndPath());
   for (const { type, name, objects, tablesInsert, tablesUpdate, tablesDelete, tablesOther, selectExists } of rows) {
-    nameObjectsAll.set(name, {
+    const nameNoSchema = getNameNoSchema(name);
+
+    nameObjects.set(name, {
+      type,
+      name,
+      objects: new Set<string>(JSON.parse(objects)),
+      tablesInsert: new Set<string>(JSON.parse(tablesInsert)),
+      tablesUpdate: new Set<string>(JSON.parse(tablesUpdate)),
+      tablesDelete: new Set<string>(JSON.parse(tablesDelete)),
+      tablesOther: new Set<string>(JSON.parse(tablesOther)),
+      selectExists: selectExists === 1,
+    });
+    nameObjectsNoSchema.set(nameNoSchema, {
       type,
       name,
       objects: new Set<string>(JSON.parse(objects)),
@@ -79,84 +144,109 @@ export function getNameObjectsAllFromDb(): Map<string, ObjectInfo> {
     });
   }
 
-  return nameObjectsAll;
+  return { nameObjects, nameObjectsNoSchema };
 }
+function matchAllCreate(
+  type: 'function' | 'procedure' | 'package\\+body',
+  sql: string,
+  usersAll: Set<string>
+): { schemaDot: string; object: string; sql: string }[] {
+  let before = '';
+  if (type === 'function') {
+    before = '(\\s+editionable|\\s+noneditionable)?';
+  }
 
+  let after = '';
+  if (type === 'function') {
+    after = '.+?return';
+  } else if (type === 'procedure') {
+    after = '.+?(is|as)';
+  } else if (type === 'package\\+body') {
+    after = '\\s+(is|as)';
+  }
+
+  const prefix = `create(\\s+or\\s+replace)?${before}\\s+${type}\\s+(?<schemaDot{index}>"?[\\w$#]+"?\\.)?(?<object{index}>"?[\\w$#]+"?)${after}(?<sql{index}>.+?)end`;
+  const re1 = `${prefix}\\s+\\k<object{index}>\\s*;`.replace(/{index}/g, '0');
+  const re2 = `${prefix}\\s*;`.replace(/{index}/g, '1');
+  const re = `${re1}|${re2}`;
+  const ms = sql.matchAll(new RegExp(re, 'gis'));
+
+  const rets: { schemaDot: string; object: string; sql: string }[] = [];
+  for (const m of ms) {
+    const schemaDot = trim(m.groups?.schemaDot0 || m.groups?.schemaDot1 || '', '"').toUpperCase();
+    if (schemaDot && !usersAll.has(trimEnd(schemaDot, '.'))) {
+      continue;
+    }
+
+    const object = trim(m.groups?.object0 || m.groups?.object1 || '', '"').toUpperCase();
+    const sql = m.groups?.sql0 || m.groups?.sql1 || '';
+    rets.push({ schemaDot, object, sql });
+  }
+  return rets;
+}
+function matchAllFuncProcInPkg(type: 'function' | 'procedure', sql: string): { object: string; sql: string }[] {
+  let after = '';
+  if (type === 'function') {
+    after = '.+?return';
+  } else if (type === 'procedure') {
+    after = '.+?(is|as)';
+  }
+  const prefix = `\\s+${type}\\s+(?<object{index}>"?[\\w$#]+"?)${after}(?<sql{index}>.+?)end`;
+  const re1 = `${prefix}\\s+\\k<object{index}>\\s*;`.replace(/{index}/g, '0');
+  const re2 = `${prefix}\\s*;`.replace(/{index}/g, '1');
+  const re = `${re1}|${re2}`;
+  const ms = sql.matchAll(new RegExp(re, 'gis'));
+
+  const rets: { object: string; sql: string }[] = [];
+  for (const m of ms) {
+    const object = trim(m.groups?.object0 || m.groups?.object1 || '', '"').toUpperCase();
+    const sql = m.groups?.sql0 || m.groups?.sql1 || '';
+    rets.push({ object, sql });
+  }
+  return rets;
+}
 export function getObjectNameTypeSqls(
-  objectType: ObjectType | 'package'
-): Map<string, { type: ObjectType; sql: string }> {
-  function getFunctionProcedure(sqlNoComment: string): Map<string, { type: ObjectType; sql: string }> {
-    const rePackage =
-      /create(\s+or\s+replace)?\s+package\s+body\s+(?<schemaDot>"?[\w$#]+"?\.)?(?<object>"?[\w$#]+"?)\s+(is|as)(?<sql>.+?)end(\s+\k<object>)?\s*;/gis;
-    let m: RegExpExecArray | null;
+  objectType: 'function' | 'procedure' | 'package',
+  usersAll: Set<string>
+): Map<string, { type: 'function' | 'procedure'; sql: string }> {
+  function getFuncProcInPkg(
+    sqlNoComment: string,
+    usersAll: Set<string>
+  ): Map<string, { type: 'function' | 'procedure'; sql: string }> {
+    const typeFuncProcs: ('function' | 'procedure')[] = ['function', 'procedure'];
 
-    const resFuncProc: [ObjectType, RegExp][] = [
-      [
-        'function',
-        /\s+function\s+(?<schemaDot>"?[\w$#]+"?\.)?(?<object>"?[\w$#]+"?)\s+.+?return(?<sql>.+?)end(\s+\k<object>)?\s*;/gis,
-      ],
-      [
-        'procedure',
-        /\s+procedure\s+(?<schemaDot>"?[\w$#]+"?\.)?(?<object>"?[\w$#]+"?)\s+.+?(is|as)(?<sql>.+?)end(\s+\k<object>)?\s*;/gis,
-      ],
-    ];
-
-    let nameTypeSqlsAll = new Map<string, { type: ObjectType; sql: string }>();
-    while ((m = rePackage.exec(sqlNoComment)) !== null) {
-      const sqlPackage = m.groups?.sql || '';
-
-      for (const [typeFuncProc, reFuncProc] of resFuncProc) {
-        let m: RegExpExecArray | null;
-        const nameTypeSqls = new Map<string, { type: ObjectType; sql: string }>();
-        while ((m = reFuncProc.exec(sqlPackage)) !== null) {
-          // const schemaDot = m.groups?.schemaDot || '';
-          const object = trim(m.groups?.object || '', '"').toUpperCase();
-          const sqlFuncProc = m.groups?.sql || '';
-          nameTypeSqls.set(object, { type: typeFuncProc, sql: sqlFuncProc });
-          nameTypeSqlsAll = new Map<string, { type: ObjectType; sql: string }>([...nameTypeSqlsAll, ...nameTypeSqls]);
+    let nameTypeSqlsAll = new Map<string, { type: 'function' | 'procedure'; sql: string }>();
+    const schemaDotObjectSqls = matchAllCreate('package\\+body', sqlNoComment, usersAll);
+    for (const { schemaDot, object, sql } of schemaDotObjectSqls) {
+      for (const typeFuncProc of typeFuncProcs) {
+        for (const { object: objectFuncProc, sql: sqlFuncProc } of matchAllFuncProcInPkg(typeFuncProc, sql)) {
+          nameTypeSqlsAll.set(`${schemaDot}${object}.${objectFuncProc}`, { type: typeFuncProc, sql: sqlFuncProc });
         }
       }
     }
 
     return nameTypeSqlsAll;
   }
-  function getNameTypeSqls(type: ObjectType, sqlNoComment: string): Map<string, { type: ObjectType; sql: string }> {
-    const res = new Map<ObjectType, RegExp>([
-      [
-        'view',
-        /create(\s+or\s+replace)?((\s+no)?(\s+force))?\s+view\s+(?<schemaDot>"?[\w$#]+"?\.)?(?<object>"?[\w$#]+"?)\s+.+?as(?<sql>.+?);/gis,
-      ],
-      [
-        'function',
-        /create(\s+or\s+replace)?(\s+editionable|\s+noneditionable)?\s+function\s+(?<schemaDot>"?[\w$#]+"?\.)?(?<object>"?[\w$#]+"?)\s+.+?return(?<sql>.+?)end(\s+\k<object>)?\s*;/gis,
-      ],
-      [
-        'procedure',
-        /create(\s+or\s+replace)?\s+procedure\s+(?<schemaDot>"?[\w$#]+"?\.)?(?<object>"?[\w$#]+"?)\s+.+?(is|as)(?<sql>.+?)end(\s+\k<object>)?\s*;/gis,
-      ],
-    ]);
-    let m: RegExpExecArray | null;
-    const re = res.get(type);
-    if (!re) throw new Error(`Wrong type: ${type}`);
-
-    const nameTypeSqls = new Map<string, { type: ObjectType; sql: string }>();
-    while ((m = re.exec(sqlNoComment)) !== null) {
-      // const schemaDot = m.groups?.schemaDot || '';
-      const object = trim(m.groups?.object || '', '"').toUpperCase();
-      const sql = m.groups?.sql || '';
-      nameTypeSqls.set(object, { type, sql });
+  function getNameTypeSqls(
+    type: 'function' | 'procedure',
+    sqlNoComment: string,
+    usersAll: Set<string>
+  ): Map<string, { type: 'function' | 'procedure'; sql: string }> {
+    const typeFuncProcs: ('function' | 'procedure')[] = ['function', 'procedure'];
+    const nameTypeSqls = new Map<string, { type: 'function' | 'procedure'; sql: string }>();
+    for (const typeFuncProc of typeFuncProcs) {
+      for (const { schemaDot, object, sql } of matchAllCreate(typeFuncProc, sqlNoComment, usersAll)) {
+        nameTypeSqls.set(`${schemaDot}${object}`, { type, sql });
+      }
     }
 
     return nameTypeSqls;
   }
 
-  let nameTypeSqlsAll = new Map<string, { type: ObjectType; sql: string }>();
+  let nameTypeSqlsAll = new Map<string, { type: 'function' | 'procedure'; sql: string }>();
 
   let path = '';
   switch (objectType) {
-    case 'view':
-      path = config.path.data.views;
-      break;
     case 'function':
       path = config.path.data.functions;
       break;
@@ -176,14 +266,17 @@ export function getObjectNameTypeSqls(
       const sql = readFileSyncUtf16le(fullPath);
       const sqlNoComment = removeCommentLiteralSql(sql);
       if (objectType === 'package') {
-        const nameTypeSqlsFuncProc = getFunctionProcedure(sqlNoComment);
-        nameTypeSqlsAll = new Map<string, { type: ObjectType; sql: string }>([
+        const nameTypeSqlsFuncProc = getFuncProcInPkg(sqlNoComment, usersAll);
+        nameTypeSqlsAll = new Map<string, { type: 'function' | 'procedure'; sql: string }>([
           ...nameTypeSqlsAll,
           ...nameTypeSqlsFuncProc,
         ]);
       } else {
-        const nameTypeSqls = getNameTypeSqls(objectType, sqlNoComment);
-        nameTypeSqlsAll = new Map<string, { type: ObjectType; sql: string }>([...nameTypeSqlsAll, ...nameTypeSqls]);
+        const nameTypeSqls = getNameTypeSqls(objectType, sqlNoComment, usersAll);
+        nameTypeSqlsAll = new Map<string, { type: 'function' | 'procedure'; sql: string }>([
+          ...nameTypeSqlsAll,
+          ...nameTypeSqls,
+        ]);
       }
     }
   }
@@ -212,12 +305,44 @@ function getObjectTypeAndName(
 
   return { type, name };
 }
-function getTablesIudFromSql(usersAll: Set<string>, sql: string): IudExistsSchemaDotSql {
+function getViewObjectsFromDependencies(): ObjectInfo[] {
+  const _0_name = 0;
+  const _1_objects = 1;
+  const _2_tables_other = 2;
+
+  const path = config.path.data.views;
+  const fullPaths = statSync(path).isDirectory() ? [...findFiles(path)] : [path];
+  let values: string[] = [];
+  for (const fullPath of fullPaths) {
+    const value = removeCommentLiteralSql(readFileSyncUtf16le(fullPath));
+    values = values.concat(value.split(/\r*\n/).filter((v) => !!v));
+  }
+
+  const objects: ObjectInfo[] = [];
+  for (const row of values) {
+    const cols = row.split(/\t/);
+    const object = {
+      type: 'view' as ObjectType,
+      name: cols[_0_name],
+      objects: new Set<string>(JSON.parse(cols[_1_objects])),
+      tablesInsert: new Set<string>(),
+      tablesUpdate: new Set<string>(),
+      tablesDelete: new Set<string>(),
+      tablesOther: new Set<string>(JSON.parse(cols[_2_tables_other])),
+      selectExists: true,
+    };
+    objects.push(object);
+  }
+
+  return objects;
+}
+
+function getTablesIudFromSql(usersAll: Set<string>, sql: string, nameForLog: string): IudExistsSchemaDotSql {
   const tablesInsert = new Set<string>();
   const tablesUpdate = new Set<string>();
   const tablesDelete = new Set<string>();
   let selectExists = false;
-  const schemaDotObjects = new Set<string>();
+  const names = new Set<string>();
 
   const re = /(?<userDot>"?[\w$#]+"?\.)?(?<schemaDot>"?[\w$#]+"?\.)?(?<object>"?[\w$#]+"?)/g;
 
@@ -229,18 +354,19 @@ function getTablesIudFromSql(usersAll: Set<string>, sql: string): IudExistsSchem
     const schemaDot = m.groups?.schemaDot?.toUpperCase() || '';
     const object = m.groups?.object.toUpperCase() || '';
 
-    let schemaDotObject = '';
+    let name = '';
     if (userDot && schemaDot && object) {
       const isUser = usersAll.has(trimEnd(userDot, '.'));
       if (!isUser) {
-        throw new Error(`First part is not user in ${userDot}${schemaDot}${object}`);
+        appendLogOwner(userDot, schemaDot, object, nameForLog, sql);
+        // throw new Error(`First part is not user in ${userDot}${schemaDot}${object}, name: ${nameForLog}`);
       }
 
-      schemaDotObject = `${schemaDot}${object}`;
+      name = `${userDot}${schemaDot}${object}`;
     } else if (userDot && object) {
-      schemaDotObject = `${userDot}${object}`;
+      name = `${userDot}${object}`;
     } else if (object) {
-      schemaDotObject = `${object}`;
+      name = `${object}`;
     }
 
     switch (object) {
@@ -282,61 +408,118 @@ function getTablesIudFromSql(usersAll: Set<string>, sql: string): IudExistsSchem
     if (prevType !== 'NONE') {
       switch (prevType) {
         case 'INSERT':
-          tablesInsert.add(schemaDotObject);
+          tablesInsert.add(name);
           break;
         case 'UPDATE':
-          tablesUpdate.add(schemaDotObject);
+          tablesUpdate.add(name);
           break;
         case 'DELETE':
-          tablesDelete.add(schemaDotObject);
+          tablesDelete.add(name);
           break;
         case 'MERGE':
-          tablesInsert.add(schemaDotObject);
-          tablesUpdate.add(schemaDotObject);
+          tablesInsert.add(name);
+          tablesUpdate.add(name);
           break;
       }
     } else {
-      schemaDotObjects.add(schemaDotObject);
+      if (!isSqlKeyword(name)) {
+        names.add(name);
+      }
     }
 
     prevType = 'NONE';
   }
 
-  return { tablesInsert, tablesUpdate, tablesDelete, selectExists, schemaDotObjects, sql };
+  return { tablesInsert, tablesUpdate, tablesDelete, selectExists, names, sql };
 }
-function appendLog(
-  prepend: string,
-  schemaDotObject: string,
-  name: string,
-  type: ObjectType | 'xml',
-  typeIudSub: { type: ObjectType; iud: IudExistsSchemaDotSql } | undefined,
-  sql: string
-) {
-  const dateTime = format(new Date(), 'yyyy-MM-dd HH:mm:ss');
-  const body = `schemaDotObject: ${schemaDotObject}, name: ${name}, type: ${type}, typeSub: ${typeIudSub?.type},
-sql: ${sql}`;
-  const log = `==================================================
-${dateTime} ${prepend} ${body}
 
-`;
-  appendFileSync(resolve(config.path.logDirectory, 'getObjectChild.log'), log);
-  // console.log(log);
+function findTable(tablesAll: Set<string>, tablesAllNoSchema: Set<string>, name: string, nameNoSchema: string): string {
+  if (tablesAll.has(name)) return name;
+
+  if (tablesAllNoSchema.has(nameNoSchema)) {
+    const tablesFound = [...tablesAll].filter((t) => t.endsWith(`.${nameNoSchema}`));
+    if (tablesFound.length === 0) {
+      return '';
+    } else if (tablesFound.length === 1) {
+      return tablesFound[0];
+    } else {
+      return `${config.defaultOwner}.${nameNoSchema}`;
+    }
+  }
+
+  return '';
+}
+function findNameTypeIuds(
+  nameTypeIudsAll: Map<string, IudExistsSchemaDotSql2>,
+  nameTypeIudsAllNoSchema: Map<string, IudExistsSchemaDotSql2>,
+  name: string,
+  nameNoSchema: string
+): string {
+  let typeIud = nameTypeIudsAll.get(name);
+  if (typeIud) {
+    return name;
+  }
+
+  typeIud = nameTypeIudsAllNoSchema.get(nameNoSchema);
+  if (typeIud) {
+    return typeIud.name;
+  }
+
+  return '';
+}
+function findNameObjects(
+  nameObjectsAll: Map<string, ObjectInfo>,
+  nameObjectsAllNoSchema: Map<string, ObjectInfo>,
+  name: string,
+  nameNoSchema: string
+): string {
+  if (nameObjectsAll.has(name)) return name;
+
+  const objectFound = nameObjectsAllNoSchema.get(nameNoSchema);
+  if (objectFound) {
+    return objectFound.name;
+  }
+
+  return '';
+}
+function getNameTypeIuds(
+  nameTypeIudsAll: Map<string, IudExistsSchemaDotSql2>,
+  nameTypeIudsAllNoSchema: Map<string, IudExistsSchemaDotSql2>,
+  name: string,
+  nameNoSchema: string
+): IudExistsSchemaDotSql2 | undefined {
+  const nameFound = findNameTypeIuds(nameTypeIudsAll, nameTypeIudsAllNoSchema, name, nameNoSchema);
+  if (nameFound) return nameTypeIudsAll.get(nameFound);
+  return undefined;
+}
+function getNameObjects(
+  nameObjectsAll: Map<string, ObjectInfo>,
+  nameObjectsAllNoSchema: Map<string, ObjectInfo>,
+  name: string,
+  nameNoSchema: string
+): ObjectInfo | undefined {
+  const nameFound = findNameObjects(nameObjectsAll, nameObjectsAllNoSchema, name, nameNoSchema);
+  if (nameFound) return nameObjectsAll.get(nameFound);
+  return undefined;
 }
 function getTablesIud(
   tables: Set<string>,
   usersAll: Set<string>,
   tablesAll: Set<string>,
-  nameTypeIudsAll: Map<string, { type: ObjectType; iud: IudExistsSchemaDotSql }> | null,
+  tablesAllNoSchema: Set<string>,
+  nameTypeIudsAll: Map<string, IudExistsSchemaDotSql2> | null,
+  nameTypeIudsAllNoSchema: Map<string, IudExistsSchemaDotSql2> | null,
   nameObjectsAll: Map<string, ObjectInfo> | null,
+  nameObjectsAllNoSchema: Map<string, ObjectInfo> | null,
   typeForLog: ObjectType | 'xml',
   nameForLog: string,
   sqlForLog: string
 ): Set<string> {
   const tablesNew = new Set<string>();
-  for (const schemaDotObject of tables) {
-    const object = schemaDotObject.includes('.') ? schemaDotObject.split('.')[1] : schemaDotObject;
+  for (const name of tables) {
+    const nameNoSchema = getNameNoSchema(name);
 
-    const table = (tablesAll.has(schemaDotObject) && schemaDotObject) || (tablesAll.has(object) && object);
+    const table = findTable(tablesAll, tablesAllNoSchema, name, nameNoSchema);
     if (table) {
       tablesNew.add(table);
       continue;
@@ -344,43 +527,45 @@ function getTablesIud(
 
     let tableFound: string | undefined = '';
     let typeIudSub = undefined;
-    if (nameTypeIudsAll) {
-      typeIudSub = nameTypeIudsAll.get(schemaDotObject) || nameTypeIudsAll.get(object);
+    if (nameTypeIudsAll && nameTypeIudsAllNoSchema) {
+      typeIudSub = getNameTypeIuds(nameTypeIudsAll, nameTypeIudsAllNoSchema, name, nameNoSchema);
       if (!typeIudSub) {
-        appendLog('Table or objects not exists in IUD', schemaDotObject, nameForLog, typeForLog, typeIudSub, sqlForLog);
+        appendLog('Table or objects not exists in IUD', name, nameForLog, typeForLog, typeIudSub, sqlForLog);
         continue;
       }
       if (typeIudSub.type !== 'view') {
-        appendLog('Object is not table or view in IUD', schemaDotObject, nameForLog, typeForLog, typeIudSub, sqlForLog);
+        appendLog('Object is not table or view in IUD', name, nameForLog, typeForLog, typeIudSub, sqlForLog);
         continue;
       }
 
-      const sqlView = typeIudSub.iud.sql;
-      const { schemaDotObjects: schemaDotObjectsView, selectExists: selectExistsView } = getTablesIudFromSql(
-        usersAll,
-        sqlView
-      );
-      tableFound = [...schemaDotObjectsView].find((schemaDotObject) => {
-        const object = schemaDotObject.includes('.') ? schemaDotObject.split('.')[1] : schemaDotObject;
-        return (tablesAll.has(schemaDotObject) && schemaDotObject) || (tablesAll.has(object) && object);
+      const sqlView = typeIudSub.sql;
+      const { names, selectExists: selectExistsView } = getTablesIudFromSql(usersAll, sqlView, nameForLog);
+      tableFound = [...names].find((nameCur) => {
+        const nameNoSchemaCur = getNameNoSchema(nameCur);
+        const nameFound = findTable(tablesAll, tablesAllNoSchema, nameCur, nameNoSchema);
+        return nameFound;
       });
-    } else if (nameObjectsAll) {
-      const objectsFound = nameObjectsAll.get(schemaDotObject) || nameObjectsAll.get(object);
+    } else if (nameObjectsAll && nameObjectsAllNoSchema) {
+      const objectsFound = getNameObjects(nameObjectsAll, nameObjectsAllNoSchema, name, nameNoSchema);
       if (!objectsFound) {
-        appendLog('Table or objects not exists in IUD', schemaDotObject, nameForLog, typeForLog, undefined, sqlForLog);
+        appendLog('Table or objects not exists in IUD', name, nameForLog, typeForLog, undefined, sqlForLog);
         continue;
       }
       if (objectsFound.type !== 'view') {
-        appendLog('Object is not table or view in IUD', schemaDotObject, nameForLog, typeForLog, undefined, sqlForLog);
+        appendLog('Object is not table or view in IUD', name, nameForLog, typeForLog, undefined, sqlForLog);
         continue;
       }
 
       const { tablesOther } = objectsFound;
-      tableFound = (tablesOther.has(schemaDotObject) && schemaDotObject) || (tablesOther.has(object) && object) || '';
+      tableFound = [...tablesOther].find((nameCur) => {
+        const nameNoSchemaCur = getNameNoSchema(nameCur);
+        const nameFound = findTable(tablesAll, tablesAllNoSchema, nameCur, nameNoSchemaCur);
+        return nameForLog;
+      });
     }
 
     if (!tableFound) {
-      appendLog('Table not exists inside view', schemaDotObject, nameForLog, typeForLog, typeIudSub, sqlForLog);
+      appendLog('Table not exists inside view', name, nameForLog, typeForLog, typeIudSub, sqlForLog);
       continue;
     }
 
@@ -393,20 +578,26 @@ function getObjectChild(
   iud: IudExistsSchemaDotSql,
   usersAll: Set<string>,
   tablesAll: Set<string>,
-  nameTypeIudsAll: Map<string, { type: ObjectType; iud: IudExistsSchemaDotSql }> | null,
+  tablesAllNoSchema: Set<string>,
+  nameTypeIudsAll: Map<string, IudExistsSchemaDotSql2> | null,
+  nameTypeIudsAllNoSchema: Map<string, IudExistsSchemaDotSql2> | null,
   nameObjectsAll: Map<string, ObjectInfo> | null,
+  nameObjectsAllNoSchema: Map<string, ObjectInfo> | null,
   typeForLog: ObjectType | 'xml',
   nameForLog: string,
   sqlForLog: string
 ): ObjectChild {
-  const { tablesInsert, tablesUpdate, tablesDelete, selectExists, schemaDotObjects, sql } = iud;
+  const { tablesInsert, tablesUpdate, tablesDelete, selectExists, names, sql } = iud;
   // If inserted to view, change to table inside of view
   const tablesInsertNew = getTablesIud(
     tablesInsert,
     usersAll,
     tablesAll,
+    tablesAllNoSchema,
     nameTypeIudsAll,
+    nameTypeIudsAllNoSchema,
     nameObjectsAll,
+    nameObjectsAllNoSchema,
     typeForLog,
     nameForLog,
     sqlForLog
@@ -415,8 +606,11 @@ function getObjectChild(
     tablesUpdate,
     usersAll,
     tablesAll,
+    tablesAllNoSchema,
     nameTypeIudsAll,
+    nameTypeIudsAllNoSchema,
     nameObjectsAll,
+    nameObjectsAllNoSchema,
     typeForLog,
     nameForLog,
     sqlForLog
@@ -425,8 +619,11 @@ function getObjectChild(
     tablesDelete,
     usersAll,
     tablesAll,
+    tablesAllNoSchema,
     nameTypeIudsAll,
+    nameTypeIudsAllNoSchema,
     nameObjectsAll,
+    nameObjectsAllNoSchema,
     typeForLog,
     nameForLog,
     sqlForLog
@@ -434,25 +631,23 @@ function getObjectChild(
 
   const tablesOtherNew = new Set<string>();
   const objectsNew = new Set<string>();
-  for (const schemaDotObject of schemaDotObjects) {
-    const object = schemaDotObject.includes('.') ? schemaDotObject.split('.')[1] : schemaDotObject;
+  for (const name of names) {
+    const nameNoSchema = getNameNoSchema(name);
 
-    const tableNew = (tablesAll.has(schemaDotObject) && schemaDotObject) || (tablesAll.has(object) && object);
+    const tableNew = findTable(tablesAll, tablesAllNoSchema, name, nameNoSchema);
     if (tableNew) {
       tablesOtherNew.add(tableNew);
       continue;
     }
 
-    if (nameTypeIudsAll) {
-      const objectNew =
-        (nameTypeIudsAll.get(schemaDotObject) && schemaDotObject) || (nameTypeIudsAll.get(object) && object);
+    if (nameTypeIudsAll && nameTypeIudsAllNoSchema) {
+      const objectNew = findNameTypeIuds(nameTypeIudsAll, nameTypeIudsAllNoSchema, name, nameNoSchema);
       if (objectNew) {
         objectsNew.add(objectNew);
         continue;
       }
-    } else if (nameObjectsAll) {
-      const objectNew =
-        (nameObjectsAll.get(schemaDotObject) && schemaDotObject) || (nameObjectsAll.get(object) && object);
+    } else if (nameObjectsAll && nameObjectsAllNoSchema) {
+      const objectNew = findNameObjects(nameObjectsAll, nameObjectsAllNoSchema, name, nameNoSchema);
       if (objectNew) {
         objectsNew.add(objectNew);
         continue;
@@ -539,7 +734,7 @@ export function insertUsersToDb(): Set<string> {
   for (const fullPath of fullPaths) {
     let values: string[] = [];
 
-    const value = readFileSyncUtf16le(fullPath);
+    const value = removeCommentLiteralSql(readFileSyncUtf16le(fullPath));
     values = values.concat(value.split(/\r*\n/));
 
     const users = new Set(values.filter((v) => !!v).map((v) => v.toUpperCase()));
@@ -552,8 +747,9 @@ export function insertUsersToDb(): Set<string> {
   return usersAll;
 }
 
-export function insertTablesToDb(): Set<string> {
+export function insertTablesToDb(): { tables: Set<string>; tablesNoSchema: Set<string> } {
   let tablesAll = new Set<string>();
+  let tablesAllNoSchema = new Set<string>();
 
   const path = config.path.data.tables;
 
@@ -561,48 +757,82 @@ export function insertTablesToDb(): Set<string> {
   for (const fullPath of fullPaths) {
     let values: string[] = [];
 
-    const value = readFileSyncUtf16le(fullPath);
+    const value = removeCommentLiteralSql(readFileSyncUtf16le(fullPath));
     values = values.concat(value.split(/\r*\n/));
 
     const tables = new Set(values.filter((v) => !!v).map((v) => v.toUpperCase()));
+    const tablesNoSchema = new Set(values.filter((v) => !!v).map((v) => getNameNoSchema(v.toUpperCase())));
     tablesAll = new Set([...tablesAll, ...tables]);
+    tablesAllNoSchema = new Set([...tablesAllNoSchema, ...tablesNoSchema]);
   }
-  if (!tablesAll.size) return tablesAll;
+  if (!tablesAll.size) return { tables: new Set<string>(), tablesNoSchema: new Set<string>() };
 
   tCache.insertTables(path, tablesAll);
 
-  return tablesAll;
+  return { tables: tablesAll, tablesNoSchema: tablesAllNoSchema };
 }
 
-export function insertObjects(usersAll: Set<string>, tablesAll: Set<string>): Map<string, ObjectInfo> {
+export function insertObjects(
+  usersAll: Set<string>,
+  tablesAll: Set<string>,
+  tablesAllNoSchema: Set<string>
+): { nameObjects: Map<string, ObjectInfo>; nameObjectsNoSchema: Map<string, ObjectInfo> } {
   let nameTypeSqlsAll = new Map<string, { type: ObjectType; sql: string }>();
-  const objectTypes: (ObjectType | 'package')[] = ['view', 'function', 'procedure', 'package'];
+  const objectTypes: ('function' | 'procedure' | 'package')[] = ['function', 'procedure', 'package'];
   for (const objectType of objectTypes) {
-    const nameTypeSqls = getObjectNameTypeSqls(objectType);
+    const nameTypeSqls = getObjectNameTypeSqls(objectType, usersAll);
     nameTypeSqlsAll = new Map<string, { type: ObjectType; sql: string }>([...nameTypeSqlsAll, ...nameTypeSqls]);
   }
 
-  const nameTypeIudsAll = new Map(
-    [...nameTypeSqlsAll].map(([name, { type, sql }]) => {
-      const iud = getTablesIudFromSql(usersAll, sql);
-      return [name, { type, iud }];
-    })
-  );
+  const nameTypeIudsAll = new Map<string, IudExistsSchemaDotSql2>();
+  const nameTypeIudsAllNoSchema = new Map<string, IudExistsSchemaDotSql2>();
+  for (const [name, { type, sql }] of nameTypeSqlsAll) {
+    const iud = getTablesIudFromSql(usersAll, sql, name);
+    nameTypeIudsAll.set(name, { type, name, ...iud });
+    const nameNoSchema = getNameNoSchema(name);
+    nameTypeIudsAllNoSchema.set(nameNoSchema, { type, name, ...iud });
+  }
 
-  const objectsAll: ObjectInfo[] = [];
-  const nameObjectsAll = new Map<string, ObjectInfo>();
-  for (const [name, { type, iud }] of nameTypeIudsAll) {
-    const { sql } = iud;
-    const objectChild = getObjectChild(iud, usersAll, tablesAll, nameTypeIudsAll, null, type, name, sql);
+  let objects: ObjectInfo[] = [];
+
+  const objectsView = getViewObjectsFromDependencies();
+  objects = objects.concat(objectsView);
+
+  for (const [name, iud] of nameTypeIudsAll) {
+    const { type, sql } = iud;
+
+    const objectChild = getObjectChild(
+      iud,
+      usersAll,
+      tablesAll,
+      tablesAllNoSchema,
+      nameTypeIudsAll,
+      nameTypeIudsAllNoSchema,
+      null,
+      null,
+      type,
+      name,
+      sql
+    );
     const object = { type, name, ...objectChild };
-    objectsAll.push(object);
-    nameObjectsAll.set(name, object);
-  }
-  if (objectsAll.length) {
-    tCache.insertObjects(configReader.objectTypeAndPath(), objectsAll);
+    objects.push(object);
   }
 
-  return nameObjectsAll;
+  const nameObjects = new Map<string, ObjectInfo>();
+  const nameObjectsNoSchema = new Map<string, ObjectInfo>();
+  for (const object of objects) {
+    const { name } = object;
+    const nameNoSchema = getNameNoSchema(name);
+
+    nameObjects.set(name, object);
+    nameObjectsNoSchema.set(nameNoSchema, object);
+  }
+
+  if (objects.length) {
+    tCache.insertObjects(configReader.objectTypeAndPath(), objects);
+  }
+
+  return { nameObjects, nameObjectsNoSchema };
 }
 
 export function insertXmlInfoXmlNodeInfo(
@@ -610,7 +840,9 @@ export function insertXmlInfoXmlNodeInfo(
   fullPath: string,
   usersAll: Set<string>,
   tablesAll: Set<string>,
-  nameObjectsAll: Map<string, ObjectInfo>
+  tablesAllNoSchema: Set<string>,
+  nameObjectsAll: Map<string, ObjectInfo>,
+  nameObjectsAllNoSchema: Map<string, ObjectInfo>
 ): XmlInfo | null {
   const xmlPath = getDbPath(rootDir, fullPath);
 
@@ -677,13 +909,16 @@ export function insertXmlInfoXmlNodeInfo(
       console.error(`${id} has ${ex}`);
     }
 
-    const iud = getTablesIudFromSql(usersAll, sql);
+    const iud = getTablesIudFromSql(usersAll, sql, id);
     const { objects, tablesInsert, tablesUpdate, tablesDelete, tablesOther, selectExists } = getObjectChild(
       iud,
       usersAll,
       tablesAll,
+      tablesAllNoSchema,
+      null,
       null,
       nameObjectsAll,
+      nameObjectsAllNoSchema,
       'xml',
       id,
       `${sqlInclude}\n${sql}`

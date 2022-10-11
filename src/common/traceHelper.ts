@@ -88,46 +88,6 @@ export function mergeExtends(classInfos: ClassInfo[]): ClassInfo[] {
   return classInfosNew;
 }
 
-export function getXmlNodeInfoFinds(
-  rootDir: string,
-  directory: string,
-  filePattern: string | RegExp
-): XmlNodeInfoFind[] {
-  const fullDir = resolve(rootDir, directory);
-  if (!existsSync(fullDir)) {
-    return [];
-  }
-
-  let finds: XmlNodeInfoFind[] = [];
-
-  const fullPaths = statSync(fullDir).isDirectory() ? [...findFiles(fullDir, filePattern)] : [fullDir];
-  for (const fullPath of fullPaths) {
-    const xmlPath = getDbPath(rootDir, fullPath);
-    const xmlInfo = getXmlInfoFromDb(xmlPath);
-    if (!xmlInfo) continue;
-
-    const { namespace, nodes } = xmlInfo;
-    const findsCur: XmlNodeInfoFind[] = nodes.map(
-      ({ id, tagName, params, objects, tablesInsert, tablesUpdate, tablesDelete, tablesOther, selectExists }) => ({
-        xmlPath,
-        namespaceId: namespace ? `${namespace}.${id}` : id,
-        id,
-        tagName,
-        params,
-        objects,
-        tablesInsert,
-        tablesUpdate,
-        tablesDelete,
-        tablesOther,
-        selectExists,
-      })
-    );
-    finds = finds.concat(findsCur);
-  }
-
-  return finds;
-}
-
 export function rowToObjectChild(row: { [key: string]: any }): ObjectChild {
   const objects = new Set<string>(JSON.parse(row.objects) as string[]);
   const tablesInsert = new Set<string>(JSON.parse(row.tablesInsert) as string[]);

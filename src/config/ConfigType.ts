@@ -36,4 +36,5 @@ export type ConfigType = {
     logDirectory: string;
   };
   startingPoint: StartingPoint;
+  defaultOwner: string;
 };

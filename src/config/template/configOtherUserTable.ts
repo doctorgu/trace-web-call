@@ -41,4 +41,5 @@ export const configOtherUserTable: ConfigType = {
     logDirectory: './test/output',
   },
   startingPoint: 'map',
+  defaultOwner: '',
 };

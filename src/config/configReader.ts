@@ -5,7 +5,6 @@ import { getTablesFromDb, ObjectType } from '../common/batisHelper';
 import { runInsertToDbFirst } from '../common/message';
 import { config } from './config';
 import { sqlCacheInit } from './sqlCache';
-import { cacheReader } from '../common/cacheReader';
 
 let _tables = new Set<string>();
 

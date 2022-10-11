@@ -2,6 +2,59 @@
 
 ```sql
 -- h2o_hmall_route_table
-select  keyName key_name, groupSeq group_seq, seq, depth, routeType route_type, value, output
-from    vRouteTableTxt;
+select  r.keyName key_name, r.groupSeq group_seq, r.seq, r.depth, r.routeType route_type,
+        (select group_concat(j.value) from json_each(r.valueMapping) j) value_mapping,
+        r.valueMethod value_method, r.valueXml value_xml, r.valueView value_view, r.valueFunction value_function, r.valueProcedure value_procedure,
+        (select group_concat(j.value) from json_each(r.objects) j) objects,
+        (select group_concat(j.value) from json_each(r.tablesInsert) j) tables_insert,
+        (select group_concat(j.value) from json_each(r.tablesUpdate) j) tables_update,
+        (select group_concat(j.value) from json_each(r.tablesDelete) j) tables_delete,
+        (select group_concat(j.value) from json_each(r.tablesOther) j) tables_other,
+        r.selectExists select_exists
+from    RouteTable r;
+
+-- h2o_hmall_start_to
+select  keyName key_name, groupSeq group_seq, start start_, tables, views, functions, procedures, types
+from    vStartToTableObject;
+
+-- users.txt
+select  username
+from    all_users
+where   username not in ('CTXSYS','DBADMIN','EXFSYS','EXPERDB','OUTLN','SYS','SYSTEM','WMSYS','XDB','XS$NULL')
+        and username in (select owner from all_tables union all select owner from all_objects)
+order by username;
+
+-- tables.txt
+select  owner || '.' || table_name
+from    all_tables
+where   owner not in ('CTXSYS','DBADMIN','EXFSYS','EXPERDB','OUTLN','SYS','SYSTEM','WMSYS','XDB','XS$NULL')
+        and (table_name not like '$%' and table_name not like '#%' and length(table_name) >= 5)
+order by owner, table_name;
+
+-- views.txt
+with t as
+(
+    select  owner, name, type, referenced_owner, referenced_name, case when referenced_type != 'TABLE' then 'OBJECT' else 'TABLE' end referenced_type
+    from    sys.dba_dependencies
+    where   type = 'VIEW'
+            and referenced_type in ('TABLE','VIEW','FUNCTION','PROCEDURE')
+            and owner not in ('CTXSYS','DBADMIN','EXFSYS','EXPERDB','OUTLN','SYS','SYSTEM','WMSYS','XDB','XS$NULL')
+            and referenced_owner not in ('CTXSYS','DBADMIN','EXFSYS','EXPERDB','OUTLN','SYS','SYSTEM','WMSYS','XDB','XS$NULL')
+    order by owner, name, referenced_owner, referenced_name
+), t2 as
+(
+    select  owner, name, referenced_type,
+            case when referenced_type = 'OBJECT' then
+              '[' || listagg('"' || referenced_owner || '.' || referenced_name || '"', ',') within group (order by referenced_owner, referenced_name) || ']'
+            end objects,
+            case when referenced_type = 'TABLE' then
+              '[' || listagg('"' || referenced_owner || '.' || referenced_name || '"', ',') within group (order by referenced_owner, referenced_name) || ']'
+            end tables_select
+    from    t
+    group by owner, name, referenced_type
+)
+select  owner || '.' || name name, nvl(min(objects), '[]') objects, nvl(min(tables_select), '[]') tables_select
+from    t2
+group by owner || '.' || name
+order by 1;
 ```

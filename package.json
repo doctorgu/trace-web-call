@@ -17,8 +17,11 @@
     "logGitCount": "tsc && node -e \"require('./dist/run/logGitCount').logGitCount()\"",
     "truncateCstSimple": "tsc && node -e \"require('./dist/run/truncate').truncateCstSimple()\"",
     "truncateUsers": "tsc && node -e \"require('./dist/run/truncate').truncateUsers()\"",
+    "truncateUsers2": "node -e \"require('./dist/run/truncate').truncateUsers()\"",
     "truncateTables": "tsc && node -e \"require('./dist/run/truncate').truncateTables()\"",
-    "truncateObjects": "tsc && node -e \"require('./dist/run/truncate').truncateObjects()\""
+    "truncateTables2": "node -e \"require('./dist/run/truncate').truncateTables()\"",
+    "truncateObjects": "tsc && node -e \"require('./dist/run/truncate').truncateObjects()\"",
+    "truncateObjects2": "node -e \"require('./dist/run/truncate').truncateObjects()\""
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.0"

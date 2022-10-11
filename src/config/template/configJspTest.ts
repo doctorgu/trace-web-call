@@ -35,4 +35,5 @@ export const configJspTest: ConfigType = {
     logDirectory: './test/output',
   },
   startingPoint: 'map',
+  defaultOwner: '',
 };
