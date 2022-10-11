@@ -3,19 +3,40 @@
 ```sql
 -- h2o_hmall_route_table
 select  r.keyName key_name, r.groupSeq group_seq, r.seq, r.depth, r.routeType route_type,
-        (select group_concat(j.value) from json_each(r.valueMapping) j) value_mapping,
         r.valueMethod value_method, r.valueXml value_xml, r.valueView value_view, r.valueFunction value_function, r.valueProcedure value_procedure,
-        (select group_concat(j.value) from json_each(r.objects) j) objects,
-        (select group_concat(j.value) from json_each(r.tablesInsert) j) tables_insert,
-        (select group_concat(j.value) from json_each(r.tablesUpdate) j) tables_update,
-        (select group_concat(j.value) from json_each(r.tablesDelete) j) tables_delete,
-        (select group_concat(j.value) from json_each(r.tablesOther) j) tables_other,
         r.selectExists select_exists
 from    RouteTable r;
 
--- h2o_hmall_start_to
-select  keyName key_name, groupSeq group_seq, start start_, tables, views, functions, procedures, types
-from    vStartToTableObject;
+-- h2o_hmall_route_mapping
+select  r.keyName key_name, r.groupSeq group_seq, r.seq, j.value
+from    RouteTable r
+        inner join json_each(r.valueMapping) j;
+
+-- h2o_hmall_route_objects
+select  r.keyName key_name, r.groupSeq group_seq, r.seq, j.value
+from    RouteTable r
+        inner join json_each(r.objects) j;
+
+-- h2o_hmall_route_insert
+select  r.keyName key_name, r.groupSeq group_seq, r.seq, j.value
+from    RouteTable r
+        inner join json_each(r.tablesInsert) j;
+
+-- h2o_hmall_route_update
+select  r.keyName key_name, r.groupSeq group_seq, r.seq, j.value
+from    RouteTable r
+        inner join json_each(r.tablesUpdate) j;
+
+-- h2o_hmall_route_delete
+select  r.keyName key_name, r.groupSeq group_seq, r.seq, j.value
+from    RouteTable r
+        inner join json_each(r.tablesDelete) j;
+
+-- h2o_hmall_route_other
+select  r.keyName key_name, r.groupSeq group_seq, r.seq, j.value
+from    RouteTable r
+        inner join json_each(r.tablesOther) j;
+
 
 -- users.txt
 select  username

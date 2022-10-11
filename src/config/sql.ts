@@ -288,9 +288,9 @@ from    (
                     end
                 end type,
 
-                nullif(r.valueView) valueView,
-                nullif(r.valueFunction) valueFunction,
-                nullif(r.valueProcedure) valueProcedure
+                nullif(r.valueView, '') valueView,
+                nullif(r.valueFunction, '') valueFunction,
+                nullif(r.valueProcedure, '') valueProcedure
 
         from    RouteTable r
                 left join json_each(r.valueMapping) jMapping

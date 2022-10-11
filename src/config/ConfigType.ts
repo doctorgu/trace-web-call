@@ -24,7 +24,7 @@ export type ConfigType = {
       }[];
     };
     data: {
-      users: './data/users.txt';
+      users: string;
       tables: string;
       views: string;
       functions: string;

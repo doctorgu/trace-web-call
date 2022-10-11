@@ -147,7 +147,7 @@ export function getNameObjectsAllFromDb(): {
   return { nameObjects, nameObjectsNoSchema };
 }
 function matchAllCreate(
-  type: 'function' | 'procedure' | 'package\\+body',
+  type: 'function' | 'procedure' | 'package\\s+body',
   sql: string,
   usersAll: Set<string>
 ): { schemaDot: string; object: string; sql: string }[] {
@@ -161,7 +161,7 @@ function matchAllCreate(
     after = '.+?return';
   } else if (type === 'procedure') {
     after = '.+?(is|as)';
-  } else if (type === 'package\\+body') {
+  } else if (type === 'package\\s+body') {
     after = '\\s+(is|as)';
   }
 
@@ -216,7 +216,7 @@ export function getObjectNameTypeSqls(
     const typeFuncProcs: ('function' | 'procedure')[] = ['function', 'procedure'];
 
     let nameTypeSqlsAll = new Map<string, { type: 'function' | 'procedure'; sql: string }>();
-    const schemaDotObjectSqls = matchAllCreate('package\\+body', sqlNoComment, usersAll);
+    const schemaDotObjectSqls = matchAllCreate('package\\s+body', sqlNoComment, usersAll);
     for (const { schemaDot, object, sql } of schemaDotObjectSqls) {
       for (const typeFuncProc of typeFuncProcs) {
         for (const { object: objectFuncProc, sql: sqlFuncProc } of matchAllFuncProcInPkg(typeFuncProc, sql)) {
@@ -542,7 +542,7 @@ function getTablesIud(
       const { names, selectExists: selectExistsView } = getTablesIudFromSql(usersAll, sqlView, nameForLog);
       tableFound = [...names].find((nameCur) => {
         const nameNoSchemaCur = getNameNoSchema(nameCur);
-        const nameFound = findTable(tablesAll, tablesAllNoSchema, nameCur, nameNoSchema);
+        const nameFound = findTable(tablesAll, tablesAllNoSchema, nameCur, nameNoSchemaCur);
         return nameFound;
       });
     } else if (nameObjectsAll && nameObjectsAllNoSchema) {
@@ -560,7 +560,7 @@ function getTablesIud(
       tableFound = [...tablesOther].find((nameCur) => {
         const nameNoSchemaCur = getNameNoSchema(nameCur);
         const nameFound = findTable(tablesAll, tablesAllNoSchema, nameCur, nameNoSchemaCur);
-        return nameForLog;
+        return nameFound;
       });
     }
 
