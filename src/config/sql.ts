@@ -162,7 +162,7 @@ create table RouteJsp (
     routeType text not null,
     valueMapping text not null,
     valueMethod text not null,
-    valueJsp text not null,
+    jsps text not null,
     insertTime timestamp not null default current_timestamp,
     primary key (keyName, groupSeq, seq)
 );
@@ -225,8 +225,7 @@ from    RouteTable r
 
 group by r.keyName, r.groupSeq, r.seq;
 
-
-create view vRouteTableTxt
+create view vRouteTableIndent
 as
 select  keyName, groupSeq, seq, depth, routeType, value,
         substring('         ' || routeType, -9)
@@ -236,7 +235,7 @@ select  keyName, groupSeq, seq, depth, routeType, value,
         else
             ''
         end
-        || value output,
+        || value valueIndent,
         objects, tablesInsert, tablesUpdate, tablesDelete, tablesOther, selectExists
 from    vRouteTable;
 
@@ -306,7 +305,25 @@ from    (
 group by keyName, groupSeq;
 
 
-create view vRouteJspTxt
+create view vRouteJsp
+as
+select  r.keyName, r.groupSeq, r.seq, min(r.depth) depth, min(r.routeType) routeType,
+        ifnull(
+            case routeType
+            when 'mapping' then group_concat(distinct jMapping.value)
+            when 'method' then group_concat(distinct r.valueMethod)
+            when 'jsp' then group_concat(distinct jJsps.value)
+            end
+        , ''
+        ) value
+
+from    RouteJsp r
+        left join json_each(r.valueMapping) jMapping
+        left join json_each(r.jsps) jJsps
+
+group by r.keyName, r.groupSeq, r.seq;
+
+create view vRouteJspIndent
 as
 select  keyName, groupSeq, seq,
         case when seq = 0 then char(13) else '' end
@@ -317,7 +334,7 @@ select  keyName, groupSeq, seq,
         else
             ''
         end
-        || value output
+        || value valueIndent
 from    vRouteJsp;
 
 
@@ -337,7 +354,7 @@ from    (
                 end jsps
         from    RouteJsp r
                 left join json_each(r.valueMapping) jMapping
-                left join json_each(r.valueJsp) jJsp
+                left join json_each(r.jsps) jJsp
         where   r.seq = 0 and r.routeType in ('mapping', 'method')
                 or r.routeType in ('jsp')
         order by r.keyName, r.groupSeq, jsps

@@ -48,7 +48,7 @@ export type RouteJsp<RouteType> = {
   routeType: RouteType;
   valueMapping?: RouteType extends 'mapping' ? string[] : [];
   valueMethod?: RouteType extends 'method' ? string : '';
-  valueJsp?: RouteType extends 'jsp' ? Set<string> : '';
+  jsps?: RouteType extends 'jsp' ? Set<string> : '';
 };
 
 function getBaseMethods(classInfos: ClassInfo[], extendsNameSub: string): MethodInfo[] {
@@ -344,7 +344,7 @@ function getJspPathsByJspPath(
         seq: routes.length,
         depth,
         routeType: 'jsp',
-        valueJsp: new Set<string>([include]),
+        jsps: new Set<string>([include]),
       };
       routes.push(routeJsp);
 
@@ -373,7 +373,7 @@ export function getJspsByMethod(
       seq: routes.length,
       depth,
       routeType: 'jsp',
-      valueJsp: new Set<string>([jspPath]),
+      jsps: new Set<string>([jspPath]),
     };
     routes.push(routeJsp);
 
