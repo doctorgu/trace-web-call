@@ -9,16 +9,13 @@ export const configJspModelAndView: ConfigType = {
       main: [
         {
           startings: { directory: `jspModelAndView`, file: 'ModelAndViewTestController.java' },
-          serviceXmlJspDirs: {
-            service: {
-              directory: 'jspModelAndView',
-              file: 'ModelAndViewTestController.java',
-            },
-            xml: '',
-            jspDirectory: 'jspModelAndView',
-          },
-
           keyName: 'jspModelAndView',
+          service: {
+            directory: 'jspModelAndView',
+            file: 'ModelAndViewTestController.java',
+          },
+          xml: '',
+          jspDirectory: 'jspModelAndView',
         },
       ],
     },

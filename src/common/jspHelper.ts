@@ -41,16 +41,16 @@ export type JspInfo = {
   includes: string[];
 };
 
-export function getJspInfoFromDb(): JspInfo[] {
-  const rows = tJspInfo.selectJspInfo();
+export function getJspInfoFromDb(keyName: string): JspInfo[] {
+  const rows = tJspInfo.selectJspInfo(keyName);
   return rows.map(({ jspPath, includes }) => ({
     jspPath,
     includes: JSON.parse(includes),
   }));
 }
 
-export function insertJspInfoToDb(jspInfos: JspInfo[]): void {
-  tJspInfo.insertJspInfo(jspInfos);
+export function insertJspInfoToDb(keyName: string, jspInfos: JspInfo[]): void {
+  tJspInfo.insertJspInfo(keyName, jspInfos);
 }
 
 export function getJspIncludes(fullJspDirectory: string, jspFullPath: string): string[] {
@@ -72,7 +72,7 @@ export function getJspIncludes(fullJspDirectory: string, jspFullPath: string): s
 
   return includes;
 }
-export function insertJspInfo(fullJspDirectory: string, jspFullPaths: string[]): JspInfo[] {
+export function insertJspInfo(keyName: string, fullJspDirectory: string, jspFullPaths: string[]): JspInfo[] {
   const jspInfos: JspInfo[] = [];
 
   for (const jspFullPath of jspFullPaths) {
@@ -82,7 +82,7 @@ export function insertJspInfo(fullJspDirectory: string, jspFullPaths: string[]):
     jspInfos.push({ jspPath, includes });
   }
 
-  insertJspInfoToDb(jspInfos);
+  insertJspInfoToDb(keyName, jspInfos);
 
   return jspInfos;
 }
@@ -122,14 +122,14 @@ export function insertRouteJspKeyName() {
   for (let i = 0; i < config.path.source.main.length; i++) {
     const {
       startings: { directory, file },
-      serviceXmlJspDirs,
       keyName,
+      jspDirectory,
     } = config.path.source.main[i];
 
     const findsStarting = getFindsByClassPathClassNameFromDb(keyName, directory, file);
 
     console.log(`getStartingToTables`);
-    const routesAll = getStartingToJsps(findsStarting, serviceXmlJspDirs.jspDirectory, config.startingPoint);
+    const routesAll = getStartingToJsps(keyName, findsStarting, jspDirectory, config.startingPoint);
 
     const routesCur = routesAll
       .map((routes, i) => {

@@ -979,14 +979,15 @@ export function insertRouteTableKeyName() {
   for (let i = 0; i < config.path.source.main.length; i++) {
     const {
       startings: { directory, file },
-      serviceXmlJspDirs,
       keyName,
+      service,
+      xml,
     } = config.path.source.main[i];
 
     const findsStarting = getFindsByClassPathClassNameFromDb(keyName, directory, file);
 
-    const directories = [serviceXmlJspDirs.service.directory];
-    const directoriesXml = [serviceXmlJspDirs.xml];
+    const directories = [service.directory];
+    const directoriesXml = [xml];
 
     console.log(`getStartingToTables`);
     const routesAll = getStartingToObjects(

@@ -9,18 +9,16 @@ export type ConfigType = {
     source: {
       rootDir: string;
       dependency: {
+        keyName: string;
         service: DirectoryAndFilePattern;
         xml: string;
-        jspDirectory: string;
       }[];
       main: {
         startings: DirectoryAndFilePattern;
-        serviceXmlJspDirs: {
-          service: DirectoryAndFilePattern;
-          xml: string;
-          jspDirectory: string;
-        };
         keyName: string;
+        service: DirectoryAndFilePattern;
+        xml: string;
+        jspDirectory: string;
       }[];
     };
     data: {

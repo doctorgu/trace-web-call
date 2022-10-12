@@ -41,11 +41,11 @@ from    RouteTable r
 -- h2o_hmall_route_jsp
 select  r.keyName key_name, r.groupSeq group_seq, r.seq, r.depth, r.routeType route_type,
         r.valueMethod value_method
-from    RouteTable r;
+from    RouteJsp r;
 
 -- h2o_hmall_route_jsps
 select  r.keyName key_name, r.groupSeq group_seq, r.seq, j.value
-from    RouteTable r
+from    RouteJsp r
         inner join json_each(r.jsps) j;
 
 

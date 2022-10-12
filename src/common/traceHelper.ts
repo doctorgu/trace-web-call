@@ -382,11 +382,12 @@ export function getJspsByMethod(
 }
 
 export function getStartingToJsps(
+  keyName: string,
   findsStarting: MethodInfoFind[],
   jspDirectory: string,
   startingPoint: StartingPoint
 ): RouteTable<RouteTypeJsp>[][] {
-  const jspInfos = getJspInfoFromDb();
+  const jspInfos = getJspInfoFromDb(keyName);
 
   const routesAll: RouteTable<RouteTypeJsp>[][] = [];
   for (let nMethod = 0; nMethod < findsStarting.length; nMethod++) {

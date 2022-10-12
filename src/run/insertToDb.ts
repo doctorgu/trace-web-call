@@ -36,36 +36,27 @@ function insertJspClassXml(
   tablesAllNoSchema: Set<string>,
   nameObjectsAll: Map<string, ObjectInfo>,
   nameObjectsAllNoSchema: Map<string, ObjectInfo>,
-  serviceXmlJspDirs: { service: DirectoryAndFilePattern; xml: string; jspDirectory: string }[]
+  keyName: string,
+  service: DirectoryAndFilePattern,
+  xml: string,
+  jspDirectory: string
 ): { jspInfos: JspInfo[]; classInfos: ClassInfo[]; xmlInfos: XmlInfo[] } {
   const classInfos: ClassInfo[] = [];
   const xmlInfos: XmlInfo[] = [];
   let jspInfos: JspInfo[] = [];
 
-  serviceXmlJspDirs.forEach(({ service: { directory, file }, jspDirectory }) => {
-    if (jspDirectory) {
-      let jspFullPaths: string[] = [];
-      const fullJspDirectory = resolve(rootDir, jspDirectory);
-      if (existsSync(fullJspDirectory)) {
-        jspFullPaths = [...findFiles(fullJspDirectory, '*.jsp')];
-      }
-      if (jspFullPaths.length) {
-        jspInfos = insertJspInfo(fullJspDirectory, jspFullPaths);
+  const { directory, file } = service;
+  if (directory) {
+    const initDir = resolve(rootDir, directory);
+    for (const fullPath of [...findFiles(initDir, file)]) {
+      const classInfo = insertClassInfo(rootDir, fullPath);
+      if (classInfo) {
+        classInfos.push(classInfo);
       }
     }
+  }
 
-    if (directory) {
-      const initDir = resolve(rootDir, directory);
-      for (const fullPath of [...findFiles(initDir, file)]) {
-        const classInfo = insertClassInfo(rootDir, fullPath);
-        if (classInfo) {
-          classInfos.push(classInfo);
-        }
-      }
-    }
-  });
-
-  serviceXmlJspDirs.forEach(({ xml }) => {
+  if (xml) {
     const fullDir = resolve(rootDir, xml);
     if (existsSync(fullDir)) {
       const fullPaths = statSync(fullDir).isDirectory() ? [...findFiles(fullDir, '*.xml')] : [fullDir];
@@ -84,9 +75,20 @@ function insertJspClassXml(
         }
       }
     }
-  });
+  }
 
-  return { jspInfos, classInfos, xmlInfos };
+  if (jspDirectory) {
+    let jspFullPaths: string[] = [];
+    const fullJspDirectory = resolve(rootDir, jspDirectory);
+    if (existsSync(fullJspDirectory)) {
+      jspFullPaths = [...findFiles(fullJspDirectory, '*.jsp')];
+    }
+    if (jspFullPaths.length) {
+      jspInfos = insertJspInfo(keyName, fullJspDirectory, jspFullPaths);
+    }
+  }
+
+  return { classInfos, xmlInfos, jspInfos };
 }
 
 export function insertToDb() {
@@ -134,26 +136,34 @@ export function insertToDb() {
   tCommon.insertKeyInfo(config.path.source.main.map(({ keyName }) => ({ keyName })));
   startTime = logTimeMsg(startTime, `insertKeyInfo`);
 
-  const {
-    jspInfos: jspInfosDep,
-    classInfos: classInfosDep,
-    xmlInfos: xmlInfosDep,
-  } = insertJspClassXml(
-    rootDir,
-    usersAll,
-    tablesAll,
-    tablesAllNoSchema,
-    nameObjectsAll,
-    nameObjectsAllNoSchema,
-    config.path.source.dependency
-  );
-  startTime = logTimeMsg(startTime, `insertJspClassXml Dependency`);
+  let classInfosDepAll: ClassInfo[] = [];
+  let xmlInfosDepAll: XmlInfo[] = [];
+  for (const { keyName, service, xml } of config.path.source.dependency) {
+    const { classInfos: classInfosDep, xmlInfos: xmlInfosDep } = insertJspClassXml(
+      rootDir,
+      usersAll,
+      tablesAll,
+      tablesAllNoSchema,
+      nameObjectsAll,
+      nameObjectsAllNoSchema,
+      keyName,
+      service,
+      xml,
+      ''
+    );
+    startTime = logTimeMsg(startTime, `insertJspClassXml Dependency ${keyName}`);
+
+    classInfosDepAll = classInfosDepAll.concat(classInfosDep);
+    xmlInfosDepAll = xmlInfosDepAll.concat(xmlInfosDep);
+  }
 
   for (let i = 0; i < config.path.source.main.length; i++) {
     const {
       startings: { directory, file },
-      serviceXmlJspDirs,
       keyName,
+      service,
+      xml,
+      jspDirectory,
     } = config.path.source.main[i];
 
     const classInfosStarting: ClassInfo[] = [];
@@ -170,9 +180,9 @@ export function insertToDb() {
     }
 
     const {
-      jspInfos: jspInfosMain,
       classInfos: classInfosMain,
       xmlInfos: xmlInfosMain,
+      jspInfos: jspInfosMain,
     } = insertJspClassXml(
       rootDir,
       usersAll,
@@ -180,17 +190,20 @@ export function insertToDb() {
       tablesAllNoSchema,
       nameObjectsAll,
       nameObjectsAllNoSchema,
-      serviceXmlJspDirs.service.directory ? [serviceXmlJspDirs] : []
+      keyName,
+      service,
+      xml,
+      jspDirectory
     );
     startTime = logTimeMsg(startTime, `insertJspClassXml Main ${directory}`);
 
-    const jspPathsCur = [...jspInfosDep, ...jspInfosMain].map(({ jspPath }) => jspPath);
-    const classInfosCur = [...classInfosDep, ...classInfosStarting, ...classInfosMain];
+    const jspPathsCur = jspInfosMain.map(({ jspPath }) => jspPath);
+    const classInfosCur = [...classInfosDepAll, ...classInfosStarting, ...classInfosMain];
     const classInfosMerged = mergeExtends(classInfosCur);
     insertMethodInfoFindKeyName(keyName, jspPathsCur, classInfosMerged);
     startTime = logTimeMsg(startTime, `insertMethodInfoFindKeyName ${directory}`);
 
-    const xmlInfosCur = [...xmlInfosDep, ...xmlInfosMain];
+    const xmlInfosCur = [...xmlInfosDepAll, ...xmlInfosMain];
     insertXmlInfoFindKeyName(keyName, xmlInfosCur);
     startTime = logTimeMsg(startTime, `insertXmlInfoFindKeyName ${directory}`);
   }

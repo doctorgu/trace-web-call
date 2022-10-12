@@ -5,27 +5,27 @@ import { JspInfo } from '../common/jspHelper';
 import { escapeDollar } from '../common/util';
 
 class TJspInfo {
-  selectJspInfo(): DbRow[] {
+  selectJspInfo(keyName: string): DbRow[] {
     const sql = `
 select  jspPath, includes
 from    JspInfo
+where   keyName = @keyName
   `;
-    return all(configReader.db(), sql);
+    return all(configReader.db(), sql, { keyName });
   }
 
-  insertJspInfo(jspInfos: JspInfo[]): betterSqlite3.Database {
+  insertJspInfo(keyName: string, jspInfos: JspInfo[]): betterSqlite3.Database {
     const jspInfosJson = jspInfos.map(({ jspPath, includes }) => ({
+      keyName,
       jspPath,
       includes: JSON.stringify(includes),
     }));
     const sqlTmp = `
-delete  from JspInfo;
-
 insert into JspInfo
-  (jspPath, includes)
+  (keyName, jspPath, includes)
 values
   {values};`;
-    const sqlTmpValues = `({jspPath}, {includes})`;
+    const sqlTmpValues = `({keyName}, {jspPath}, {includes})`;
     const sqlValues = new SqlTemplate(sqlTmpValues).replaceAlls(jspInfosJson, ',\n');
     const sql = sqlTmp.replace('{values}', escapeDollar(sqlValues));
     return exec(configReader.db(), sql);

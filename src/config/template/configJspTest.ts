@@ -9,16 +9,13 @@ export const configJspTest: ConfigType = {
       main: [
         {
           startings: { directory: `jspTest`, file: 'JspTestController.java' },
-          serviceXmlJspDirs: {
-            service: {
-              directory: 'jspTest',
-              file: 'JspTestController.java',
-            },
-            xml: '',
-            jspDirectory: 'jspTest/jsp',
-          },
-
           keyName: 'jspTest',
+          service: {
+            directory: 'jspTest',
+            file: 'JspTestController.java',
+          },
+          xml: '',
+          jspDirectory: 'jspTest/jsp',
         },
       ],
     },

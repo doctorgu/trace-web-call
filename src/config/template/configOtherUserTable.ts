@@ -7,24 +7,21 @@ export const configOtherUserTable: ConfigType = {
       rootDir: 'C:/source/trace-web-call',
       dependency: [
         {
+          keyName: 'OtherDep',
           service: { directory: `test/`, file: 'OtherUserTablesDependency.java' },
           xml: 'test/OtherUserTablesDependency.xml',
-          jspDirectory: '',
         },
       ],
       main: [
         {
           startings: { directory: `test/`, file: 'OtherUserTablesController.java' },
-          serviceXmlJspDirs: {
-            service: {
-              directory: 'test',
-              file: 'OtherUserTablesBase.java',
-            },
-            xml: 'test/OtherUserTables.xml',
-            jspDirectory: '',
-          },
-
           keyName: 'OtherUserTables',
+          service: {
+            directory: 'test',
+            file: 'OtherUserTablesBase.java',
+          },
+          xml: 'test/OtherUserTables.xml',
+          jspDirectory: '',
         },
       ],
     },

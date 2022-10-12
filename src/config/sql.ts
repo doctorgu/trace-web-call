@@ -123,10 +123,11 @@ create index IxMethodInfoFind2 on MethodInfoFind (keyName, classPath);
 
 
 create table JspInfo (
+    keyName text not null,
     jspPath text not null,
     includes text not null,
     insertTime timestamp not null default current_timestamp,
-    primary key (jspPath)
+    primary key (keyName, jspPath)
 );
 
 
