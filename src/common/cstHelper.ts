@@ -137,82 +137,117 @@ export function rangeOfImages(
   end: number,
   finds: (string | RegExp)[]
 ): { matches: RegExpExecArray[]; start: number; end: number } | null {
-  const matches: RegExpExecArray[] = [];
+  let idxBlocks = start;
 
-  const findFirst = finds[0];
-  const idxFirst = blocks.findIndex(({ image }, i) => {
-    if (i < start || i > end) return false;
+  while (true) {
+    const matches: RegExpExecArray[] = [];
 
-    if (typeof findFirst === 'string') {
-      if (findFirst !== image) return false;
-    } else {
-      const match = findFirst.exec(image);
-      if (!match) return false;
+    const findFirst = finds[0];
+    const idxFirst = blocks.findIndex(({ image }, i) => {
+      if (i < idxBlocks || i > end) return false;
+
+      if (typeof findFirst === 'string') {
+        if (findFirst !== image) return false;
+      } else {
+        const match = findFirst.exec(image);
+        if (!match) return false;
+      }
+
+      return true;
+    });
+    if (idxFirst === -1) return null;
+
+    idxBlocks = idxFirst - 1;
+    let found = true;
+    for (let idxFind = 0; idxFind < finds.length; idxFind++) {
+      const find = finds[idxFind];
+
+      idxBlocks++;
+      if (idxBlocks > end) {
+        found = false;
+        break;
+      }
+
+      const { image } = blocks[idxBlocks];
+
+      if (typeof find === 'string') {
+        if (find !== image) {
+          found = false;
+          break;
+        }
+      } else {
+        const match = find.exec(image);
+        if (!match) {
+          found = false;
+          break;
+        }
+
+        matches.push(match);
+      }
     }
-
-    return true;
-  });
-  if (idxFirst === -1) return null;
-
-  let idxBlocks = idxFirst - 1;
-  for (let idxFind = 0; idxFind < finds.length; idxFind++) {
-    const find = finds[idxFind];
-
-    idxBlocks++;
-    if (idxBlocks > end) return null;
-
-    const { image } = blocks[idxBlocks];
-
-    if (typeof find === 'string') {
-      if (find !== image) return null;
-    } else {
-      const match = find.exec(image);
-      if (!match) return null;
-
-      matches.push(match);
+    if (found) {
+      return { matches, start: idxFirst, end: idxBlocks };
     }
   }
-
-  return { matches, start: idxFirst, end: idxBlocks };
 }
 export function lastRangeOfImages(
   blocks: PathsAndImage[],
   startFromRtoL: number,
+  endFromRtoL: number,
   finds: (string | RegExp)[]
 ): { matches: RegExpExecArray[]; start: number; end: number } | null {
-  const matches: RegExpExecArray[] = [];
+  let idxBlocks = startFromRtoL;
 
-  const findLast = finds[finds.length - 1];
-  const idxLast = findLastIndex(blocks, ({ image }, i) => {
-    if (i > startFromRtoL) return false;
+  while (true) {
+    const matches: RegExpExecArray[] = [];
 
-    if (typeof findLast === 'string') {
-      if (findLast !== image) return false;
-    } else {
-      const match = findLast.exec(image);
-      if (!match) return false;
+    const findLast = finds[finds.length - 1];
+    const idxLast = findLastIndex(blocks, ({ image }, i) => {
+      if (i > idxBlocks || i < endFromRtoL) return false;
+
+      if (typeof findLast === 'string') {
+        if (findLast !== image) return false;
+      } else {
+        const match = findLast.exec(image);
+        if (!match) return false;
+      }
+
+      return true;
+    });
+    if (idxLast === -1) return null;
+
+    idxBlocks = idxLast + 1;
+    let found = false;
+    for (let idxFind = finds.length - 1; idxFind >= 0; idxFind--) {
+      const find = finds[idxFind];
+
+      idxBlocks--;
+      if (idxBlocks < endFromRtoL) {
+        found = false;
+        break;
+      }
+
+      const { image } = blocks[idxBlocks];
+
+      if (typeof find === 'string') {
+        if (find !== image) {
+          found = false;
+          break;
+        }
+      } else {
+        const match = find.exec(image);
+        if (!match) {
+          found = false;
+          break;
+        }
+
+        matches.push(match);
+      }
     }
-
-    return true;
-  });
-  if (idxLast === -1) return null;
-
-  let idxBlocks = idxLast;
-  for (let idxFind = finds.length - 1; idxFind >= 0; idxFind--) {
-    const find = finds[idxFind];
-    const { image } = blocks[idxBlocks--];
-
-    if (typeof find === 'string') {
-      if (find !== image) return null;
-    } else {
-      const match = find.exec(image);
-      if (!match) return null;
-
-      matches.push(match);
+    if (found) {
+      return { matches, start: idxBlocks + 1, end: idxLast };
     }
   }
-
-  return { matches, start: idxBlocks + 1, end: idxLast };
 }
 
 // export function execImages(r: RegExp, images: string[], separator: string = '', index: number = 0) {
@@ -398,7 +433,7 @@ function moveBinOpComma(
   }
 
   // String[] a = { "a", "b", };
-  console.error(`Cannot find pathsPrefix: ${pathsPrefix.join(',')}`);
+  // console.error(`Cannot find pathsPrefix: ${pathsPrefix.join(',')}`);
 
   return list;
 }

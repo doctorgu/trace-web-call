@@ -128,7 +128,7 @@ export function insertRouteJspKeyName() {
 
     const findsStarting = getFindsByClassPathClassNameFromDb(keyName, directory, file);
 
-    console.log(`getStartingToTables`);
+    console.log(`getStartingToJsps`);
     const routesAll = getStartingToJsps(keyName, findsStarting, jspDirectory, config.startingPoint);
 
     const routesCur = routesAll

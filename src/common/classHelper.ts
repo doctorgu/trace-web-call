@@ -503,10 +503,10 @@ function getValues(blocks: PathsAndImage[], start: number, posSemicolon: number)
         const posSemicolon = blocks.findIndex(({ paths }, i) => i > start && endsWith(paths, 'Semicolon'));
 
         // new ModelAndView("abc", model);
-        let retRBrace = lastRangeOfImages(blocks, posSemicolon, [',', /\w+/, ')', ';']);
+        let retRBrace = lastRangeOfImages(blocks, posSemicolon, start, [',', /^\w+$/, ')', ';']);
         if (!retRBrace) {
           // new ModelAndView("abc");
-          retRBrace = lastRangeOfImages(blocks, posSemicolon, [')', ';']);
+          retRBrace = lastRangeOfImages(blocks, posSemicolon, start, [')', ';']);
         }
         if (!retRBrace) {
           throw new Error(`ModelAndView right part not found`);
