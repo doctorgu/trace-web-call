@@ -30,91 +30,104 @@ export function getValue(parent: any, pathDotSeparated: string): string {
   return prop;
 }
 
-function getOpeningPosition(
-  list: (PathsAndImage & { binMoved: boolean })[],
-  posClose: number,
-  symbolOpen: string,
-  symbolClose: string
-): number {
-  let counter = 1;
-
-  for (let i = posClose - 1; i >= 0; i--) {
-    const { image } = list[i];
-    if (image === symbolClose) {
-      counter++;
-    } else if (image === symbolOpen) {
-      counter--;
-    }
-
-    if (counter === 0) {
-      return i;
-    }
-  }
-
-  throw new Error(`Openning symbol not found before ${posClose} index.`);
-}
-
-export function startsWith2(paths: string[], finds: string[]): boolean {
+export function startsWith2(paths: string[], finds: (string | RegExp)[]): boolean {
   const finds2 = [...finds];
 
   let index = -1;
   for (let i = 0; i < finds2.length; i++) {
+    const find = finds2[i];
+
     index++;
-    if (finds2[i] !== paths[index]) {
-      return false;
+
+    if (typeof find === 'string') {
+      if (find !== paths[index]) {
+        return false;
+      }
+    } else {
+      if (!find.test(paths[index])) {
+        return false;
+      }
     }
   }
 
   return true;
 }
-export function startsWith(paths: string[], ...finds: string[]): boolean {
+export function startsWith(paths: string[], ...finds: (string | RegExp)[]): boolean {
   return startsWith2(paths, finds);
 }
 
-export function endsWith2(paths: string[], finds: string[]): boolean {
+export function endsWith2(paths: string[], finds: (string | RegExp)[]): boolean {
   const finds2 = [...finds];
 
   let index = paths.length;
   for (let i = finds2.length - 1; i >= 0; i--) {
+    const find = finds2[i];
+
     index--;
-    if (finds2[i] !== paths[index]) {
-      return false;
+
+    if (typeof find === 'string') {
+      if (find !== paths[index]) {
+        return false;
+      }
+    } else {
+      if (!find.test(paths[index])) {
+        return false;
+      }
     }
   }
 
   return true;
 }
-export function endsWith(paths: string[], ...finds: string[]): boolean {
+export function endsWith(paths: string[], ...finds: (string | RegExp)[]): boolean {
   return endsWith2(paths, finds);
 }
 
-export function indexOf2(paths: string[], finds: string[]): number {
+export function indexOf2(paths: string[], finds: (string | RegExp)[]): number {
   let idxSrc = 0;
 
   while (true) {
-    let idxFirst = paths.indexOf(finds[0], idxSrc);
+    const findFirst = finds[0];
+    let idxFirst = paths.findIndex((v, i) => {
+      if (i < idxSrc) return false;
+
+      if (typeof findFirst === 'string') {
+        return v === findFirst;
+      } else {
+        return findFirst.test(v);
+      }
+    });
     if (idxFirst === -1) return -1;
 
     idxSrc = idxFirst;
 
     let found = true;
     for (let idxFind = 1; idxFind < finds.length; idxFind++) {
+      const find = finds[idxFind];
+
       idxSrc++;
-      if (finds[idxFind] !== paths[idxSrc]) {
-        found = false;
-        break;
+
+      if (typeof find === 'string') {
+        if (find !== paths[idxSrc]) {
+          found = false;
+          break;
+        }
+      } else {
+        if (!find.test(paths[idxSrc])) {
+          found = false;
+          break;
+        }
       }
     }
     if (found) return idxFirst;
   }
 }
-export function indexOf(paths: string[], ...finds: string[]): number {
+export function indexOf(paths: string[], ...finds: (string | RegExp)[]): number {
   return indexOf2(paths, finds);
 }
-export function includes2(paths: string[], finds: string[]): boolean {
+export function includes2(paths: string[], finds: (string | RegExp)[]): boolean {
   return indexOf2(paths, finds) !== -1;
 }
-export function includes(paths: string[], ...finds: string[]): boolean {
+export function includes(paths: string[], ...finds: (string | RegExp)[]): boolean {
   return indexOf2(paths, finds) !== -1;
 }
 
@@ -384,23 +397,40 @@ function moveBinOpComma(
     }
   }
 
-  throw new Error(`Cannot find pathsPrefix: ${pathsPrefix.join(',')}`);
+  // String[] a = { "a", "b", };
+  console.error(`Cannot find pathsPrefix: ${pathsPrefix.join(',')}`);
+
+  return list;
 }
 export function reorderBinOpCommaColon(pathsAndImageList: PathsAndImage[]): PathsAndImage[] {
   const list = [...pathsAndImageList];
-  const dests = ['BinaryOperator', 'Comma', 'Colon'];
+  const dests: (string | RegExp)[][] = [
+    ['BinaryOperator'],
+    ['BinaryOperator', /^[0-9]+$/],
+    ['Comma'],
+    ['Comma', /^[0-9]+$/],
+    ['ternaryExpression', 'Colon'],
+  ];
+
+  const rDigit = /^[0-9]+$/;
 
   for (let i = 0; i < list.length; i++) {
     const { paths } = list[i];
 
-    const rDigit = /^[0-9]+$/;
-    const binOne = dests.includes(paths[paths.length - 1]);
-    const binOneMore = dests.includes(paths[paths.length - 2]) && rDigit.test(paths[paths.length - 1]);
-    if (!binOne && !binOneMore) continue;
+    let found = false;
+    let endsWithDigit = false;
+    for (const dest of dests) {
+      if (endsWith2(paths, dest)) {
+        endsWithDigit = rDigit.test(paths[paths.length - 1]);
+        found = true;
+        break;
+      }
+    }
+    if (!found) continue;
 
-    const indexBin = binOne ? 0 : parseInt(paths[paths.length - 1], 0);
     const posBinInList = i;
-    const posBinInPath = paths.length - (binOne ? 1 : 2);
+    const posBinInPath = paths.length - (endsWithDigit ? 2 : 1);
+    const indexBin = endsWithDigit ? parseInt(paths[paths.length - 1], 10) : 0;
     moveBinOpComma(list, posBinInList, posBinInPath, indexBin);
   }
   return list;

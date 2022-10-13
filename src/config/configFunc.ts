@@ -57,7 +57,7 @@ export const configFunc: FuncInfo[] = [
   },
   {
     // HttpUtils.getString("hdplcc_promo_sectId","2718492")
-    find: ['HttpUtils', '.', 'getString', '(', /^"([\w+.]+)"$/, /^"([\w+.]+)"$/, ')'],
+    find: ['HttpUtils', '.', 'getString', '(', /^"([\w+.]+)"$/, ',', /^"([\w+.]+)"$/, ')'],
     replace: (matches: RegExpExecArray[]): string => {
       const value = matches[0][1];
       const defaultValue = matches[1][1];
@@ -66,7 +66,7 @@ export const configFunc: FuncInfo[] = [
   },
   {
     // ServletRequestUtils.getRequiredStringParameter(request, "EventNo")
-    find: ['ServletRequestUtils', '.', 'getRequiredStringParameter', '(', /^\w+$/, /^"([\w+.]+)"$/, ')'],
+    find: ['ServletRequestUtils', '.', 'getRequiredStringParameter', '(', /^\w+$/, ',', /^"([\w+.]+)"$/, ')'],
     replace: (matches: RegExpExecArray[]): string => {
       const value = matches[1][1];
       return `{ServletRequestUtils.getRequiredStringParameter:${value}}`;
@@ -74,7 +74,7 @@ export const configFunc: FuncInfo[] = [
   },
   {
     // WebLogicUtil.getSessionValue(request, "AdultAuthItemCode")
-    find: ['WebLogicUtil', '.', 'getSessionValue', '(', /^\w+$/, /^"([\w+.]+)"$/, ')'],
+    find: ['WebLogicUtil', '.', 'getSessionValue', '(', /^\w+$/, ',', /^"([\w+.]+)"$/, ')'],
     replace: (matches: RegExpExecArray[]): string => {
       const value = matches[1][1];
       return `{WebLogicUtil.getSessionValue:${value}}`;
@@ -82,7 +82,7 @@ export const configFunc: FuncInfo[] = [
   },
   {
     // URLEncoder.encode(orgRefer, "UTF-8")
-    find: ['URLEncoder', '.', 'encode', '(', /^\w+$/, /^"[^"]+"$/, ')'],
+    find: ['URLEncoder', '.', 'encode', '(', /^\w+$/, ',', /^"[^"]+"$/, ')'],
     replace: '',
   },
   {
@@ -92,7 +92,26 @@ export const configFunc: FuncInfo[] = [
   },
   {
     // return HttpUtils.sendEmail(model,customerService,emailAdr, ipAdr, emailSelfCertGbcd,id,custNo);
-    find: ['HttpUtils', '.', 'sendEmail', '(', ')'],
+    find: [
+      'HttpUtils',
+      '.',
+      'sendEmail',
+      '(',
+      /^\w+$/,
+      ',',
+      /^\w+$/,
+      ',',
+      /^\w+$/,
+      ',',
+      /^\w+$/,
+      ',',
+      /^\w+$/,
+      ',',
+      /^\w+$/,
+      ',',
+      /^\w+$/,
+      ')',
+    ],
     replace: '{MappingJacksonJsonView}',
   },
 ];

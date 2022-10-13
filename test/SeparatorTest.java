@@ -4,6 +4,11 @@ public class SeparatorTest {
 
 		int ternaryTest = true ? 1 : 0;
 
+		switch (num) {
+			case 1: break;
+			case 2: break;
+		}
+		
 		int num = 1;
 		num += 1;
 		num -= 1;
