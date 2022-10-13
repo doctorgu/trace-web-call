@@ -1,5 +1,9 @@
 public class SeparatorTest {
 	public void getAbc(Model model) throws Exception {
+		new ModelAndView("redirect:https://" + ConfigUtil.getString("server.host") + "/p/cob/registMrMember.do", model);
+
+		int ternaryTest = true ? 1 : 0;
+
 		int num = 1;
 		num += 1;
 		num -= 1;
@@ -18,5 +22,7 @@ public class SeparatorTest {
 
 		int l = 1 + 2 - 3 * 4 / 5;
 		int m = (1 + 2) - (3 * (4 / 5));
+
+		
 	}
 }

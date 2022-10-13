@@ -53,93 +53,25 @@ function getOpeningPosition(
 
   throw new Error(`Openning symbol not found before ${posClose} index.`);
 }
-function getPathsAndImageListFromSimpleCst2(parent: any, paths: string[], pathsAndImageList: PathsAndImage[]): void {
-  if (typeof parent === 'string') {
-    pathsAndImageList.push({ paths, image: parent });
-    return;
-  }
 
-  const kvList = Object.entries(parent);
-  for (let nKv = 0; nKv < kvList.length; nKv++) {
-    const [key, value] = kvList[nKv];
+export function startsWith2(paths: string[], finds: string[]): boolean {
+  const finds2 = [...finds];
 
-    const prop = parent[key];
-
-    const pathsNew = [...paths];
-    pathsNew.push(key);
-    getPathsAndImageListFromSimpleCst2(prop, pathsNew, pathsAndImageList);
-  }
-}
-function getInsertIdx(list: (PathsAndImage & { binMoved: boolean })[], start: number, offset: number): number {
-  let counter = 0;
-  for (let i = start; i >= 0; i--) {
-    const { image } = list[i];
-    if (image === ')') {
-      i = getOpeningPosition(list, i, '(', ')');
-    }
-
-    counter++;
-    if (counter === offset) {
-      return i;
+  let index = -1;
+  for (let i = 0; i < finds2.length; i++) {
+    index++;
+    if (finds2[i] !== paths[index]) {
+      return false;
     }
   }
 
-  throw new Error(`Not reached by offset: ${offset}`);
+  return true;
 }
-function moveBinaryOperator(list: (PathsAndImage & { binMoved: boolean })[], posBin: number, lastIdxBin: number): void {
-  // [1, 2, 3, 4, +, +, +] -> [1, +, 2, +, 3, +, 4]
-  //    : [1, 2, 3, 4, +, +, +]
-  // - 3: [1, 2, 3, +, 4, +, +]
-  // - 4: [1, 2, +, 3, +, 4, +]
-  // - 5: [1, +, 2, +, 3, +, 4]
-  let insertIdx = -1;
-  let offset = lastIdxBin + 1;
-  for (let i = 0; i < lastIdxBin + 1; i++) {
-    const cur = list.splice(posBin, 1)[0];
-    insertIdx = getInsertIdx(list, posBin - 1, offset);
-    list.splice(insertIdx, 0, cur);
-    cur.binMoved = true;
-
-    offset++;
-  }
-}
-export function reorderBinaryOperator(pathsAndImageList: PathsAndImage[]): PathsAndImage[] {
-  const list: (PathsAndImage & { binMoved: boolean })[] = pathsAndImageList.map(({ paths, image }) => ({
-    paths,
-    image,
-    binMoved: false,
-  }));
-  const dests = ['BinaryOperator', 'Comma'];
-
-  for (let i = list.length - 1; i >= 0; i--) {
-    const { paths, binMoved } = list[i];
-
-    const rDigit = /^[0-9]+$/;
-    const binOne = dests.includes(paths[paths.length - 1]);
-    const binOneMore = dests.includes(paths[paths.length - 2]) && rDigit.test(paths[paths.length - 1]);
-    if ((!binOne && !binOneMore) || binMoved) continue;
-
-    const lastIdxS = binOne ? '0' : paths[paths.length - 1];
-
-    moveBinaryOperator(list, i, parseInt(lastIdxS));
-  }
-  return list.map(({ paths, image }) => ({ paths, image }));
-}
-export function getPathsAndImagesFromSimpleCst(parent: any) {
-  const paths: string[] = [];
-  const pathsAndImageList: PathsAndImage[] = [];
-
-  getPathsAndImageListFromSimpleCst2(parent, paths, pathsAndImageList);
-
-  // return pathsAndImageList;
-
-  // !!! Has problem that plus inserted between 'getString' and '(' in following
-  // return new ModelAndView("redirect:https://" + ConfigUtil.getString("server.host") + "/p/cob/registMrMember.do", model);
-  const pathsAndImageListOrdered = reorderBinaryOperator(pathsAndImageList);
-  return pathsAndImageListOrdered;
+export function startsWith(paths: string[], ...finds: string[]): boolean {
+  return startsWith2(paths, finds);
 }
 
-export function endsWith2(paths: string[], finds: Keyword[]): boolean {
+export function endsWith2(paths: string[], finds: string[]): boolean {
   const finds2 = [...finds];
 
   let index = paths.length;
@@ -152,18 +84,11 @@ export function endsWith2(paths: string[], finds: Keyword[]): boolean {
 
   return true;
 }
-export function endsWith(paths: string[], ...finds: Keyword[]): boolean {
+export function endsWith(paths: string[], ...finds: string[]): boolean {
   return endsWith2(paths, finds);
 }
 
-export function includes2(paths: string[], finds: Keyword[]): boolean {
-  return indexOf2(paths, finds) !== -1;
-}
-export function includes(paths: string[], ...finds: Keyword[]): boolean {
-  return indexOf2(paths, finds) !== -1;
-}
-
-export function indexOf2(paths: string[], finds: Keyword[]): number {
+export function indexOf2(paths: string[], finds: string[]): number {
   let idxSrc = 0;
 
   while (true) {
@@ -183,17 +108,21 @@ export function indexOf2(paths: string[], finds: Keyword[]): number {
     if (found) return idxFirst;
   }
 }
-export function indexOf(paths: string[], ...finds: Keyword[]): number {
+export function indexOf(paths: string[], ...finds: string[]): number {
   return indexOf2(paths, finds);
 }
+export function includes2(paths: string[], finds: string[]): boolean {
+  return indexOf2(paths, finds) !== -1;
+}
+export function includes(paths: string[], ...finds: string[]): boolean {
+  return indexOf2(paths, finds) !== -1;
+}
 
-/** skipPlusComma: set to true to solve reorderBinaryOperator bug */
 export function rangeOfImages(
   blocks: PathsAndImage[],
   start: number,
   end: number,
-  finds: (string | RegExp)[],
-  skipPlusComma: boolean = false
+  finds: (string | RegExp)[]
 ): { matches: RegExpExecArray[]; start: number; end: number } | null {
   const matches: RegExpExecArray[] = [];
 
@@ -220,10 +149,6 @@ export function rangeOfImages(
     if (idxBlocks > end) return null;
 
     const { image } = blocks[idxBlocks];
-    if (skipPlusComma && (image === '+' || image === ',')) {
-      idxFind--;
-      continue;
-    }
 
     if (typeof find === 'string') {
       if (find !== image) return null;
@@ -240,8 +165,7 @@ export function rangeOfImages(
 export function lastRangeOfImages(
   blocks: PathsAndImage[],
   startFromRtoL: number,
-  finds: (string | RegExp)[],
-  skipPlusComma: boolean = false
+  finds: (string | RegExp)[]
 ): { matches: RegExpExecArray[]; start: number; end: number } | null {
   const matches: RegExpExecArray[] = [];
 
@@ -264,10 +188,6 @@ export function lastRangeOfImages(
   for (let idxFind = finds.length - 1; idxFind >= 0; idxFind--) {
     const find = finds[idxFind];
     const { image } = blocks[idxBlocks--];
-    if (skipPlusComma && (image === '+' || image === ',')) {
-      idxFind++;
-      continue;
-    }
 
     if (typeof find === 'string') {
       if (find !== image) return null;
@@ -342,4 +262,155 @@ export function getRBracePosition(pathsAndImages: PathsAndImage[], posLBrace: nu
   }
 
   throw new Error(`RBrace not found after ${posLBrace} index.`);
+}
+
+function getPathsAndImageListFromSimpleCst2(parent: any, paths: string[], pathsAndImageList: PathsAndImage[]): void {
+  if (typeof parent === 'string') {
+    pathsAndImageList.push({ paths, image: parent });
+    return;
+  }
+
+  const kvList = Object.entries(parent);
+  for (let nKv = 0; nKv < kvList.length; nKv++) {
+    const [key, value] = kvList[nKv];
+
+    const prop = parent[key];
+
+    const pathsNew = [...paths];
+    pathsNew.push(key);
+    getPathsAndImageListFromSimpleCst2(prop, pathsNew, pathsAndImageList);
+  }
+}
+
+// function getInsertIdx(list: (PathsAndImage & { binMoved: boolean })[], start: number, offset: number): number {
+//   let counter = 0;
+//   for (let i = start; i >= 0; i--) {
+//     const { image } = list[i];
+//     if (image === ')') {
+//       i = getOpeningPosition(list, i, '(', ')');
+//     }
+
+//     counter++;
+//     if (counter === offset) {
+//       return i;
+//     }
+//   }
+
+//   throw new Error(`Not reached by offset: ${offset}`);
+// }
+// function moveBinaryOperator(list: (PathsAndImage & { binMoved: boolean })[], posBin: number, lastIdxBin: number): void {
+//   // [1, 2, 3, 4, +, +, +] -> [1, +, 2, +, 3, +, 4]
+//   //    : [1, 2, 3, 4, +, +, +]
+//   // - 3: [1, 2, 3, +, 4, +, +]
+//   // - 4: [1, 2, +, 3, +, 4, +]
+//   // - 5: [1, +, 2, +, 3, +, 4]
+//   let insertIdx = -1;
+//   let offset = lastIdxBin + 1;
+//   for (let i = 0; i < lastIdxBin + 1; i++) {
+//     const cur = list.splice(posBin, 1)[0];
+//     insertIdx = getInsertIdx(list, posBin - 1, offset);
+//     list.splice(insertIdx, 0, cur);
+//     cur.binMoved = true;
+
+//     offset++;
+//   }
+// }
+// export function reorderBinaryOperator(pathsAndImageList: PathsAndImage[]): PathsAndImage[] {
+//   const list: (PathsAndImage & { binMoved: boolean })[] = pathsAndImageList.map(({ paths, image }) => ({
+//     paths,
+//     image,
+//     binMoved: false,
+//   }));
+//   const dests = ['BinaryOperator', 'Comma'];
+
+//   for (let i = list.length - 1; i >= 0; i--) {
+//     const { paths, binMoved } = list[i];
+
+//     const rDigit = /^[0-9]+$/;
+//     const binOne = dests.includes(paths[paths.length - 1]);
+//     const binOneMore = dests.includes(paths[paths.length - 2]) && rDigit.test(paths[paths.length - 1]);
+//     if ((!binOne && !binOneMore) || binMoved) continue;
+
+//     const lastIdxS = binOne ? '0' : paths[paths.length - 1];
+
+//     moveBinaryOperator(list, i, parseInt(lastIdxS));
+//   }
+//   return list.map(({ paths, image }) => ({ paths, image }));
+// }
+// export function getPathsAndImagesFromSimpleCst(parent: any): PathsAndImage[] {
+//   const paths: string[] = [];
+//   const pathsAndImageList: PathsAndImage[] = [];
+
+//   getPathsAndImageListFromSimpleCst2(parent, paths, pathsAndImageList);
+
+//   // return pathsAndImageList;
+
+//   // !!! Has problem that plus inserted between 'getString' and '(' in following
+//   // return new ModelAndView("redirect:https://" + ConfigUtil.getString("server.host") + "/p/cob/registMrMember.do", model);
+//   const pathsAndImageListOrdered = reorderBinaryOperator(pathsAndImageList);
+//   return pathsAndImageListOrdered;
+// }
+function moveBinOpComma(
+  list: PathsAndImage[],
+  posBinInList: number,
+  posBinInPath: number,
+  indexBin: number
+): PathsAndImage[] {
+  // num + 1:
+  // "num" unaryExpression,0,primary,primaryPrefix,fqnOrRefType,fqnOrRefTypePartFirst,fqnOrRefTypePartCommon,Identifier
+  // "1"   unaryExpression,1,primary,primaryPrefix,literal,integerLiteral,DecimalLiteral
+  // "+"   BinaryOperator
+
+  const { paths: pathsPrev } = list[posBinInList - 1];
+  const toInsert = list.splice(posBinInList, 1)[0];
+  const { paths: pathsBin } = toInsert;
+
+  const prevSiblingName = pathsPrev.slice(posBinInPath, posBinInPath + 1)[0];
+  const pathsPrefix = [...pathsBin.slice(0, posBinInPath), prevSiblingName, (indexBin + 1).toString()];
+
+  for (let i = posBinInList - 1; i >= 0; i--) {
+    const { paths } = list[i];
+    // find end index of group
+    if (startsWith2(paths, pathsPrefix)) {
+      // find start index of group
+      for (let j = i - 1; j >= 0; j--) {
+        const { paths: paths2 } = list[j];
+        if (!startsWith2(paths2, pathsPrefix)) {
+          const indexStart = j + 1;
+          list.splice(indexStart, 0, toInsert);
+          return list;
+        }
+      }
+    }
+  }
+
+  throw new Error(`Cannot find pathsPrefix: ${pathsPrefix.join(',')}`);
+}
+export function reorderBinOpCommaColon(pathsAndImageList: PathsAndImage[]): PathsAndImage[] {
+  const list = [...pathsAndImageList];
+  const dests = ['BinaryOperator', 'Comma', 'Colon'];
+
+  for (let i = 0; i < list.length; i++) {
+    const { paths } = list[i];
+
+    const rDigit = /^[0-9]+$/;
+    const binOne = dests.includes(paths[paths.length - 1]);
+    const binOneMore = dests.includes(paths[paths.length - 2]) && rDigit.test(paths[paths.length - 1]);
+    if (!binOne && !binOneMore) continue;
+
+    const indexBin = binOne ? 0 : parseInt(paths[paths.length - 1], 0);
+    const posBinInList = i;
+    const posBinInPath = paths.length - (binOne ? 1 : 2);
+    moveBinOpComma(list, posBinInList, posBinInPath, indexBin);
+  }
+  return list;
+}
+export function getPathsAndImagesFromSimpleCst(parent: any): PathsAndImage[] {
+  const paths: string[] = [];
+  const pathsAndImageList: PathsAndImage[] = [];
+
+  getPathsAndImageListFromSimpleCst2(parent, paths, pathsAndImageList);
+
+  const pathsAndImageListOrdered = reorderBinOpCommaColon(pathsAndImageList);
+  return pathsAndImageListOrdered;
 }

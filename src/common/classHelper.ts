@@ -21,7 +21,6 @@ import {
   getPathsAndImagesFromSimpleCst,
   indexOf,
   rangeOfImages,
-  reorderBinaryOperator,
   lastRangeOfImages,
 } from './cstHelper';
 import { getJspViewFinds, JspView, JspViewFind } from './jspHelper';
@@ -420,9 +419,9 @@ function getConstructFuncVarValue(
     configConstructor;
 
   for (const func of configWhat) {
-    const { type, find, skipPlusComma, replace } = func;
+    const { type, find, replace } = func;
 
-    const ret = rangeOfImages(blocks, start, posSemicolon, find, skipPlusComma);
+    const ret = rangeOfImages(blocks, start, posSemicolon, find);
     if (ret && ret.start === start) {
       const { end } = ret;
       if (typeof replace === 'string') {
@@ -444,7 +443,7 @@ function getValueType(
 ): { type: ValueType; value: string; end: number } {
   // new ModelAndView("abc", model);
   const findsNewClass = ['new', /^\w+$/, '('];
-  const retNew = rangeOfImages(blocks, start, end, findsNewClass, true);
+  const retNew = rangeOfImages(blocks, start, end, findsNewClass);
   if (retNew && retNew.start === start) {
     const posRBrace = getRBracePosition(blocks, retNew.end);
     if (posRBrace !== -1) {
@@ -460,11 +459,11 @@ function getValueType(
 
   // svc.get(p1, p2);
   const findsClassDotMethod = [/^\w+$/, '.', /^\w+$/, '('];
-  let retFunc = rangeOfImages(blocks, start, end, findsClassDotMethod, true);
+  let retFunc = rangeOfImages(blocks, start, end, findsClassDotMethod);
   if (!retFunc) {
     // get(p1, p2);
     const findsMethod = [/^\w+$/, '('];
-    retFunc = rangeOfImages(blocks, start, end, findsMethod, true);
+    retFunc = rangeOfImages(blocks, start, end, findsMethod);
   }
   if (retFunc && retFunc.start === start) {
     const posRBrace = getRBracePosition(blocks, retFunc.end);
@@ -730,7 +729,7 @@ function getMethods(cstSimple: any, pathsAndImageList: PathsAndImage[], vars: Va
   return methods;
 }
 
-function getCstClassDeclaration(cstSimpleAll: any): any {
+export function getCstClassDeclaration(cstSimpleAll: any): any {
   let classDeclaration = getProperty(
     cstSimpleAll,
     'ordinaryCompilationUnit.typeDeclaration.classDeclaration'.split('.')
