@@ -1,8 +1,7 @@
 # TraceWebCall
 
-Shows all tables used when API called through Mapping annotation in controller.
-
-Also shows all routes from API to SQL.
+1. Log all tables, objects(view, function, procedure, package) jsp files used when API called through Mapping annotation in controller.
+1. Log all routes from API to tables, objects, jsp.
 
 ## Initial setup
 
@@ -15,10 +14,8 @@ Also shows all routes from API to SQL.
 - Change path of `src/config/config.ts`
 - Write all table's name(upper case, separated by new line) to `data/tables.txt`
 
-## Rule
+## Exception
 
-- All file has following rule
-  - Controller file name must ends with `Controller.java`
 - Overloaded function supported by parameter count, so same parameter count with different type not supported.
 
   ```java
@@ -65,30 +62,20 @@ Also shows all routes from API to SQL.
 
 ## Run
 
-Results will be like following after running `yarn dev` command.
-
-`mapToTables.txt`:
+Results will be inserted into following SQLite table after running `yarn start` command.
 
 ```text
-/api/manual/v1/BizBuilderWorkHandler: WB_WORK
-/api/manual/v1/csManualTabHandler: WM_MANUALTAB,WM_MANUALTABCOMPONENT
-```
-
-`routes.txt`:
-
-```text
-mapping: /api/manual/v1/BizBuilderWorkHandler
- method: BizBuilderController.bizBuilderWorkHandler
- method: BizBuilderService.selectWorkList
-    xml: BizBuilder.selectWorkList
-  table: WB_WORK
-
-mapping: /api/manual/v1/csManualTabHandler
- method: CsManualController.csManualTabHandler
- method: CSManualService.selectEditorTabListNoClobByMualIdx
-    xml: Manual.selectEditorTabListNoClobByMualIdx
-  table: WM_MANUALTAB
- method: CSManualService.selectEditorTabComponentByMualIdx
-    xml: Manual.selectEditorTabComponentByMualIdx
-  table: WM_MANUALTABCOMPONENT
+ClassInfo
+HeaderInfo
+JspInfo
+KeyInfo
+MethodInfo
+MethodInfoFind
+ObjectAndTables
+RouteJsp
+RouteTable
+Tables
+XmlInfo
+XmlNodeInfo
+XmlNodeInfoFind
 ```
