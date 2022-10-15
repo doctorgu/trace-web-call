@@ -217,7 +217,7 @@ export function lastRangeOfImages(
     if (idxLast === -1) return null;
 
     idxBlocks = idxLast + 1;
-    let found = false;
+    let found = true;
     for (let idxFind = finds.length - 1; idxFind >= 0; idxFind--) {
       const find = finds[idxFind];
 
