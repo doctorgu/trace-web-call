@@ -1,6 +1,5 @@
 export type ValueType = 'Constructor' | 'Function' | 'Variable' | 'Literal' | 'Other';
 
-// skipPlusComma is true to solve reorderBinaryOperator bug
 export type FuncType = 'ModelAndViewWithParam';
 
 export type FuncInfo = {

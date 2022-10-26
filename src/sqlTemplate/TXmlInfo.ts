@@ -1,4 +1,4 @@
-import { XmlInfo, XmlNodeInfo, XmlNodeInfoFind } from '../common/batisHelper';
+import { XmlInfo, XmlNodeInfo, XmlNodeInfoFind } from '../common/sqlMapperHelper';
 import { all, DbRow, exec, get, run } from '../common/sqliteHelper';
 import { escapeDollar } from '../common/util';
 import { SqlTemplate } from '../common/sqliteHelper';
@@ -6,7 +6,7 @@ import { configReader } from '../config/configReader';
 import betterSqlite3 from 'better-sqlite3';
 
 class TXmlInfo {
-  selectXmlInfo(xmlPath: string): any {
+  selectXmlInfo(xmlPath: string): DbRow {
     const sql = `
 select  xmlPath, namespace
 from    XmlInfo

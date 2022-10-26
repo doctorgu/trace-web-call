@@ -1,5 +1,5 @@
 export type OutputType = 'txt' | 'csv';
-export type StartingPoint = 'map' | 'publicMethod';
+export type StartingPoint = 'mapping' | 'publicMethod' | 'springBatch';
 
 export type DirectoryAndFilePattern = { directory: string; file: string | RegExp };
 
@@ -14,10 +14,10 @@ export type ConfigType = {
         xml: string;
       }[];
       main: {
-        startings: DirectoryAndFilePattern;
         keyName: string;
+        startings: DirectoryAndFilePattern;
         service: DirectoryAndFilePattern;
-        xml: string;
+        xmlDirectory: string;
         jspDirectory: string;
       }[];
     };

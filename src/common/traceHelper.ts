@@ -1,23 +1,22 @@
 import { existsSync, statSync } from 'fs';
 import { resolve } from 'path';
-import { findFiles, getLastPath, trimEnd, trimStart, trimStarts } from './util';
-import {
-  MethodInfo,
-  MethodInfoFind,
-  getFindsByClassPathClassNameFromDb,
-  ClassInfo,
-  CallerInfo,
-  rowsToFinds,
-} from './classHelper';
-import { XmlNodeInfoFind, getXmlInfoFromDb, ObjectInfo, ObjectChild, ObjectType } from './batisHelper';
-import { config } from '../config/config';
+import { findFiles, getClassNameFromFullName, getLastPath, trimEnd, trimStart, trimStarts } from './util';
+import { MethodInfo, MethodInfoFind, ClassInfo, rowsToFinds } from './classHelper';
+import { ObjectInfo, ObjectChild, ObjectType } from '../common/batisHelper';
 import { configReader } from '../config/configReader';
-import { StartingPoint } from '../config/ConfigType';
+import { DirectoryAndFilePattern, StartingPoint } from '../config/ConfigType';
 import tClassInfo from '../sqlTemplate/TClassInfo';
 import tCache from '../sqlTemplate/TCache';
 import tXmlInfo from '../sqlTemplate/TXmlInfo';
 import { filterJspFromJsp, getJspInfoFromDb, JspInfo, viewNameToJspPath } from './jspHelper';
-import { getDbPath } from './common';
+import {
+  BatchJob,
+  BeanSql,
+  BeanTargetObject,
+  getBatchJobFromDb,
+  getBeanSqlFromDb,
+  getBeanTargetObjectFromDb,
+} from './batchHelper';
 
 export type RouteTypeTable = 'mapping' | 'method' | 'xml' | 'view' | 'function' | 'procedure';
 export type RouteTable<RouteType> = {
@@ -49,6 +48,30 @@ export type RouteJsp<RouteType> = {
   valueMapping?: RouteType extends 'mapping' ? string[] : [];
   valueMethod?: RouteType extends 'method' ? string : '';
   jsps?: RouteType extends 'jsp' ? Set<string> : '';
+};
+
+export type RouteTypeBatch = 'job' | 'step' | 'method' | 'xml' | 'view' | 'function' | 'procedure';
+export type RouteBatch<RouteType> = {
+  groupSeq?: number; // Only used for inserting to table
+  seq: number;
+  depth: number;
+  routeType: RouteType;
+  valueJob?: RouteType extends 'job' ? string : '';
+  valueStep?: RouteType extends 'step' ? string : '';
+  valueMethod?: RouteType extends 'method' ? string : '';
+  valueXml?: RouteType extends 'xml' ? string : '';
+  valueView?: RouteType extends 'view' ? string : '';
+  valueFunction?: RouteType extends 'function' ? string : '';
+  valueProcedure?: RouteType extends 'procedure' ? string : '';
+
+  restartable?: RouteType extends 'job' ? boolean : false;
+
+  objects?: RouteType extends 'xml' | 'view' | 'function' | 'procedure' ? Set<string> : null;
+  tablesInsert?: RouteType extends 'xml' | 'view' | 'function' | 'procedure' ? Set<string> : null;
+  tablesUpdate?: RouteType extends 'xml' | 'view' | 'function' | 'procedure' ? Set<string> : null;
+  tablesDelete?: RouteType extends 'xml' | 'view' | 'function' | 'procedure' ? Set<string> : null;
+  tablesOther?: RouteType extends 'xml' | 'view' | 'function' | 'procedure' ? Set<string> : null;
+  selectExists?: RouteType extends 'xml' | 'view' | 'function' | 'procedure' ? boolean : null;
 };
 
 function getBaseMethods(classInfos: ClassInfo[], extendsNameSub: string): MethodInfo[] {
@@ -211,7 +234,7 @@ function getObjectByStringLiteral(
   return true;
 }
 
-function findByTypeMethod(
+function findByNameParameterCount(
   keyName: string,
   directories: string[],
   typeName: string,
@@ -227,6 +250,12 @@ function findByTypeMethod(
     typeName,
     classNameThis
   );
+  const finds = rowsToFinds(rows);
+  return finds;
+}
+
+function findByName(keyName: string, directories: string[], typeName: string, methodName: string): MethodInfoFind[] {
+  const rows = tClassInfo.selectMethodInfoFindByName(keyName, methodName, directories, typeName);
   const finds = rowsToFinds(rows);
   return finds;
 }
@@ -249,7 +278,14 @@ export function getTableNamesByMethod(
       }
     }
 
-    const founds = findByTypeMethod(keyName, directories, typeName, classNameThis, methodName, callerParameterCount);
+    const founds = findByNameParameterCount(
+      keyName,
+      directories,
+      typeName,
+      classNameThis,
+      methodName,
+      callerParameterCount
+    );
     for (let nFound = 0; nFound < founds.length; nFound++) {
       const found = founds[nFound];
       if (found) {
@@ -286,12 +322,12 @@ export function getStartingToObjects(
   for (let nMethod = 0; nMethod < findsStarting.length; nMethod++) {
     const methodInStartings = findsStarting[nMethod];
     const { className, mappingValues, isPublic: methodIsPublic, name: methodName } = methodInStartings;
-    if (startingPoint === 'map' && !mappingValues.length) continue;
+    if (startingPoint === 'mapping' && !mappingValues.length) continue;
     if (startingPoint === 'publicMethod' && !methodIsPublic) continue;
 
     const routes: RouteTable<RouteTypeTable>[] = [];
 
-    if (startingPoint === 'map') {
+    if (startingPoint === 'mapping') {
       let depth = -1;
       const routeMapping: RouteTable<'mapping'> = {
         seq: routes.length,
@@ -393,12 +429,12 @@ export function getStartingToJsps(
   for (let nMethod = 0; nMethod < findsStarting.length; nMethod++) {
     const methodInStartings = findsStarting[nMethod];
     const { className, mappingValues, isPublic: methodIsPublic, name: methodName } = methodInStartings;
-    if (startingPoint === 'map' && !mappingValues.length) continue;
+    if (startingPoint === 'mapping' && !mappingValues.length) continue;
     if (startingPoint === 'publicMethod' && !methodIsPublic) continue;
 
     const routes: RouteJsp<RouteTypeJsp>[] = [];
 
-    if (startingPoint === 'map') {
+    if (startingPoint === 'mapping') {
       let depth = -1;
       const routeMapping: RouteJsp<'mapping'> = {
         seq: routes.length,
@@ -417,10 +453,8 @@ export function getStartingToJsps(
       };
       routes.push(routeMethod);
 
-      if (jspDirectory) {
-        getJspsByMethod(jspInfos, jspDirectory, methodInStartings, routes, depth + 1);
-        routesAll.push(routes);
-      }
+      getJspsByMethod(jspInfos, jspDirectory, methodInStartings, routes, depth + 1);
+      routesAll.push(routes);
     } else if (startingPoint === 'publicMethod') {
       const classDotMethod = `${className}.${methodName}`;
       let depth = -1;
@@ -432,11 +466,164 @@ export function getStartingToJsps(
       };
       routes.push(routeMethod);
 
-      if (jspDirectory) {
-        getJspsByMethod(jspInfos, jspDirectory, methodInStartings, routes, depth + 1);
-        routesAll.push(routes);
+      getJspsByMethod(jspInfos, jspDirectory, methodInStartings, routes, depth + 1);
+      routesAll.push(routes);
+    }
+  }
+
+  return routesAll;
+}
+
+function routeTableToBatch(routesTable: RouteTable<RouteTypeTable>[], seqStart: number) {
+  const routes: RouteBatch<RouteTypeBatch>[] = [];
+
+  for (const routeTable of routesTable) {
+    switch (routeTable.routeType) {
+      case 'method':
+        {
+          const route: RouteBatch<'method'> = {
+            seq: seqStart++,
+            depth: routeTable.depth,
+            routeType: 'method',
+            valueMethod: routeTable.valueMethod,
+          };
+          routes.push(route);
+        }
+        break;
+      case 'xml':
+        {
+          const route: RouteBatch<'xml'> = {
+            seq: seqStart++,
+            depth: routeTable.depth,
+            routeType: 'xml',
+            valueXml: routeTable.valueXml,
+
+            objects: routeTable.objects as Set<string>,
+            tablesInsert: routeTable.tablesInsert as Set<string>,
+            tablesUpdate: routeTable.tablesUpdate as Set<string>,
+            tablesDelete: routeTable.tablesDelete as Set<string>,
+            tablesOther: routeTable.tablesOther as Set<string>,
+            selectExists: routeTable.selectExists as boolean,
+          };
+          routes.push(route);
+        }
+        break;
+      case 'view':
+        {
+          const route: RouteBatch<'view'> = {
+            seq: seqStart++,
+            depth: routeTable.depth,
+            routeType: 'view',
+            valueView: routeTable.valueView,
+
+            objects: routeTable.objects as Set<string>,
+            tablesInsert: routeTable.tablesInsert as Set<string>,
+            tablesUpdate: routeTable.tablesUpdate as Set<string>,
+            tablesDelete: routeTable.tablesDelete as Set<string>,
+            tablesOther: routeTable.tablesOther as Set<string>,
+            selectExists: routeTable.selectExists as boolean,
+          };
+          routes.push(route);
+        }
+        break;
+      case 'function':
+        {
+          const route: RouteBatch<'function'> = {
+            seq: seqStart++,
+            depth: routeTable.depth,
+            routeType: 'function',
+            valueFunction: routeTable.valueView,
+
+            objects: routeTable.objects as Set<string>,
+            tablesInsert: routeTable.tablesInsert as Set<string>,
+            tablesUpdate: routeTable.tablesUpdate as Set<string>,
+            tablesDelete: routeTable.tablesDelete as Set<string>,
+            tablesOther: routeTable.tablesOther as Set<string>,
+            selectExists: routeTable.selectExists as boolean,
+          };
+          routes.push(route);
+        }
+        break;
+    }
+  }
+
+  return routes;
+}
+
+export function getBatchToObjects(
+  keyName: string,
+  batchXmlDirectory: string,
+  directories: string[],
+  directoriesXml: string[]
+): RouteBatch<RouteTypeBatch>[][] {
+  const batchJobs: BatchJob[] = getBatchJobFromDb(keyName);
+  const targets: BeanTargetObject[] = getBeanTargetObjectFromDb(keyName);
+  const sqls: BeanSql[] = getBeanSqlFromDb(keyName);
+
+  const routesAll: RouteBatch<RouteTypeBatch>[][] = [];
+  for (const batchJob of batchJobs) {
+    let routes: RouteBatch<RouteTypeBatch>[] = [];
+    let depth = -1;
+
+    const routeJob: RouteBatch<'job'> = {
+      seq: routes.length,
+      depth: ++depth,
+      routeType: 'job',
+      valueJob: batchJob.id,
+      restartable: batchJob.restartable,
+    };
+    routes.push(routeJob);
+
+    for (const step of batchJob.steps) {
+      const depthCur = depth + 1;
+
+      const routeStep: RouteBatch<'step'> = {
+        seq: routes.length,
+        depth: depthCur,
+        routeType: 'step',
+        valueStep: step.beanId,
+      };
+      routes.push(routeStep);
+
+      const targetBeanIds: string[] = [];
+      if (step.tasklet.ref) targetBeanIds.push(step.tasklet.ref);
+      if (step.tasklet.reader) targetBeanIds.push(step.tasklet.reader);
+      if (step.tasklet.processor) targetBeanIds.push(step.tasklet.processor);
+      if (step.tasklet.writer) targetBeanIds.push(step.tasklet.writer);
+      for (const targetBeanId of targetBeanIds) {
+        const target = targets.find(
+          (target) => target.batchPath === batchJob.batchPath && target.beanId === targetBeanId
+        );
+        const sql = !target && sqls.find((sql) => sql.batchPath === batchJob.batchPath && sql.beanId === targetBeanId);
+        if (target) {
+          const typeName = getClassNameFromFullName(target.className);
+          const find: MethodInfoFind = findByName(keyName, directories, typeName, target.targetMethod)[0];
+
+          const routesTable: RouteTable<RouteTypeTable>[] = [];
+          getTableNamesByMethod(keyName, find, directories, directoriesXml, routesTable, depthCur + 1);
+
+          const routesBatch: RouteBatch<RouteTypeBatch>[] = routeTableToBatch(routesTable, routes.length);
+          routes = routes.concat(routesBatch);
+        } else if (sql) {
+          const routeBatch: RouteBatch<'xml'> = {
+            seq: routes.length,
+            depth: depthCur + 1,
+            routeType: 'xml',
+            valueXml: sql?.beanId,
+
+            objects: sql.objects,
+            tablesInsert: sql.tablesInsert,
+            tablesUpdate: sql.tablesUpdate,
+            tablesDelete: sql.tablesDelete,
+            tablesOther: sql.tablesOther,
+            selectExists: sql.selectExists,
+          };
+          routes.push(routeBatch);
+        }
       }
     }
+
+    routesAll.push(routes);
   }
 
   return routesAll;

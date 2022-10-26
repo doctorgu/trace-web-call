@@ -17,7 +17,7 @@ export const configComposite: ConfigType = {
             directory: 'bz-manual-api-common/src/main/java/biz/micro/portal/manual/api/common/spring/service',
             file: /.+Impl\.java|.+DAO\.java/,
           },
-          xml: 'bz-manual-api-common/src/main/resources/sql/oracle',
+          xmlDirectory: 'bz-manual-api-common/src/main/resources/sql/oracle',
           jspDirectory: '',
         },
         {
@@ -30,7 +30,7 @@ export const configComposite: ConfigType = {
             directory: 'bz-store-api-bizgroup/src/main/java/biz/micro/portal/store/api/bizgroup/spring/service',
             file: /.+Impl\.java|.+DAO\.java/,
           },
-          xml: 'bz-store-api-bizgroup/src/main/resources/sql/oracle',
+          xmlDirectory: 'bz-store-api-bizgroup/src/main/resources/sql/oracle',
           jspDirectory: '',
         },
         {
@@ -43,7 +43,7 @@ export const configComposite: ConfigType = {
             directory: 'bz-portal-api-account/src/main/java/biz/micro/portal/common/api/account/service',
             file: /.+Impl\.java|.+DAO\.java/,
           },
-          xml: 'bz-portal-api-account/src/main/resources/sql/oracle',
+          xmlDirectory: 'bz-portal-api-account/src/main/resources/sql/oracle',
           jspDirectory: '',
         },
       ],
@@ -60,6 +60,6 @@ export const configComposite: ConfigType = {
     outputDirectory: './output',
     logDirectory: './output/log',
   },
-  startingPoint: 'map',
+  startingPoint: 'mapping',
   defaultOwner: '',
 };

@@ -9,13 +9,28 @@ drop table if exists MethodInfo;
 drop table if exists MethodInfoFind;
 
 drop table if exists RouteTable;
-drop table if exists RouteJsp;
+
 drop table if exists JspInfo;
+drop table if exists RouteJsp;
+
+drop table if exists BatchJob;
+drop table if exists BatchStep;
+drop table if exists BeanTargetObject;
+drop table if exists BeanSql;
+
 
 drop view if exists vRouteTable;
-drop view if exists vRouteTableTxt;
-drop view if exists vStartToTableObject;
-drop view if exists vJspViews;
+drop view if exists vRouteTableIndent;
+drop view if exists vStartToObject;
+
+drop view if exists vRouteJsp;
+drop view if exists vRouteJspIndent;
+drop view if exists vStartToJsp;
+drop view if exists vJspViewFind;
+
+drop view if exists vRouteBatch;
+drop view if exists vRouteBatchIndent;
+drop view if exists vBatchToObject;
 
 -- strict removed because SQLiteStudio does not support it.
 
@@ -121,16 +136,6 @@ create table MethodInfoFind (
 create index IxMethodInfoFind1 on MethodInfoFind (keyName, name, parameterCount, className, implementsName);
 create index IxMethodInfoFind2 on MethodInfoFind (keyName, classPath);
 
-
-create table JspInfo (
-    keyName text not null,
-    jspPath text not null,
-    includes text not null,
-    insertTime timestamp not null default current_timestamp,
-    primary key (keyName, jspPath)
-);
-
-
 create table RouteTable (
     keyName text not null,
     groupSeq int not null,
@@ -155,6 +160,15 @@ create table RouteTable (
     primary key (keyName, groupSeq, seq)
 );
 
+
+create table JspInfo (
+    keyName text not null,
+    jspPath text not null,
+    includes text not null,
+    insertTime timestamp not null default current_timestamp,
+    primary key (keyName, jspPath)
+);
+
 create table RouteJsp (
     keyName text not null,
     groupSeq int not null,
@@ -164,6 +178,89 @@ create table RouteJsp (
     valueMapping text not null,
     valueMethod text not null,
     jsps text not null,
+    insertTime timestamp not null default current_timestamp,
+    primary key (keyName, groupSeq, seq)
+);
+
+
+create table BatchJob (
+    keyName text not null,
+    batchPath text not null,
+    jobId text not null,
+    
+    restartable int not null check (restartable in (0, 1)),
+    
+    insertTime timestamp not null default current_timestamp,
+    primary key (keyName, batchPath, jobId)
+);
+
+create table BatchStep (
+    batchPath text not null,
+    jobId text not null,
+    beanId text not null,
+    
+    next text not null,
+    
+    ref text not null,
+    reader text not null,
+    writer text not null,
+    processor text not null,
+    commitInterval int not null,
+
+    insertTime timestamp not null default current_timestamp,
+    primary key (batchPath, jobId, beanId)
+);
+
+create table BeanTargetObject (
+    batchPath text not null,
+    beanId text not null,
+
+    className text not null,
+    properties text not null,
+    targetMethod text not null,
+
+    insertTime timestamp not null default current_timestamp,
+    primary key (batchPath, beanId)
+);
+
+create table BeanSql (
+    batchPath text not null,
+    beanId text not null,
+
+    dataSource text not null,
+
+    objects text not null,
+    tablesInsert text not null,
+    tablesUpdate text not null,
+    tablesDelete text not null,
+    tablesOther text not null,
+    selectExists int not null check (selectExists in (0, 1)),
+
+    insertTime timestamp not null default current_timestamp,
+    primary key (batchPath, beanId)
+);
+
+create table RouteBatch (
+    keyName text not null,
+    groupSeq int not null,
+    seq int not null,
+    depth int not null,
+    routeType text not null,
+    valueJob text not null,
+    valueStep text not null,
+    valueMethod text not null,
+    valueXml text not null,
+    valueView text not null,
+    valueFunction text not null,
+    valueProcedure text not null,
+
+    objects text not null,
+    tablesInsert text not null,
+    tablesUpdate text not null,
+    tablesDelete text not null,
+    tablesOther text not null,
+    selectExists int not null check (selectExists in (0, 1)),
+    
     insertTime timestamp not null default current_timestamp,
     primary key (keyName, groupSeq, seq)
 );
@@ -240,8 +337,7 @@ select  keyName, groupSeq, seq, depth, routeType, value,
         objects, tablesInsert, tablesUpdate, tablesDelete, tablesOther, selectExists
 from    vRouteTable;
 
-
-create view vStartToTableObject
+create view vStartToObject
 as
 with 
 AllTables as
@@ -338,8 +434,7 @@ select  keyName, groupSeq, seq,
         || value valueIndent
 from    vRouteJsp;
 
-
-create view vStartToJsps
+create view vStartToJsp
 as
 select  keyName, groupSeq, group_concat(start) start, group_concat(distinct jsps) jsps
 from    (
@@ -362,8 +457,7 @@ from    (
         )
 group by keyName, groupSeq;
 
-
-create view vJspViewFinds
+create view vJspViewFind
 as
 select  f.keyName, f.className, jMv.value mappingValues,
         json_extract(jVn.value, '$.name') jspName,
@@ -374,4 +468,140 @@ from    MethodInfoFind f
         left join json_each(f.jspViewFinds) jVn
 where   f.returnType = 'ModelAndView'
 group by f.keyName, f.className, json_extract(jVn.value, '$.name');
+
+
+create view vRouteBatch
+as
+select  r.keyName, r.groupSeq, r.seq, min(r.depth) depth, min(r.routeType) routeType,
+        ifnull(
+            case routeType
+            when 'job' then group_concat(distinct r.valueJob)
+            when 'step' then group_concat(distinct r.valueStep)
+            when 'method' then group_concat(distinct r.valueMethod)
+            when 'xml' then group_concat(distinct r.valueXml)
+            when 'view' then group_concat(distinct r.valueView)
+            when 'function' then group_concat(distinct r.valueFunction)
+            when 'procedure' then group_concat(distinct r.valueProcedure)
+            end
+        , ''
+        ) value,
+
+        ifnull(
+            case when routeType in ('xml', 'view', 'function', 'procedure') then
+                group_concat(distinct jObjects.value)
+            end
+        , '') objects,
+        ifnull(
+            case when routeType in ('xml', 'view', 'function', 'procedure') then
+                group_concat(distinct jTablesInsert.value)
+            end
+        , '') tablesInsert,
+        ifnull(
+            case when routeType in ('xml', 'view', 'function', 'procedure') then
+                group_concat(distinct jTablesUpdate.value)
+            end
+        , '') tablesUpdate,
+        ifnull(
+            case when routeType in ('xml', 'view', 'function', 'procedure') then
+                group_concat(distinct jTablesDelete.value)
+            end
+        , '') tablesDelete,
+        ifnull(
+            case when routeType in ('xml', 'view', 'function', 'procedure') then
+                group_concat(distinct jTablesOther.value)
+            end
+        , '') tablesOther,
+        ifnull(
+            case when routeType in ('xml', 'view', 'function', 'procedure') then
+                group_concat(distinct jSelectExists.value)
+            end
+        , '') selectExists
+
+from    RouteBatch r
+        left join json_each(r.objects) jObjects
+        left join json_each(r.tablesInsert) jTablesInsert
+        left join json_each(r.tablesUpdate) jTablesUpdate
+        left join json_each(r.tablesDelete) jTablesDelete
+        left join json_each(r.tablesOther) jTablesOther
+        left join json_each(r.selectExists) jSelectExists
+
+group by r.keyName, r.groupSeq, r.seq;
+
+create view vRouteBatchIndent
+as
+select  keyName, groupSeq, seq, depth, routeType, value,
+        substring('         ' || routeType, -9)
+        || ': ' ||
+        case when depth > 0 then
+            replace(substring(printf('%0' || (depth * 4) || 'd', 0) || '+-- ', 5), '0', ' ')
+        else
+            ''
+        end
+        || value valueIndent,
+        objects, tablesInsert, tablesUpdate, tablesDelete, tablesOther, selectExists
+from    vRouteBatch;
+
+create view vBatchToObject
+as
+with 
+AllTables as
+(
+    select  keyName, groupSeq, seq, 'I' type, r.selectExists, jtables.value tables
+    from    RouteBatch r
+            inner join json_each(r.tablesInsert) jtables
+    union all
+    select  keyName, groupSeq, seq, 'U' type, r.selectExists, jtables.value tables
+    from    RouteBatch r
+            inner join json_each(r.tablesUpdate) jtables
+    union all
+    select  keyName, groupSeq, seq, 'D' type, r.selectExists, jtables.value tables
+    from    RouteBatch r
+            inner join json_each(r.tablesDelete) jtables
+    union all
+    select  keyName, groupSeq, seq, 'O' type, r.selectExists, jtables.value tables
+    from    RouteBatch r
+            inner join json_each(r.tablesOther) jtables
+)
+select  keyName, groupSeq, group_concat(start) start,
+        group_concat(distinct tables) tables,
+        group_concat(distinct valueView) views,
+        group_concat(distinct valueFunction) functions,
+        group_concat(distinct valueProcedure) procedures,
+        group_concat(distinct type) types
+from    (
+        select  r.keyName, r.groupSeq,
+        
+                case r.routeType 
+                when 'job' then r.valueJob
+                when 'step' then r.valueStep
+                when 'method' then r.valueMethod
+                end start,
+        
+                case when r.routeType in ('xml', 'view', 'function', 'procedure') then
+                    a.tables
+                end tables,
+
+                case when r.routeType in ('xml', 'view', 'function', 'procedure') then
+                    case when a.type = 'O' then
+                        case when a.selectExists = 1 then 'S' end
+                    else
+                        a.type
+                    end
+                end type,
+
+                nullif(r.valueView, '') valueView,
+                nullif(r.valueFunction, '') valueFunction,
+                nullif(r.valueProcedure, '') valueProcedure
+
+        from    RouteBatch r
+                left join AllTables a
+                on r.keyName = a.keyName
+                and r.groupSeq = a.groupSeq
+                and r.seq = a.seq
+
+        where   (r.seq = 0 and r.routeType = 'job')
+                or r.routeType in ('xml', 'view', 'function', 'procedure')
+        order by r.keyName, r.groupSeq, tables
+        )
+group by keyName, groupSeq;
 `;

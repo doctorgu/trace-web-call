@@ -1,4 +1,4 @@
 import { ConfigType } from './ConfigType';
-import { configComposite } from './template/configComposite';
+import { configBatchTest } from './template/configBatchTest';
 
-export const config: ConfigType = configComposite;
+export const config: ConfigType = configBatchTest;

@@ -20,7 +20,7 @@ export const configOtherUserTable: ConfigType = {
             directory: 'test',
             file: 'OtherUserTablesBase.java',
           },
-          xml: 'test/OtherUserTables.xml',
+          xmlDirectory: 'test/OtherUserTables.xml',
           jspDirectory: '',
         },
       ],
@@ -37,6 +37,6 @@ export const configOtherUserTable: ConfigType = {
     outputDirectory: './test/output',
     logDirectory: './test/output',
   },
-  startingPoint: 'map',
+  startingPoint: 'mapping',
   defaultOwner: '',
 };

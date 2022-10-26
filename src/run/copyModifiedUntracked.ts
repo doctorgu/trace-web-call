@@ -54,5 +54,5 @@ export async function copyModifiedUntracked() {
   }
   // console.log(stdoutZip);
 
-  console.log('Completed');
+  console.log(`${destZipFile} created in ${rootDirDest}`);
 }

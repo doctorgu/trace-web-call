@@ -980,15 +980,15 @@ export function insertRouteTableKeyName() {
       startings: { directory, file },
       keyName,
       service,
-      xml,
+      xmlDirectory,
     } = config.path.source.main[i];
 
     const findsStarting = getFindsByClassPathClassNameFromDb(keyName, directory, file);
 
     const directories = [service.directory];
-    const directoriesXml = [xml];
+    const directoriesXml = [xmlDirectory];
 
-    console.log(`getStartingToTables`);
+    console.log(`getStartingToObjects`);
     const routesAll = getStartingToObjects(
       keyName,
       findsStarting,

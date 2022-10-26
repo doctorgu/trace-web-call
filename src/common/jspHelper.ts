@@ -125,6 +125,7 @@ export function insertRouteJspKeyName() {
       keyName,
       jspDirectory,
     } = config.path.source.main[i];
+    if (!jspDirectory) continue;
 
     const findsStarting = getFindsByClassPathClassNameFromDb(keyName, directory, file);
 
@@ -139,7 +140,7 @@ export function insertRouteJspKeyName() {
     if (!routesCur.length) {
       continue;
     }
-    console.log(`insertRouteTableKeyName`);
+    console.log(`insertRouteJspKeyName`);
     tCommon.insertRouteJspKeyName(keyName, routesCur);
   }
 }

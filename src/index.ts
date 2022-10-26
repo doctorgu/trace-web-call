@@ -12,8 +12,9 @@ import { getDbPath } from './common/common';
 import { getJspIncludes } from './common/jspHelper';
 import { logCompared } from './run/logCompared';
 import { copyModifiedUntracked } from './run/copyModifiedUntracked';
-import { getUsersFromDb } from './common/batisHelper';
+import { getNameObjectsAllFromDb, getTablesFromDb, getUsersFromDb } from './common/sqlMapperHelper';
 import { getPathsAndImagesFromSimpleCst } from './common/cstHelper';
+import { insertBatchInfo } from './common/batchHelper';
 
 function doTest() {
   // const ret = getClassInfo('C:/source/trace-web-call/test/AnnotationTestController.java');
@@ -33,9 +34,24 @@ function doTest() {
   //   console.log(jspViews);
   // }
   // --
-  // const cstSimple = getCstSimple('./test/SeparatorTest.java');
+  // const cstSimple = getCstSimple('./test/VariableHistoryTest.java');
   // const classDeclaration = getCstClassDeclaration(cstSimple);
   // const pathsAndImageList = getPathsAndImagesFromSimpleCst(classDeclaration);
+  // --
+  // let usersAll = getUsersFromDb();
+  // let { tables: tablesAll, tablesNoSchema: tablesAllNoSchema } = getTablesFromDb();
+  // let { nameObjects: nameObjectsAll, nameObjectsNoSchema: nameObjectsAllNoSchema } = getNameObjectsAllFromDb();
+  // insertBatchInfo(
+  //   'batchTest',
+  //   'C:/source/trace-web-call/test',
+  //   'C:/source/trace-web-call/test/batchTest/AlrimiDayJob.xml',
+  //   usersAll,
+  //   tablesAll,
+  //   tablesAllNoSchema,
+  //   nameObjectsAll,
+  //   nameObjectsAllNoSchema
+  // );
+  // --
 }
 // doTest();
 insertToDb();

@@ -15,19 +15,18 @@ import {
   insertXmlInfoFindKeyName,
   getTablesFromDb,
   getNameObjectsAllFromDb,
-  ObjectType,
-  ObjectInfo,
   getUsersFromDb,
   insertUsersToDb,
-} from '../common/batisHelper';
+} from '../common/sqlMapperHelper';
+import { ObjectInfo } from '../common/batisHelper';
 import { config } from '../config/config';
 import { configReader } from '../config/configReader';
 import { DirectoryAndFilePattern } from '../config/ConfigType';
 import { mergeExtends } from '../common/traceHelper';
 import { sqlInit } from '../config/sql';
 import tCommon from '../sqlTemplate/TCommon';
-import { getDbPath } from '../common/common';
-import { insertJspInfo, insertJspInfoToDb, insertRouteJspKeyName, JspInfo } from '../common/jspHelper';
+import { insertJspInfo, insertRouteJspKeyName, JspInfo } from '../common/jspHelper';
+import { BatchJob, BeanSql, BeanTargetObject, insertBatchInfo, insertRouteBatchKeyName } from '../common/batchHelper';
 
 function insertJspClassXml(
   rootDir: string,
@@ -162,7 +161,7 @@ export function insertToDb() {
       startings: { directory, file },
       keyName,
       service,
-      xml,
+      xmlDirectory: xml,
       jspDirectory,
     } = config.path.source.main[i];
 
@@ -171,9 +170,22 @@ export function insertToDb() {
       const initDir = resolve(rootDir, directory);
 
       for (const fullPath of [...findFiles(initDir, file)]) {
-        const classInfo = insertClassInfo(rootDir, fullPath);
-        if (classInfo) {
-          classInfosStarting.push(classInfo);
+        if (config.startingPoint === 'springBatch') {
+          insertBatchInfo(
+            keyName,
+            rootDir,
+            fullPath,
+            usersAll,
+            tablesAll,
+            tablesAllNoSchema,
+            nameObjectsAll,
+            nameObjectsAllNoSchema
+          );
+        } else {
+          const classInfo = insertClassInfo(rootDir, fullPath);
+          if (classInfo) {
+            classInfosStarting.push(classInfo);
+          }
         }
       }
       startTime = logTimeMsg(startTime, `insertClassInfo Starting ${directory}`);
@@ -213,4 +225,7 @@ export function insertToDb() {
 
   insertRouteJspKeyName();
   startTime = logTimeMsg(startTime, `insertRouteJspKeyName`);
+
+  insertRouteBatchKeyName();
+  startTime = logTimeMsg(startTime, `insertRouteBatchKeyName`);
 }

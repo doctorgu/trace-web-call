@@ -60,6 +60,8 @@
 
 - `protected` modifier ignored.
 
+- `next` property ignored when 'springBatch', just reads all step.
+
 ## Run
 
 Results will be inserted into following SQLite table after running `yarn start` command.

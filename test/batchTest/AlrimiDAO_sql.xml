@@ -1,0 +1,17 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<sqlMap>
+  <select id="AlrimiDAO.selectList" resultClass="hshopMap">
+  <![CDATA[
+    SELECT /* AlrimiDAO.selectList */
+            *
+    FROM    FR_ACCOUNT
+  ]]>
+  </select>
+
+  <insert id="AlrimiDAO.insertSms" parameterClass="hshopMap">
+  <![CDATA[
+  insert into FR_AUTH_SMS (SEND_TIME) values (#today#)
+  ]]>
+  </insert>
+</sqlMap>

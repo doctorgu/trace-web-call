@@ -440,6 +440,11 @@ export function logTimeMsg(startTime: number, message: string): number {
   return curTime;
 }
 
+export function getClassNameFromFullName(classNameWithPackage: string): string {
+  const pathes = classNameWithPackage.split('.');
+  return pathes[pathes.length - 1];
+}
+
 export function isSqlKeyword(value: string): boolean {
   return [
     'ACCESS',

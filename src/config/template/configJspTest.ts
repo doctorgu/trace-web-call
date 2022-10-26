@@ -14,7 +14,7 @@ export const configJspTest: ConfigType = {
             directory: 'jspTest',
             file: 'JspTestController.java',
           },
-          xml: '',
+          xmlDirectory: '',
           jspDirectory: 'jspTest/jsp',
         },
       ],
@@ -31,6 +31,6 @@ export const configJspTest: ConfigType = {
     outputDirectory: './test/output',
     logDirectory: './test/output',
   },
-  startingPoint: 'map',
+  startingPoint: 'mapping',
   defaultOwner: '',
 };

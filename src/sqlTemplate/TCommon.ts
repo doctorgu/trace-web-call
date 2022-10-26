@@ -4,7 +4,7 @@ import { configReader } from '../config/configReader';
 import { escapeDollar } from '../common/util';
 import { DbRow, SqlTemplate } from '../common/sqliteHelper';
 import { all, exec, run } from '../common/sqliteHelper';
-import { RouteJsp, RouteTable, RouteTypeJsp, RouteTypeTable } from '../common/traceHelper';
+import { RouteBatch, RouteJsp, RouteTable, RouteTypeBatch, RouteTypeJsp, RouteTypeTable } from '../common/traceHelper';
 
 class TCommon {
   initDb(sql: string): betterSqlite3.Database {
@@ -126,6 +126,86 @@ insert into RouteJsp
 values
   {values}`;
     const sqlTmpValues = `({keyName}, {groupSeq}, {seq}, {depth}, {routeType}, {valueMapping}, {valueMethod}, {jsps})`;
+    const sqlValues = new SqlTemplate(sqlTmpValues).replaceAlls(routesJson, ',\n');
+    const sql = sqlTmp.replace('{values}', escapeDollar(sqlValues));
+
+    return run(configReader.db(), sql);
+  }
+
+  insertRouteBatchKeyName(keyName: string, routes: RouteBatch<RouteTypeBatch>[]): betterSqlite3.RunResult {
+    const routesJson = routes.map(
+      ({
+        groupSeq,
+        seq,
+        depth,
+        routeType,
+        valueJob,
+        valueStep,
+        valueMethod,
+        valueXml,
+        valueView,
+        valueFunction,
+        valueProcedure,
+        objects,
+        tablesInsert,
+        tablesUpdate,
+        tablesDelete,
+        tablesOther,
+        selectExists,
+      }: RouteBatch<RouteTypeBatch>) => {
+        return {
+          keyName,
+          groupSeq,
+          seq,
+          depth,
+          routeType,
+          valueJob: routeType === 'job' ? valueJob : '',
+          valueStep: routeType === 'step' ? valueStep : '',
+          valueMethod: routeType === 'method' ? valueMethod : '',
+          valueXml: routeType === 'xml' ? valueXml : '',
+          valueView: routeType === 'view' ? valueView : '',
+          valueFunction: routeType === 'function' ? valueFunction : '',
+          valueProcedure: routeType === 'procedure' ? valueProcedure : '',
+          objects:
+            routeType === 'xml' || routeType === 'view' || routeType === 'function' || routeType === 'procedure'
+              ? JSON.stringify([...(objects as Set<string>)])
+              : JSON.stringify([]),
+          tablesInsert:
+            routeType === 'xml' || routeType === 'view' || routeType === 'function' || routeType === 'procedure'
+              ? JSON.stringify([...(tablesInsert as Set<string>)])
+              : JSON.stringify([]),
+          tablesUpdate:
+            routeType === 'xml' || routeType === 'view' || routeType === 'function' || routeType === 'procedure'
+              ? JSON.stringify([...(tablesUpdate as Set<string>)])
+              : JSON.stringify([]),
+          tablesDelete:
+            routeType === 'xml' || routeType === 'view' || routeType === 'function' || routeType === 'procedure'
+              ? JSON.stringify([...(tablesDelete as Set<string>)])
+              : JSON.stringify([]),
+          tablesOther:
+            routeType === 'xml' || routeType === 'view' || routeType === 'function' || routeType === 'procedure'
+              ? JSON.stringify([...(tablesOther as Set<string>)])
+              : JSON.stringify([]),
+          selectExists: selectExists ? 1 : 0,
+        };
+      }
+    );
+
+    const sqlTmp = `
+insert into RouteBatch
+  (
+    keyName, groupSeq, seq, depth, routeType,
+    valueJob, valueStep, valueMethod, valueXml, valueView, valueFunction, valueProcedure,
+    objects, tablesInsert, tablesUpdate, tablesDelete, tablesOther, selectExists
+  )
+values
+  {values}`;
+    const sqlTmpValues = `
+  (
+    {keyName}, {groupSeq}, {seq}, {depth}, {routeType},
+    {valueJob}, {valueStep}, {valueMethod}, {valueXml}, {valueView}, {valueFunction}, {valueProcedure},
+    {objects}, {tablesInsert}, {tablesUpdate}, {tablesDelete}, {tablesOther}, {selectExists}
+  )`;
     const sqlValues = new SqlTemplate(sqlTmpValues).replaceAlls(routesJson, ',\n');
     const sql = sqlTmp.replace('{values}', escapeDollar(sqlValues));
 

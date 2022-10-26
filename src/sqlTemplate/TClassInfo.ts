@@ -6,7 +6,7 @@ import { HeaderInfo, MethodInfo, MethodInfoFind } from '../common/classHelper';
 import betterSqlite3 from 'better-sqlite3';
 
 class TClassInfo {
-  selectClassInfo(classPath: string): any {
+  selectClassInfo(classPath: string): DbRow {
     const sql = `
 select  classPath
 from    ClassInfo
@@ -15,7 +15,7 @@ where   classPath = @classPath
     return get(configReader.db(), sql, { classPath });
   }
 
-  selectHeaderInfo(classPath: string): any {
+  selectHeaderInfo(classPath: string): DbRow {
     const sql = `
 select  name, implementsName, extendsName, mapping
 from    HeaderInfo
@@ -87,6 +87,23 @@ where   keyName = @keyName
       methodName,
       callerParameterCount,
       ...(typeName ? { typeName } : { classNameThis }),
+    });
+  }
+
+  selectMethodInfoFindByName(keyName: string, methodName: string, classPathsLike: string[], typeName: string): DbRow[] {
+    const sql = `
+select  classPath, className, implementsName, extendsName, mappingMethod, mappingValues, isPublic, returnType, name, parameterCount, callers, jspViewFinds
+from    MethodInfoFind
+where   keyName = @keyName
+        and name = @methodName
+        and
+        (${classPathsLike.map((classPathLike) => `classPath like '${classPathLike}' || '%'`).join(' or ')})
+        and (className = @typeName or implementsName = @typeName)
+`;
+    return all(configReader.db(), sql, {
+      keyName,
+      methodName,
+      typeName,
     });
   }
 

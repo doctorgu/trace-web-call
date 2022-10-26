@@ -1,0 +1,57 @@
+<?xml vesion="1.0" encoding="UTF-8"?>
+
+<beans>
+  <job id="AlrimiDayJob" restartable="true">
+    <step id="AlrimiDayStep" next="AlrimiDayStep2">
+      <tasklet ref="AlrimiDay"></tasklet>
+    </step>
+
+    <step id="AlrimiDayStep2">
+      <tasklet>
+        <chunk reader="Reader1" writer="Writer1" processor="Processor1" commit-interval="10" />
+      </tasklet>
+    </step>
+  </job>
+
+  <bean id="AlrimiDay" class="org.springframework.batch.core.step.tasklet.MethodInvokingTaskletAdapter" scope="step">
+    <property name="targetObject">
+      <bean class="batchTest.AlrimiDAO">
+        <property name="jobName" value="AlrimiDayJob" />
+        <property name="stepName" value="AlrimiDayStep" />
+        <property name="today" value="#{jobParameters['today']}" />
+      </bean>
+    </property>
+    <property name="targetMethod" value="executeDayBatch" />
+  </bean>
+
+  <bean id="Reader1" class="org.springframework.batch.item.database.JdbcCursorItemReader">
+    <property name="dataSource" ref="dsHshopBatchNonXa" />
+    <property name="sql">
+      <value>
+        <![CDATA[
+        select SEND_TIME from FR_AUTH_SMS
+        ]]>
+      </value>
+    </property>
+    <property name="rowMapper">
+      <bean class="AlrimiSmsSendRowMapper" />
+    </property>
+  </bean>
+
+  <bean id="Processor1" class="batchTest.AlrimiProcessor"></bean>
+
+  <bean id="Writer1" class="egovframework.brte.core.item.database.EgovJdbcBatchItemWriter">
+    <property name="itemPreparedStatementSetter">
+      <bean class="egovframework.brte.core.item.database.support.EgovMethodMapItemPreparedStatementSetter" />
+    </property>
+    <property name="sql">
+      <value>
+        <![CDATA[
+        insert into FR_AUTH_SMS (SEND_TIME) values (:sendTime)
+        ]]>
+      </value>
+    </property>
+    <property name="params" value="sendTime" />
+    <property name="dataSource" ref="dsHshopBatchNonXa" />
+  </bean>
+</beans>

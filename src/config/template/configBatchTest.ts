@@ -1,27 +1,27 @@
 import { ConfigType } from '../ConfigType';
 
-export const configJspModelAndView: ConfigType = {
-  name: 'JspModelAndView2',
+export const configBatchTest: ConfigType = {
+  name: 'BatchTest2',
   path: {
     source: {
       rootDir: 'C:/source/trace-web-call/test',
       dependency: [],
       main: [
         {
-          startings: { directory: `jspModelAndView`, file: 'ModelAndViewTestController.java' },
-          keyName: 'jspModelAndView',
+          keyName: 'batchTest',
+          startings: { directory: `batchTest`, file: 'AlrimiDayJob.xml' },
           service: {
-            directory: 'jspModelAndView',
-            file: 'ModelAndViewTestController.java',
+            directory: 'batchTest',
+            file: '*DAO.java',
           },
-          xmlDirectory: '',
-          jspDirectory: 'jspModelAndView',
+          xmlDirectory: 'batchTest',
+          jspDirectory: '',
         },
       ],
     },
     data: {
       users: './data/users.txt',
-      tables: './test/OtherUserTables.txt',
+      tables: './data/tables',
       views: '',
       functions: '',
       procedures: '',
@@ -31,6 +31,6 @@ export const configJspModelAndView: ConfigType = {
     outputDirectory: './test/output',
     logDirectory: './test/output',
   },
-  startingPoint: 'mapping',
+  startingPoint: 'springBatch',
   defaultOwner: '',
 };
