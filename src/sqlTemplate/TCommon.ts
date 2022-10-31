@@ -152,6 +152,7 @@ values
         tablesDelete,
         tablesOther,
         selectExists,
+        valueError,
       }: RouteBatch<RouteTypeBatch>) => {
         return {
           keyName,
@@ -187,6 +188,7 @@ values
               ? JSON.stringify([...(tablesOther as Set<string>)])
               : JSON.stringify([]),
           selectExists: selectExists ? 1 : 0,
+          valueError: routeType === 'error' ? JSON.stringify(valueError) : JSON.stringify({}),
         };
       }
     );
@@ -196,7 +198,8 @@ insert into RouteBatch
   (
     keyName, groupSeq, seq, depth, routeType,
     valueJob, valueStep, valueMethod, valueXml, valueView, valueFunction, valueProcedure,
-    objects, tablesInsert, tablesUpdate, tablesDelete, tablesOther, selectExists
+    objects, tablesInsert, tablesUpdate, tablesDelete, tablesOther, selectExists,
+    valueError
   )
 values
   {values}`;
@@ -204,7 +207,8 @@ values
   (
     {keyName}, {groupSeq}, {seq}, {depth}, {routeType},
     {valueJob}, {valueStep}, {valueMethod}, {valueXml}, {valueView}, {valueFunction}, {valueProcedure},
-    {objects}, {tablesInsert}, {tablesUpdate}, {tablesDelete}, {tablesOther}, {selectExists}
+    {objects}, {tablesInsert}, {tablesUpdate}, {tablesDelete}, {tablesOther}, {selectExists},
+    {valueError}
   )`;
     const sqlValues = new SqlTemplate(sqlTmpValues).replaceAlls(routesJson, ',\n');
     const sql = sqlTmp.replace('{values}', escapeDollar(sqlValues));

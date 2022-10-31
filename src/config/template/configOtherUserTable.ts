@@ -9,7 +9,7 @@ export const configOtherUserTable: ConfigType = {
         {
           keyName: 'OtherDep',
           service: { directory: `test/`, file: 'OtherUserTablesDependency.java' },
-          xml: 'test/OtherUserTablesDependency.xml',
+          xmlDirectory: 'test/OtherUserTablesDependency.xml',
         },
       ],
       main: [

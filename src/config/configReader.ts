@@ -1,6 +1,6 @@
 import { existsSync } from 'fs';
 import betterSqlite3 from 'better-sqlite3';
-import { regexpSqlite, testWildcardFileNameSqlite } from '../common/util';
+import { regexp, regexpReplace, regexpSubstr, testWildcardFileName } from '../common/sqliteFunction';
 import { ObjectType } from '../common/batisHelper';
 import { config } from './config';
 import { sqlCacheInit } from './sqlCache';
@@ -23,8 +23,10 @@ export const configReader = {
     PRAGMA foreign_keys=ON;
     PRAGMA cache_size = -200000; -- 200MB
     `);
-    db.function('testWildcardFileName', testWildcardFileNameSqlite);
-    db.function('regexp', regexpSqlite);
+    db.function('testWildcardFileName', testWildcardFileName);
+    db.function('regexp', regexp);
+    db.function('regexp_replace', regexpReplace);
+    db.function('regexp_substr', regexpSubstr);
     // const ret = db.prepare("select f from (select 'aaa' f union all select 'bbb') t where f = ?").pluck().get('aaa');
     // const ret2 = db
     //   .prepare("select f from (select 'aaa' f union all select 'bbb') t where f regexp ?")

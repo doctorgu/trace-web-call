@@ -5,7 +5,7 @@ import tBatchInfo from '../sqlTemplate/TBatchInfo';
 import { getObjectChild, getTablesIudFromSql, getTextCdataFromElement, ObjectChild, ObjectInfo } from './batisHelper';
 import { getDbPath } from './common';
 import { getBatchToObjects } from './traceHelper';
-import { readFileSyncUtf16le, removeCommentLiteralSql } from './util';
+import { includesPath, readFileSyncUtf16le, removeCommentLiteralSql } from './util';
 
 type BatchTasklet = {
   ref: string;
@@ -15,7 +15,7 @@ type BatchTasklet = {
   commitInterval: number;
 };
 type BatchStep = {
-  beanId: string;
+  id: string;
   next: string;
   tasklet: BatchTasklet;
 };
@@ -37,6 +37,7 @@ export type BeanSql = {
   batchPath: string;
   beanId: string;
   dataSource: string;
+  params: string;
 } & ObjectChild;
 
 /*
@@ -99,17 +100,40 @@ export type BeanSql = {
 function getBeanType(elemBean: Element): {
   id: string;
   className: string;
-  type: 'targetObject' | 'sqlInValue' | 'class';
+  type: 'targetObject' | 'noOrUnknownProperty' | 'sqlInValue' | 'locations' | 'resource';
 } {
   const id = elemBean.attributes?.id as string;
   const className = elemBean.attributes?.class as string;
+
   const elemProps = elemBean.elements;
   if (id && className && !elemProps) {
-    return { id, className, type: 'class' };
+    return { id, className, type: 'noOrUnknownProperty' };
   }
 
   if (!elemProps) {
     throw new Error(`No elements, id: ${id}, className: ${className}`);
+  }
+
+  if (elemProps.some((prop) => prop.attributes?.name === 'locations')) {
+    /*
+    <bean class="org.springframework.beans.factory.config.PropertyPlaceholderConfigurer">
+      <property name="locations">
+        <list>
+          <value>classpath:/hmall/property/globals.properties</value>
+        </list>
+      </property>
+    </bean>
+    */
+    return { id, className, type: 'locations' };
+  }
+
+  if (elemProps.some((prop) => prop.attributes?.name === 'resource')) {
+    /*
+    <bean id="Reader1" class="org.springframework.batch.item.file.FlatFileItemReader" scope="step">
+      <property name="resource" value="#{jobParameters[filePath]}" />
+    </bean>
+    */
+    return { id, className, type: 'resource' };
   }
 
   if (elemProps.some((prop) => prop.attributes?.name === 'targetObject')) {
@@ -119,31 +143,50 @@ function getBeanType(elemBean: Element): {
     return { id, className, type: 'sqlInValue' };
   }
 
-  throw new Error(`Not expected beanType`);
+  return { id, className, type: 'noOrUnknownProperty' };
+}
+function getBeanProperties(elemBean: Element) {
+  const properties: { name: string; value: string }[] = [];
+
+  const children = elemBean.elements;
+  if (!children) {
+    return properties;
+  }
+
+  const elemProps = children.filter((prop) => prop.name === 'property');
+  if (elemProps) {
+    for (const elemProp of elemProps) {
+      const name = (elemProp.attributes?.name as string) || '';
+      const value = (elemProp.attributes?.value as string) || '';
+      properties.push({ name, value });
+    }
+  }
+
+  return properties;
 }
 function getBeanTargetObject(batchPath: string, beanId: string, elemBean: Element): BeanTargetObject {
   const elemProps = elemBean.elements;
-  if (!elemProps) throw new Error(`No elements in bean tag`);
-
-  const elemTargetObject = elemProps.find((prop) => prop.attributes?.name === 'targetObject');
-  if (!elemTargetObject) throw new Error(`No targetObject name in bean tag`);
-
-  const elemBeanSub = elemTargetObject.elements?.find((prop) => prop.name === 'bean');
-  if (!elemBeanSub) throw new Error(`No bean in targetObject tag`);
-
-  const className = elemBeanSub.attributes?.class as string;
-  const elemPropsSub = elemBeanSub.elements?.filter((prop) => prop.name === 'property');
-  if (!elemPropsSub) throw new Error(`No property`);
-
-  const properties: { name: string; value: string }[] = [];
-  for (const elemProp of elemPropsSub) {
-    const name = (elemProp.attributes?.name as string) || '';
-    const value = (elemProp.attributes?.value as string) || '';
-    properties.push({ name, value });
+  if (!elemProps) {
+    throw new Error(`No elements in bean tag`);
   }
 
+  const elemTargetObject = elemProps.find((prop) => prop.attributes?.name === 'targetObject');
+  if (!elemTargetObject) {
+    throw new Error(`No targetObject name in bean tag`);
+  }
+
+  const elemBeanSub = elemTargetObject.elements?.find((prop) => prop.name === 'bean');
+  if (!elemBeanSub) {
+    throw new Error(`No bean in targetObject tag`);
+  }
+
+  const className = elemBeanSub.attributes?.class as string;
+  const properties = getBeanProperties(elemBeanSub);
+
   const elemTargetMethod = elemProps.find((prop) => prop.attributes?.name === 'targetMethod');
-  if (!elemTargetMethod) throw new Error(`No targetMethod name in bean tag`);
+  if (!elemTargetMethod) {
+    throw new Error(`No targetMethod name in bean tag`);
+  }
 
   const targetMethod = elemTargetMethod.attributes?.value as string;
 
@@ -175,6 +218,9 @@ function getBeanSql(
   if (!elemDataSource) throw new Error(`No dataSource name in bean tag`);
   const dataSource = elemDataSource.attributes?.ref as string;
 
+  const elemParams = elemProps.find((prop) => prop.attributes?.name === 'params');
+  const params = elemParams ? (elemParams.attributes?.value as string) : '';
+
   const elemValue = elemSql.elements?.find((prop) => prop.name === 'value');
   if (!elemValue) throw new Error(`No value tag in sql tag`);
 
@@ -200,6 +246,7 @@ function getBeanSql(
     batchPath,
     beanId,
     dataSource,
+    params,
     objects,
     tablesInsert,
     tablesUpdate,
@@ -234,7 +281,8 @@ function getSteps(elemSteps: Element[]) {
           reader = (attrs.reader as string) || '';
           writer = (attrs.writer as string) || '';
           processor = (attrs.processor as string) || '';
-          commitInterval = parseInt((attrs['commit-interval'] as string) || '0', 10);
+          // 0 appended to prevent NaN when commit-interval="#{jobParameters[commitInterval]}"
+          commitInterval = parseInt(attrs['commit-interval'] as string, 10) || 0;
         }
       }
     }
@@ -246,7 +294,7 @@ function getSteps(elemSteps: Element[]) {
       commitInterval,
     };
     const step: BatchStep = {
-      beanId: id,
+      id,
       next,
       tasklet,
     };
@@ -272,7 +320,12 @@ function getJobsAndBeans(
   const obj = xml2js(xml) as Element;
   if (!obj) return null;
 
-  const elems = obj.elements?.[0]?.elements;
+  const elemBeansRoot = obj.elements?.find((elem) => elem.type === 'element' && elem.name === 'beans');
+  if (!elemBeansRoot) {
+    return null;
+  }
+
+  const elems = elemBeansRoot.elements;
   if (!elems) return null;
 
   const elemJobs = elems.filter((elem) => elem.name === 'job');
@@ -294,11 +347,19 @@ function getJobsAndBeans(
   const beanTargetObjects: BeanTargetObject[] = [];
   const beanSqls: BeanSql[] = [];
   for (const elemBean of elemBeans) {
-    const { id, type } = getBeanType(elemBean);
+    const { id, className, type } = getBeanType(elemBean);
     switch (type) {
       case 'targetObject':
-        const beanTargetObject = getBeanTargetObject(batchPath, id, elemBean);
-        beanTargetObjects.push(beanTargetObject);
+        {
+          const beanTargetObject = getBeanTargetObject(batchPath, id, elemBean);
+          beanTargetObjects.push(beanTargetObject);
+        }
+        break;
+      case 'noOrUnknownProperty':
+        {
+          const properties = getBeanProperties(elemBean);
+          beanTargetObjects.push({ batchPath, beanId: id, className, properties, targetMethod: '' });
+        }
         break;
       case 'sqlInValue':
         const beanSql = getBeanSql(
@@ -312,9 +373,6 @@ function getJobsAndBeans(
           nameObjectsAllNoSchema
         );
         beanSqls.push(beanSql);
-        break;
-      case 'class':
-        // Do nothing
         break;
     }
   }
@@ -356,7 +414,7 @@ export function getBatchJobFromDb(keyName: string): BatchJob[] {
 
   const jobs: BatchJob[] = [];
   for (const row of rows) {
-    const { batchPath, jobId, restartable, beanId, next, ref, reader, writer, processor, commitInterval } = row;
+    const { batchPath, jobId, restartable, stepId, next, ref, reader, writer, processor, commitInterval } = row;
 
     let jobFound = jobs.find((job) => job.batchPath === batchPath && job.id === jobId);
     if (!jobFound) {
@@ -365,7 +423,7 @@ export function getBatchJobFromDb(keyName: string): BatchJob[] {
     }
 
     jobFound.steps.push({
-      beanId,
+      id: stepId,
       next,
       tasklet: {
         ref,
@@ -400,6 +458,7 @@ export function getBeanSqlFromDb(keyName: string): BeanSql[] {
       batchPath,
       beanId,
       dataSource,
+      params,
       objects,
       tablesInsert,
       tablesUpdate,
@@ -411,6 +470,7 @@ export function getBeanSqlFromDb(keyName: string): BeanSql[] {
       batchPath,
       beanId,
       dataSource,
+      params,
       objects: JSON.parse(objects),
       tablesInsert: JSON.parse(tablesInsert),
       tablesUpdate: JSON.parse(tablesUpdate),
@@ -424,7 +484,7 @@ export function getBeanSqlFromDb(keyName: string): BeanSql[] {
 
 export function insertRouteBatchKeyName() {
   const directoriesDep: string[] = config.path.source.dependency.map(({ service: { directory } }) => directory);
-  const directoriesXmlDep: string[] = config.path.source.dependency.map(({ xml }) => xml);
+  const directoriesXmlDep: string[] = config.path.source.dependency.map(({ xmlDirectory }) => xmlDirectory);
 
   for (let i = 0; i < config.path.source.main.length; i++) {
     const {

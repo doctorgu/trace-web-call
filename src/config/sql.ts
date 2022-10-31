@@ -197,7 +197,7 @@ create table BatchJob (
 create table BatchStep (
     batchPath text not null,
     jobId text not null,
-    beanId text not null,
+    id text not null,
     
     next text not null,
     
@@ -208,7 +208,7 @@ create table BatchStep (
     commitInterval int not null,
 
     insertTime timestamp not null default current_timestamp,
-    primary key (batchPath, jobId, beanId)
+    primary key (batchPath, jobId, id)
 );
 
 create table BeanTargetObject (
@@ -228,6 +228,7 @@ create table BeanSql (
     beanId text not null,
 
     dataSource text not null,
+    params text not null,
 
     objects text not null,
     tablesInsert text not null,
@@ -261,6 +262,8 @@ create table RouteBatch (
     tablesOther text not null,
     selectExists int not null check (selectExists in (0, 1)),
     
+    valueError text not null,
+
     insertTime timestamp not null default current_timestamp,
     primary key (keyName, groupSeq, seq)
 );
@@ -482,6 +485,7 @@ select  r.keyName, r.groupSeq, r.seq, min(r.depth) depth, min(r.routeType) route
             when 'view' then group_concat(distinct r.valueView)
             when 'function' then group_concat(distinct r.valueFunction)
             when 'procedure' then group_concat(distinct r.valueProcedure)
+            when 'error' then group_concat(distinct r.valueError)
             end
         , ''
         ) value,
@@ -573,8 +577,6 @@ from    (
         
                 case r.routeType 
                 when 'job' then r.valueJob
-                when 'step' then r.valueStep
-                when 'method' then r.valueMethod
                 end start,
         
                 case when r.routeType in ('xml', 'view', 'function', 'procedure') then

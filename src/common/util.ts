@@ -263,32 +263,6 @@ export function lastMatchOf(
   return { index: match.index, match };
 }
 
-export function regexpSqlite(pattern: string, value: string) {
-  const ret = new RegExp(pattern).test(value);
-  return ret ? 1 : 0;
-}
-
-// QtScript in SQLiteStudio:
-// const pattern = arguments[0];
-// const fileName = arguments[1];
-// const ignoreCase = arguments[2];
-
-// // escape except star(*) and question(?), * -> .*, ? -> .?
-// const pattern2 = pattern
-//   .replace(/[-\/\\^$+.()|[\]{}]/g, '\\$&')
-//   .replace(/\*/g, '.*')
-//   .replace(/\?/g, '.?');
-// const ret = new RegExp('^' + pattern2 + '$', ignoreCase ? 'i' : '').test(fileName);
-// return ret ? 1 : 0;
-export function testWildcardFileNameSqlite(pattern: string, fileName: string, ignoreCase: number): number {
-  // escape except star(*) and question(?), * -> .*, ? -> .?
-  const pattern2 = pattern
-    .replace(/[-\/\\^$+.()|[\]{}]/g, '\\$&')
-    .replace(/\*/g, '.*')
-    .replace(/\?/g, '.?');
-  const ret = new RegExp(`^${pattern2}$`, ignoreCase ? 'i' : '').test(fileName);
-  return ret ? 1 : 0;
-}
 export function testWildcardFileName(pattern: string, fileName: string, ignoreCase: boolean = true): boolean {
   // escape except star(*) and question(?), * -> .*, ? -> .?
   const pattern2 = pattern
@@ -443,6 +417,14 @@ export function logTimeMsg(startTime: number, message: string): number {
 export function getClassNameFromFullName(classNameWithPackage: string): string {
   const pathes = classNameWithPackage.split('.');
   return pathes[pathes.length - 1];
+}
+
+export function includesPath(path: string, find: string | string[], separator: RegExp | string = /\\|\//) {
+  if (typeof find === 'string') {
+    return path.split(separator).includes(find);
+  } else {
+    return path.split(separator).some((p) => find.includes(p));
+  }
 }
 
 export function isSqlKeyword(value: string): boolean {

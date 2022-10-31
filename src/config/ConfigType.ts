@@ -1,7 +1,7 @@
 export type OutputType = 'txt' | 'csv';
 export type StartingPoint = 'mapping' | 'publicMethod' | 'springBatch';
 
-export type DirectoryAndFilePattern = { directory: string; file: string | RegExp };
+export type DirectoryAndFilePattern = { directory: string; directoryIgnore?: string; file: string | RegExp };
 
 export type ConfigType = {
   name: string;
@@ -11,7 +11,7 @@ export type ConfigType = {
       dependency: {
         keyName: string;
         service: DirectoryAndFilePattern;
-        xml: string;
+        xmlDirectory: string;
       }[];
       main: {
         keyName: string;

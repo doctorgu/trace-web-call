@@ -20,7 +20,7 @@ class TBatchInfo {
     const sql = `
 select  job.batchPath, job.jobId, job.restartable,
 
-        step.beanId,
+        step.id stepId,
         step.next, step.ref,
         step.reader, step.writer, step.processor,
         step.commitInterval
@@ -49,7 +49,7 @@ where   tgt.batchPath in
   selectBeanSql(keyName: string): DbRow[] {
     const sql = `
 select  sql.batchPath, sql.beanId,
-        sql.dataSource,
+        sql.dataSource, sql.params,
         sql.objects, sql.tablesInsert, sql.tablesUpdate, sql.tablesDelete, sql.tablesOther, sql.selectExists
 from    BeanSql sql
 where   sql.batchPath in
@@ -77,7 +77,7 @@ where   sql.batchPath in
           keyName,
           batchPath: job.batchPath,
           jobId: job.id,
-          beanId: step.beanId,
+          id: step.id,
           next: step.next,
 
           ref: step.tasklet.ref,
@@ -103,6 +103,7 @@ where   sql.batchPath in
       beanId: sql.beanId,
 
       dataSource: sql.dataSource,
+      params: sql.params,
 
       objects: JSON.stringify([...sql.objects]),
       tablesInsert: JSON.stringify([...sql.tablesInsert]),
@@ -129,11 +130,11 @@ values
     if (batchStepJson.length) {
       const sqlTmpBatchStep = `
 insert into BatchStep
-  (batchPath, jobId, beanId, next, ref, reader, writer, processor, commitInterval)
+  (batchPath, jobId, id, next, ref, reader, writer, processor, commitInterval)
 values
   {values}
 `;
-      const sqlTmpValues = `({batchPath}, {jobId}, {beanId}, {next}, {ref}, {reader}, {writer}, {processor}, {commitInterval})`;
+      const sqlTmpValues = `({batchPath}, {jobId}, {id}, {next}, {ref}, {reader}, {writer}, {processor}, {commitInterval})`;
       const sqlValues = new SqlTemplate(sqlTmpValues).replaceAlls(batchStepJson, ',\n');
       sqlBatchStep = sqlTmpBatchStep.replace('{values}', escapeDollar(sqlValues));
     }
@@ -155,11 +156,11 @@ values
     if (beanSqlJson.length) {
       const sqlTmpBeanSql = `
 insert into BeanSql
-  (batchPath, beanId, dataSource, objects, tablesInsert, tablesUpdate, tablesDelete, tablesOther, selectExists)
+  (batchPath, beanId, dataSource, params, objects, tablesInsert, tablesUpdate, tablesDelete, tablesOther, selectExists)
 values
   {values}
 `;
-      const sqlTmpValues = `({batchPath}, {beanId}, {dataSource}, {objects}, {tablesInsert}, {tablesUpdate}, {tablesDelete}, {tablesOther}, {selectExists})`;
+      const sqlTmpValues = `({batchPath}, {beanId}, {dataSource}, {params}, {objects}, {tablesInsert}, {tablesUpdate}, {tablesDelete}, {tablesOther}, {selectExists})`;
       const sqlValues = new SqlTemplate(sqlTmpValues).replaceAlls(beanSqlJson, ',\n');
       sqlBeanSql = sqlTmpBeanSql.replace('{values}', escapeDollar(sqlValues));
     }

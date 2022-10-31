@@ -21,11 +21,15 @@ export function getProperty(parent: any, paths: string[]): any {
   return null;
 }
 
-export function getValue(parent: any, pathDotSeparated: string): string {
+export function getValue(parent: any, pathDotSeparated: string, joinSeparator: string = '.'): string {
   const paths = pathDotSeparated.split('.');
 
-  const prop = getProperty(parent, paths);
+  let prop = getProperty(parent, paths);
   if (prop === null) return '';
+
+  if (Array.isArray(prop)) {
+    prop = prop.join(joinSeparator);
+  }
 
   return prop;
 }

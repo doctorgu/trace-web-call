@@ -12,6 +12,7 @@
     "logCompared": "tsc && node -e \"require('./dist/run/logCompared').logCompared()\"",
     "logCompared2": "node -e \"require('./dist/run/logCompared').logCompared()\"",
     "copyModifiedUntracked": "tsc && node -e \"require('./dist/run/copyModifiedUntracked').copyModifiedUntracked()\"",
+    "copyModifiedUntracked2": "node -e \"require('./dist/run/copyModifiedUntracked').copyModifiedUntracked()\"",
     "insertToDb": "tsc && node -e \"require('./dist/run/insertToDb').insertToDb()\"",
     "insertToDb2": "node -e \"require('./dist/run/insertToDb').insertToDb()\"",
     "logGitCount": "tsc && node -e \"require('./dist/run/logGitCount').logGitCount()\"",

@@ -1,6 +1,6 @@
 import { existsSync, statSync, unlinkSync } from 'fs';
 import { resolve } from 'path';
-import { findFiles, logTimeMsg } from '../common/util';
+import { findFiles, includesPath, logTimeMsg } from '../common/util';
 import {
   ClassInfo,
   insertClassInfo,
@@ -26,7 +26,7 @@ import { mergeExtends } from '../common/traceHelper';
 import { sqlInit } from '../config/sql';
 import tCommon from '../sqlTemplate/TCommon';
 import { insertJspInfo, insertRouteJspKeyName, JspInfo } from '../common/jspHelper';
-import { BatchJob, BeanSql, BeanTargetObject, insertBatchInfo, insertRouteBatchKeyName } from '../common/batchHelper';
+import { insertBatchInfo, insertRouteBatchKeyName } from '../common/batchHelper';
 
 function insertJspClassXml(
   rootDir: string,
@@ -37,7 +37,7 @@ function insertJspClassXml(
   nameObjectsAllNoSchema: Map<string, ObjectInfo>,
   keyName: string,
   service: DirectoryAndFilePattern,
-  xml: string,
+  xmlDirectory: string,
   jspDirectory: string
 ): { jspInfos: JspInfo[]; classInfos: ClassInfo[]; xmlInfos: XmlInfo[] } {
   const classInfos: ClassInfo[] = [];
@@ -55,8 +55,8 @@ function insertJspClassXml(
     }
   }
 
-  if (xml) {
-    const fullDir = resolve(rootDir, xml);
+  if (xmlDirectory) {
+    const fullDir = resolve(rootDir, xmlDirectory);
     if (existsSync(fullDir)) {
       const fullPaths = statSync(fullDir).isDirectory() ? [...findFiles(fullDir, '*.xml')] : [fullDir];
       for (const fullPath of fullPaths) {
@@ -137,7 +137,7 @@ export function insertToDb() {
 
   let classInfosDepAll: ClassInfo[] = [];
   let xmlInfosDepAll: XmlInfo[] = [];
-  for (const { keyName, service, xml } of config.path.source.dependency) {
+  for (const { keyName, service, xmlDirectory } of config.path.source.dependency) {
     const { classInfos: classInfosDep, xmlInfos: xmlInfosDep } = insertJspClassXml(
       rootDir,
       usersAll,
@@ -147,7 +147,7 @@ export function insertToDb() {
       nameObjectsAllNoSchema,
       keyName,
       service,
-      xml,
+      xmlDirectory,
       ''
     );
     startTime = logTimeMsg(startTime, `insertJspClassXml Dependency ${keyName}`);
@@ -158,10 +158,10 @@ export function insertToDb() {
 
   for (let i = 0; i < config.path.source.main.length; i++) {
     const {
-      startings: { directory, file },
+      startings: { directory, directoryIgnore, file },
       keyName,
       service,
-      xmlDirectory: xml,
+      xmlDirectory,
       jspDirectory,
     } = config.path.source.main[i];
 
@@ -170,6 +170,10 @@ export function insertToDb() {
       const initDir = resolve(rootDir, directory);
 
       for (const fullPath of [...findFiles(initDir, file)]) {
+        if (directoryIgnore && includesPath(fullPath, directoryIgnore)) {
+          continue;
+        }
+
         if (config.startingPoint === 'springBatch') {
           insertBatchInfo(
             keyName,
@@ -204,7 +208,7 @@ export function insertToDb() {
       nameObjectsAllNoSchema,
       keyName,
       service,
-      xml,
+      xmlDirectory,
       jspDirectory
     );
     startTime = logTimeMsg(startTime, `insertJspClassXml Main ${directory}`);

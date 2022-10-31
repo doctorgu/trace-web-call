@@ -845,10 +845,13 @@ export function getClassInfo(fullPath: string): {
   header: HeaderInfo;
   vars: VarInfo[];
   methods: MethodInfo[];
-} {
+} | null {
   const cstSimple = getCstSimpleFromDb(fullPath);
   // const cstSimple = getCstSimple(fullPath);
   const classDeclaration = getCstClassDeclaration(cstSimple);
+  // Skip interface
+  if (!classDeclaration) return null;
+
   const pathsAndImageList = getPathsAndImagesFromSimpleCst(classDeclaration);
 
   const header = getHeaderInfo(classDeclaration);
@@ -866,8 +869,12 @@ export function insertClassInfo(rootDir: string, fullPath: string): ClassInfo | 
     return null;
   }
 
-  const { header, vars, methods } = getClassInfo(fullPath);
+  const ret = getClassInfo(fullPath);
+  if (!ret) {
+    return null;
+  }
 
+  const { header, vars, methods } = ret;
   tClassInfo.insertClassInfo(classPath, header, methods);
 
   return { classPath, header, methods };
@@ -973,7 +980,7 @@ export function getFindsByClassPathClassNameFromDb(
 
 export function insertRouteTableKeyName() {
   const directoriesDep: string[] = config.path.source.dependency.map(({ service: { directory } }) => directory);
-  const directoriesXmlDep: string[] = config.path.source.dependency.map(({ xml }) => xml);
+  const directoriesXmlDep: string[] = config.path.source.dependency.map(({ xmlDirectory }) => xmlDirectory);
 
   for (let i = 0; i < config.path.source.main.length; i++) {
     const {

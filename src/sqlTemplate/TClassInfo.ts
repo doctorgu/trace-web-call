@@ -90,19 +90,23 @@ where   keyName = @keyName
     });
   }
 
-  selectMethodInfoFindByName(keyName: string, methodName: string, classPathsLike: string[], typeName: string): DbRow[] {
+  selectMethodInfoFindByName(
+    keyName: string,
+    methodNames: string[],
+    classPathsLike: string[],
+    typeName: string
+  ): DbRow[] {
     const sql = `
 select  classPath, className, implementsName, extendsName, mappingMethod, mappingValues, isPublic, returnType, name, parameterCount, callers, jspViewFinds
 from    MethodInfoFind
 where   keyName = @keyName
-        and name = @methodName
         and
         (${classPathsLike.map((classPathLike) => `classPath like '${classPathLike}' || '%'`).join(' or ')})
+        and name in (${methodNames.map((methodName) => `'${methodName}'`).join(',')})
         and (className = @typeName or implementsName = @typeName)
 `;
     return all(configReader.db(), sql, {
       keyName,
-      methodName,
       typeName,
     });
   }
