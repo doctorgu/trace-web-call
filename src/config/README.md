@@ -158,10 +158,10 @@ t as
             )
 )
 select  group_concat(t.value)
-        || ifnull(char(13) || 'I:' || group_concat(distinct t.i), '')
-        || ifnull(char(13) || 'U:' || group_concat(distinct t.u), '')
-        || ifnull(char(13) || 'D:' || group_concat(distinct t.d), '')
-        || ifnull(char(13) || 'S:' || group_concat(distinct t.s), '')
+        || ifnull(char(13) || '(Insert):' || group_concat(distinct t.i), '')
+        || ifnull(char(13) || '(Update):' || group_concat(distinct t.u), '')
+        || ifnull(char(13) || '(Delete):' || group_concat(distinct t.d), '')
+        || ifnull(char(13) || '(Select):' || group_concat(distinct t.s), '')
         || char(13) || char(13) value
 from    t
 group by t.keyName, t.groupSeq, t.rnum
