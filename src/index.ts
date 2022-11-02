@@ -12,7 +12,13 @@ import { getDbPath } from './common/common';
 import { getJspIncludes } from './common/jspHelper';
 import { logCompared } from './run/logCompared';
 import { copyModifiedUntracked } from './run/copyModifiedUntracked';
-import { getNameObjectsAllFromDb, getTablesFromDb, getUsersFromDb } from './common/sqlMapperHelper';
+import {
+  getNameObjectsAllFromDb,
+  getTablesFromDb,
+  getUsersFromDb,
+  getXmlInfoXmlNodeInfo,
+  insertTablesToDb,
+} from './common/sqlMapperHelper';
 import { getPathsAndImagesFromSimpleCst } from './common/cstHelper';
 import { insertBatchInfo } from './common/batchHelper';
 
@@ -52,6 +58,26 @@ function doTest() {
   //   nameObjectsAllNoSchema
   // );
   // --
+  //
+
+  const rootDir = 'C:/source/trace-web-call';
+  const fullPath = 'C:/source/trace-web-call/test/manual_common.xml';
+  const usersAll = getUsersFromDb();
+  insertTablesToDb();
+  const { tables: tablesAll, tablesNoSchema: tablesAllNoSchema } = getTablesFromDb();
+  const { nameObjects: nameObjectsAll, nameObjectsNoSchema: nameObjectsAllNoSchema } = getNameObjectsAllFromDb();
+  const ret = getXmlInfoXmlNodeInfo(
+    rootDir,
+    fullPath,
+    usersAll,
+    tablesAll,
+    tablesAllNoSchema,
+    nameObjectsAll,
+    nameObjectsAllNoSchema
+  );
+  if (ret) {
+    console.log(ret.nodes);
+  }
 }
 // doTest();
 insertToDb();

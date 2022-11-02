@@ -426,7 +426,7 @@ export function insertObjects(
   return { nameObjects, nameObjectsNoSchema };
 }
 
-export function insertXmlInfoXmlNodeInfo(
+export function getXmlInfoXmlNodeInfo(
   rootDir: string,
   fullPath: string,
   usersAll: Set<string>,
@@ -517,6 +517,30 @@ export function insertXmlInfoXmlNodeInfo(
 
     nodes.push({ id, tagName, params, objects, tablesInsert, tablesUpdate, tablesDelete, tablesOther, selectExists });
   }
+
+  return { xmlPath, namespace, nodes };
+}
+export function insertXmlInfoXmlNodeInfo(
+  rootDir: string,
+  fullPath: string,
+  usersAll: Set<string>,
+  tablesAll: Set<string>,
+  tablesAllNoSchema: Set<string>,
+  nameObjectsAll: Map<string, ObjectInfo>,
+  nameObjectsAllNoSchema: Map<string, ObjectInfo>
+): XmlInfo | null {
+  const ret = getXmlInfoXmlNodeInfo(
+    rootDir,
+    fullPath,
+    usersAll,
+    tablesAll,
+    tablesAllNoSchema,
+    nameObjectsAll,
+    nameObjectsAllNoSchema
+  );
+  if (!ret) return null;
+
+  const { xmlPath, namespace, nodes } = ret;
 
   tXmlInfo.insertXmlInfoXmlNodeInfo(xmlPath, namespace, nodes);
 

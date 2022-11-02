@@ -147,4 +147,11 @@ export const configVar: FuncInfo[] = [
   },
 ];
 
-export const ignores = new Set(['int', 'float', 'char', 'boolean', 'string', '(', ')', '+', ',']);
+export const ignoresImage = new Set(['int', 'float', 'char', 'boolean', 'string', '(', ')', '+', ',']);
+
+export const ignoresInstance = ['Date', 'String', 'Integer'];
+
+export const ignoresInstanceMethod = [
+  ['BaseController', 'getRequest'],
+  ['BaseController', 'getSession'],
+];

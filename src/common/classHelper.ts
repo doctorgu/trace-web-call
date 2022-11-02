@@ -24,7 +24,17 @@ import {
   lastRangeOfImages,
 } from './cstHelper';
 import { getJspViewFinds, JspView, JspViewFind } from './jspHelper';
-import { configConstructor, configFunc, configVar, FuncInfo, FuncType, ignores, ValueType } from '../config/configFunc';
+import {
+  configConstructor,
+  configFunc,
+  configVar,
+  FuncInfo,
+  FuncType,
+  ignoresImage,
+  ignoresInstance,
+  ignoresInstanceMethod,
+  ValueType,
+} from '../config/configFunc';
 import { getCstSimple, PathsAndImage } from './cstSimpleHelper';
 
 export type Keyword =
@@ -276,8 +286,10 @@ function getCallerInfos2(
   vars: VarInfo[],
   posStart: number,
   posEnd: number,
-  callers: CallerInfo[] = []
+  newClassName: string = ''
 ): CallerInfo[] {
+  let callers: CallerInfo[] = [];
+
   const range = list.filter((v, i) => i >= posStart && i <= posEnd);
 
   const posLBrace = range.findIndex(({ paths }) => endsWith(paths, 'LBrace'));
@@ -298,14 +310,33 @@ function getCallerInfos2(
   fqnOrRefType.fqnOrRefTypePartFirst.fqnOrRefTypePartCommon.Identifier
   selectMember(siteId, param);
 
-  unaryExpression.primary.primaryPrefix
+  unaryExpression.primary.primaryPrefix.This
+  unaryExpression.primary.primarySuffix.0.Dot
   unaryExpression.primary.primarySuffix.0.Identifier
   this.selectMember(siteId, param);
 
-  unaryExpression.primary.primaryPrefix
+  unaryExpression.primary.primaryPrefix.This
+  unaryExpression.primary.primarySuffix.0.Dot
   unaryExpression.primary.primarySuffix.0.Identifier
+  unaryExpression.primary.primarySuffix.1.Dot
   unaryExpression.primary.primarySuffix.1.Identifier
   this.memberInfoDAO.selectMember(siteId, param);
+
+  primaryPrefix.parenthesisExpression.LBrace
+  primaryPrefix.parenthesisExpression.expression.ternaryExpression.binaryExpression.unaryExpression.primary.primaryPrefix.newExpression.unqualifiedClassInstanceCreationExpression.New
+  primaryPrefix.parenthesisExpression.expression.ternaryExpression.binaryExpression.unaryExpression.primary.primaryPrefix.newExpression.unqualifiedClassInstanceCreationExpression.classOrInterfaceTypeToInstantiate.Identifier
+  primaryPrefix.parenthesisExpression.expression.ternaryExpression.binaryExpression.unaryExpression.primary.primaryPrefix.newExpression.unqualifiedClassInstanceCreationExpression.LBrace
+  primaryPrefix.parenthesisExpression.expression.ternaryExpression.binaryExpression.unaryExpression.primary.primaryPrefix.newExpression.unqualifiedClassInstanceCreationExpression.argumentList.expression.ternaryExpression.binaryExpression.unaryExpression.primary.primaryPrefix.This
+  primaryPrefix.parenthesisExpression.expression.ternaryExpression.binaryExpression.unaryExpression.primary.primaryPrefix.newExpression.unqualifiedClassInstanceCreationExpression.RBrace
+  primaryPrefix.parenthesisExpression.RBrace
+  primarySuffix.0.Dot
+  primarySuffix.0.Identifier
+  primarySuffix.1.methodInvocationSuffix.LBrace
+  primarySuffix.1.methodInvocationSuffix.argumentList.expression.0.ternaryExpression.binaryExpression.unaryExpression.primary.primaryPrefix.fqnOrRefType.fqnOrRefTypePartFirst.fqnOrRefTypePartCommon.Identifier
+  primarySuffix.1.methodInvocationSuffix.argumentList.Comma
+  primarySuffix.1.methodInvocationSuffix.argumentList.expression.1.ternaryExpression.binaryExpression.unaryExpression.primary.primaryPrefix.fqnOrRefType.fqnOrRefTypePartFirst.fqnOrRefTypePartCommon.Identifier
+  primarySuffix.1.methodInvocationSuffix.RBrace
+  (new BatchUtil(this)).insertJob(jobName, stepName);
   */
 
   const rangeBeforeLBrace = range.filter((v, i) => i < posLBrace);
@@ -321,7 +352,7 @@ function getCallerInfos2(
       rest = image;
     } else if (includes(paths, 'This')) {
       thisFound = true;
-    } else if (thisFound) {
+    } else if (thisFound || newClassName) {
       if (
         includes(paths, 'unaryExpression', 'primary', 'primarySuffix', '0', 'Identifier') ||
         includes(paths, 'unaryExpressionNotPlusMinus', 'primary', 'primarySuffix', '0', 'Identifier')
@@ -349,6 +380,7 @@ function getCallerInfos2(
         typeName = varByInstance.typeName;
       }
     } else {
+      typeName = newClassName;
       methodName = first;
     }
   }
@@ -362,6 +394,10 @@ function getCallerInfos2(
     if (lBraceInnerFound) {
       const posLBraceInner = i;
       const posRBraceInner = getRBracePosition(rangeBrace, posLBraceInner);
+
+      // Not calling getNewClass here because no such case yet
+      // ex: (new BatchUtil(this)).insertJob((new BatchUtil(this)).getJobInfo());
+
       const callersInner = getCallerInfos2(cstSimple, rangeBrace, vars, 0, posRBraceInner);
       callers = callers.concat(callersInner);
       i = posRBraceInner;
@@ -380,6 +416,33 @@ function getCallerInfos2(
   return callers;
 }
 
+// get 'BatchUtil' and '(' position after method in '(new BatchUtil(this)).insertJob(jobName, stepName);'
+function getNewClass(
+  list: PathsAndImage[],
+  posLBrace: number,
+  posRBrace: number
+): { className: string; posDotAfterRBrace: number; posRBrace2: number } | null {
+  const retLeft = rangeOfImages(list, posLBrace, posRBrace, ['new', /\w+/, '(']);
+  if (!retLeft) return null;
+
+  const posRBraceClass = getRBracePosition(list, posLBrace);
+  if (posRBraceClass === -1) return null;
+
+  const posDotAfterRBrace = posRBraceClass + 1;
+  if (!endsWith(list[posDotAfterRBrace].paths, 'Dot')) {
+    return null;
+  }
+
+  const posLBrace2 = list.findIndex(({ paths }, idx) => idx > posRBraceClass && endsWith(paths, 'LBrace'));
+  if (posLBrace2 === -1) return null;
+
+  const posRBrace2 = getRBracePosition(list, posLBrace2);
+  if (posRBrace2 === -1) return null;
+
+  const className = retLeft.matches[0][0];
+  return { className, posDotAfterRBrace, posRBrace2 };
+}
+
 function getCallerInfos(
   cstSimple: any,
   methodDecls: PathsAndImage[],
@@ -395,7 +458,27 @@ function getCallerInfos(
     if (posLBrace === -1) break;
 
     const posRBrace = getRBracePosition(list, posLBrace);
-    const callersCur = getCallerInfos2(cstSimple, list, vars, i, posRBrace);
+
+    /*primaryPrefix.parenthesisExpression.LBrace
+  primaryPrefix.parenthesisExpression.expression.ternaryExpression.binaryExpression.unaryExpression.primary.primaryPrefix.newExpression.unqualifiedClassInstanceCreationExpression.New
+  primaryPrefix.parenthesisExpression.expression.ternaryExpression.binaryExpression.unaryExpression.primary.primaryPrefix.newExpression.unqualifiedClassInstanceCreationExpression.classOrInterfaceTypeToInstantiate.Identifier
+  primaryPrefix.parenthesisExpression.expression.ternaryExpression.binaryExpression.unaryExpression.primary.primaryPrefix.newExpression.unqualifiedClassInstanceCreationExpression.LBrace
+  primaryPrefix.parenthesisExpression.expression.ternaryExpression.binaryExpression.unaryExpression.primary.primaryPrefix.newExpression.unqualifiedClassInstanceCreationExpression.argumentList.expression.ternaryExpression.binaryExpression.unaryExpression.primary.primaryPrefix.This
+  primaryPrefix.parenthesisExpression.expression.ternaryExpression.binaryExpression.unaryExpression.primary.primaryPrefix.newExpression.unqualifiedClassInstanceCreationExpression.RBrace
+  */
+
+    let posStart = i;
+    let posEnd = posRBrace;
+
+    let newClassName = '';
+    const ret = getNewClass(list, posLBrace, posRBrace);
+    if (ret) {
+      posStart = ret.posDotAfterRBrace + 1;
+      posEnd = ret.posRBrace2;
+      newClassName = ret.className;
+    }
+
+    const callersCur = getCallerInfos2(cstSimple, list, vars, posStart, posEnd, newClassName);
     if (callersCur.length) {
       callers = callers.concat(callersCur);
     }
@@ -403,7 +486,15 @@ function getCallerInfos(
     i = posRBrace;
   }
 
-  return callers;
+  const callersFiltered = callers.filter(
+    (caller) =>
+      !ignoresInstance.includes(caller.instanceName) &&
+      !ignoresInstanceMethod.some(
+        ([instance, method]) => instance === caller.instanceName && method === caller.methodName
+      )
+  );
+
+  return callersFiltered;
 }
 
 function getConstructFuncVarValue(
@@ -492,7 +583,7 @@ function getValueType(
 }
 function getValues(blocks: PathsAndImage[], start: number, posSemicolon: number): { values: JspView[]; end: number } {
   const { image } = blocks[start];
-  if (ignores.has(image)) return { values: [], end: -1 };
+  if (ignoresImage.has(image)) return { values: [], end: -1 };
 
   const { type, value, end: endMain } = getValueType(blocks, start, posSemicolon);
   if (type === 'Constructor') {

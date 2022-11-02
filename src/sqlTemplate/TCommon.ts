@@ -220,8 +220,8 @@ values
     const dbNameDest = parse(basename(pathDest)).name;
 
     const names = [
-      { name: 'table', view: 'vStartToTableObject', column: 'tables' },
-      { name: 'jsp', view: 'vStartToJsps', column: 'jsps' },
+      { name: 'table', view: 'vStartToObject', column: 'tables' },
+      { name: 'jsp', view: 'vStartToJsp', column: 'jsps' },
     ];
     const sqlDiffMap = new Map<string, string>();
     const sqlInsertedMap = new Map<string, string>();
