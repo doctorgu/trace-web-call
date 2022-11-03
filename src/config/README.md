@@ -95,6 +95,7 @@ with
 jobComma (value) as
 (
     select  'TestJob1,TestJob2'
+    --select  'TestJob1,TestJob2'
 ),
 jobRow as
 (
@@ -111,23 +112,35 @@ jobRowJoined as
 ),
 r012 as
 (
-    select  r.keyName, r.groupSeq,
+    select  distinct
+            r.keyName, r.groupSeq,
+
+            case when r.depth = 0 then
+                ''
+            else
+                '└' || substring(replace(printf('%0' || (r.depth * 3) || 'd', '0'), '0', '-'), 3) || ' '
+            end
+            ||
             case r.routeType
             when 'job' then
                 r.valueJob
             when 'step' then
-                '└─ ' || r.valueStep
+                r.valueStep
             when 'method' then
-                '└──── ' || r.valueMethod
+                r.valueMethod
             when 'xml' then
-                '└──── ' || r.valueXml
+                r.valueXml
             end value,
+
             jr.rnum
     from    RouteBatch r
             inner join jobRowJoined jr
             on jr.keyName = r.keyName
             and jr.groupSeq = r.groupSeq
-    where   r.depth in (0, 1, 2)
+    where   (
+                (r.routeType in ('job', 'step') or (r.depth = 2 and r.routeType in ('method', 'xml')))
+                or r.routeType in ('xml')
+            )
 ),
 r012Value as
 (
@@ -157,13 +170,18 @@ t as
                 or r.routeType in ('xml', 'view', 'function', 'procedure')
             )
 )
-select  group_concat(t.value)
+select  '* ' || group_concat(distinct t.keyName)
+        || char(13) || group_concat(t.value)
         || ifnull(char(13) || '(Insert):' || group_concat(distinct t.i), '')
         || ifnull(char(13) || '(Update):' || group_concat(distinct t.u), '')
         || ifnull(char(13) || '(Delete):' || group_concat(distinct t.d), '')
         || ifnull(char(13) || '(Select):' || group_concat(distinct t.s), '')
         || char(13) || char(13) value
 from    t
+where   (t.i is null or t.i is not null and t.i not like '%BATCH_%')
+        and (t.u is null or t.u is not null and t.u not like '%BATCH_%')
+        and (t.d is null or t.d is not null and t.d not like '%BATCH_%')
+        and (t.s is null or t.s is not null and t.s not like '%BATCH_%')
 group by t.keyName, t.groupSeq, t.rnum
-order by t.rnum
+order by t.rnum;
 ```
