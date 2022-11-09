@@ -255,8 +255,6 @@ create table RouteBatch (
     tablesOther text not null,
     selectExists int not null check (selectExists in (0, 1)),
     
-    valueError text not null,
-
     insertTime timestamp not null default current_timestamp,
     primary key (keyName, groupSeq, seq)
 );

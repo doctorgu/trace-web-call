@@ -203,6 +203,7 @@ values
     const names = [
       { name: 'table', view: 'vStartToObject', column: 'tables' },
       { name: 'jsp', view: 'vStartToJsp', column: 'jsps' },
+      { name: 'batch', view: 'vStartToObject', column: 'tables' },
     ];
     const sqlDiffMap = new Map<string, string>();
     const sqlInsertedMap = new Map<string, string>();
