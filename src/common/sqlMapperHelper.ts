@@ -320,6 +320,7 @@ export function insertUsersToDb(): Set<string> {
   let usersAll = new Set<string>();
 
   const path = config.path.data.users;
+  if (!path) return usersAll;
 
   const fullPaths = statSync(path).isDirectory() ? [...findFiles(path)] : [path];
   for (const fullPath of fullPaths) {

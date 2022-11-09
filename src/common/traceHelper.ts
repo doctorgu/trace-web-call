@@ -18,18 +18,18 @@ import {
   getBeanTargetObjectFromDb,
 } from './batchHelper';
 
-export type RouteTypeTable = 'mapping' | 'method' | 'xml' | 'view' | 'function' | 'procedure';
-export type RouteTable<RouteType> = {
+export type RouteCommon = {
   groupSeq?: number; // Only used for inserting to table
   seq: number;
+  seqParent?: number;
   depth: number;
-  routeType: RouteType;
-  valueMapping?: RouteType extends 'mapping' ? string[] : [];
-  valueMethod?: RouteType extends 'method' ? string : '';
-  valueXml?: RouteType extends 'xml' ? string : '';
-  valueView?: RouteType extends 'view' ? string : '';
-  valueFunction?: RouteType extends 'function' ? string : '';
-  valueProcedure?: RouteType extends 'procedure' ? string : '';
+  routeType: any;
+};
+
+export type RouteTypeTable = 'mapping' | 'method' | 'xml' | 'view' | 'function' | 'procedure';
+export type RouteTable<RouteType> = RouteCommon & {
+  value: RouteType extends 'mapping' ? '' : string;
+  valueList: RouteType extends 'mapping' ? string[] : [];
 
   objects?: RouteType extends 'xml' | 'view' | 'function' | 'procedure' ? Set<string> : null;
   tablesInsert?: RouteType extends 'xml' | 'view' | 'function' | 'procedure' ? Set<string> : null;
@@ -40,29 +40,16 @@ export type RouteTable<RouteType> = {
 };
 
 export type RouteTypeJsp = 'mapping' | 'method' | 'jsp';
-export type RouteJsp<RouteType> = {
-  groupSeq?: number; // Only used for inserting to table
-  seq: number;
-  depth: number;
-  routeType: RouteType;
-  valueMapping?: RouteType extends 'mapping' ? string[] : [];
-  valueMethod?: RouteType extends 'method' ? string : '';
+export type RouteJsp<RouteType> = RouteCommon & {
+  value: RouteType extends 'mapping' ? '' : string;
+  valueList: RouteType extends 'mapping' ? string[] : [];
+
   jsps?: RouteType extends 'jsp' ? Set<string> : '';
 };
 
 export type RouteTypeBatch = 'job' | 'step' | 'method' | 'xml' | 'view' | 'function' | 'procedure' | 'error';
-export type RouteBatch<RouteType> = {
-  groupSeq?: number; // Only used for inserting to table
-  seq: number;
-  depth: number;
-  routeType: RouteType;
-  valueJob?: RouteType extends 'job' ? string : '';
-  valueStep?: RouteType extends 'step' ? string : '';
-  valueMethod?: RouteType extends 'method' ? string : '';
-  valueXml?: RouteType extends 'xml' ? string : '';
-  valueView?: RouteType extends 'view' ? string : '';
-  valueFunction?: RouteType extends 'function' ? string : '';
-  valueProcedure?: RouteType extends 'procedure' ? string : '';
+export type RouteBatch<RouteType> = RouteCommon & {
+  value: string;
 
   restartable?: RouteType extends 'job' ? boolean : false;
 
@@ -72,8 +59,6 @@ export type RouteBatch<RouteType> = {
   tablesDelete?: RouteType extends 'xml' | 'view' | 'function' | 'procedure' ? Set<string> : null;
   tablesOther?: RouteType extends 'xml' | 'view' | 'function' | 'procedure' ? Set<string> : null;
   selectExists?: RouteType extends 'xml' | 'view' | 'function' | 'procedure' ? boolean : null;
-
-  valueError?: RouteType extends 'error' ? { [key: string]: any } : {};
 };
 
 function getBaseMethods(classInfos: ClassInfo[], extendsNameSub: string): MethodInfo[] {
@@ -167,7 +152,8 @@ function getObjectByStringLiteral(
     seq: routes.length,
     depth,
     routeType: 'xml',
-    valueXml: stringLiteral,
+    value: stringLiteral,
+    valueList: [],
     objects,
     tablesInsert,
     tablesUpdate,
@@ -190,7 +176,8 @@ function getObjectByStringLiteral(
           seq: routes.length,
           depth: depth + depthCur + 1,
           routeType: type,
-          valueView: name,
+          value: name,
+          valueList: [],
           objects,
           tablesInsert,
           tablesUpdate,
@@ -205,7 +192,8 @@ function getObjectByStringLiteral(
           seq: routes.length,
           depth: depth + depthCur + 1,
           routeType: type,
-          valueFunction: name,
+          value: name,
+          valueList: [],
           objects,
           tablesInsert,
           tablesUpdate,
@@ -220,7 +208,8 @@ function getObjectByStringLiteral(
           seq: routes.length,
           depth: depth + depthCur + 1,
           routeType: type,
-          valueProcedure: name,
+          value: name,
+          valueList: [],
           objects,
           tablesInsert,
           tablesUpdate,
@@ -299,8 +288,8 @@ export function getTableNamesByMethod(
         const value = `${typeName ? `${typeName}.` : ''}${methodName}(${callerParameterCount})`;
         // to prevent duplicated search
         const foundPrev = routes.some(
-          ({ routeType: routeTypePrev, valueMethod: valueMethodPrev, depth: depthPrev }) =>
-            routeTypePrev === 'method' && valueMethodPrev === value && depthPrev <= depth
+          ({ routeType: routeTypePrev, value: valuePrev, depth: depthPrev }) =>
+            routeTypePrev === 'method' && valuePrev === value && depthPrev <= depth
         );
         if (foundPrev) continue;
 
@@ -308,7 +297,8 @@ export function getTableNamesByMethod(
           seq: routes.length,
           depth,
           routeType: 'method',
-          valueMethod: value,
+          value: value,
+          valueList: [],
         };
         routes.push(routeMethod);
 
@@ -340,7 +330,8 @@ export function getStartingToObjects(
         seq: routes.length,
         depth: ++depth,
         routeType: 'mapping',
-        valueMapping: mappingValues,
+        value: '',
+        valueList: mappingValues,
       };
       routes.push(routeMapping);
 
@@ -349,7 +340,8 @@ export function getStartingToObjects(
         seq: routes.length,
         depth: ++depth,
         routeType: 'method',
-        valueMethod: classDotMethod,
+        value: classDotMethod,
+        valueList: [],
       };
       routes.push(routeMethod);
 
@@ -362,7 +354,8 @@ export function getStartingToObjects(
         seq: routes.length,
         depth: ++depth,
         routeType: 'method',
-        valueMethod: classDotMethod,
+        value: classDotMethod,
+        valueList: [],
       };
       routes.push(routeMethod);
 
@@ -387,6 +380,8 @@ function getJspPathsByJspPath(
         seq: routes.length,
         depth,
         routeType: 'jsp',
+        value: '',
+        valueList: [],
         jsps: new Set<string>([include]),
       };
       routes.push(routeJsp);
@@ -416,6 +411,8 @@ export function getJspsByMethod(
       seq: routes.length,
       depth,
       routeType: 'jsp',
+      value: '',
+      valueList: [],
       jsps: new Set<string>([jspPath]),
     };
     routes.push(routeJsp);
@@ -447,7 +444,8 @@ export function getStartingToJsps(
         seq: routes.length,
         depth: ++depth,
         routeType: 'mapping',
-        valueMapping: mappingValues,
+        value: '',
+        valueList: mappingValues,
       };
       routes.push(routeMapping);
 
@@ -456,7 +454,8 @@ export function getStartingToJsps(
         seq: routes.length,
         depth: ++depth,
         routeType: 'method',
-        valueMethod: classDotMethod,
+        value: classDotMethod,
+        valueList: [],
       };
       routes.push(routeMethod);
 
@@ -469,7 +468,8 @@ export function getStartingToJsps(
         seq: routes.length,
         depth: ++depth,
         routeType: 'method',
-        valueMethod: classDotMethod,
+        value: classDotMethod,
+        valueList: [],
       };
       routes.push(routeMethod);
 
@@ -492,7 +492,7 @@ function routeTableToBatch(routesTable: RouteTable<RouteTypeTable>[], seqStart: 
             seq: seqStart++,
             depth: routeTable.depth,
             routeType: 'method',
-            valueMethod: routeTable.valueMethod,
+            value: routeTable.value,
           };
           routes.push(route);
         }
@@ -503,7 +503,7 @@ function routeTableToBatch(routesTable: RouteTable<RouteTypeTable>[], seqStart: 
             seq: seqStart++,
             depth: routeTable.depth,
             routeType: 'xml',
-            valueXml: routeTable.valueXml,
+            value: routeTable.value,
 
             objects: routeTable.objects as Set<string>,
             tablesInsert: routeTable.tablesInsert as Set<string>,
@@ -521,7 +521,7 @@ function routeTableToBatch(routesTable: RouteTable<RouteTypeTable>[], seqStart: 
             seq: seqStart++,
             depth: routeTable.depth,
             routeType: 'view',
-            valueView: routeTable.valueView,
+            value: routeTable.value,
 
             objects: routeTable.objects as Set<string>,
             tablesInsert: routeTable.tablesInsert as Set<string>,
@@ -539,7 +539,7 @@ function routeTableToBatch(routesTable: RouteTable<RouteTypeTable>[], seqStart: 
             seq: seqStart++,
             depth: routeTable.depth,
             routeType: 'function',
-            valueFunction: routeTable.valueFunction,
+            value: routeTable.value,
 
             objects: routeTable.objects as Set<string>,
             tablesInsert: routeTable.tablesInsert as Set<string>,
@@ -557,7 +557,7 @@ function routeTableToBatch(routesTable: RouteTable<RouteTypeTable>[], seqStart: 
             seq: seqStart++,
             depth: routeTable.depth,
             routeType: 'procedure',
-            valueProcedure: routeTable.valueProcedure,
+            value: routeTable.value,
 
             objects: routeTable.objects as Set<string>,
             tablesInsert: routeTable.tablesInsert as Set<string>,
@@ -594,7 +594,7 @@ export function getBatchToObjects(
       seq: routes.length,
       depth: ++depth,
       routeType: 'job',
-      valueJob: batchJob.id,
+      value: batchJob.id,
       restartable: batchJob.restartable,
     };
     routes.push(routeJob);
@@ -618,7 +618,7 @@ export function getBatchToObjects(
             seq: routes.length,
             depth: ++depthBean,
             routeType: 'step',
-            valueStep: target?.beanId || sql?.beanId,
+            value: target?.beanId || sql?.beanId || '',
           };
           routes.push(routeStep);
         }
@@ -634,7 +634,7 @@ export function getBatchToObjects(
               seq: routes.length,
               depth: ++depthBean,
               routeType: 'error',
-              valueError,
+              value: JSON.stringify(valueError),
             };
             routes.push(routeError);
             continue;
@@ -646,7 +646,7 @@ export function getBatchToObjects(
             seq: routes.length,
             depth: ++depthBean,
             routeType: 'method',
-            valueMethod: `${find.className}.${find.name}`,
+            value: `${find.className}.${find.name}`,
           };
           routes.push(routeMethod);
 
@@ -660,7 +660,7 @@ export function getBatchToObjects(
             seq: routes.length,
             depth: ++depthBean,
             routeType: 'xml',
-            valueXml: sql?.beanId,
+            value: sql.beanId,
 
             objects: sql.objects,
             tablesInsert: sql.tablesInsert,
@@ -678,4 +678,80 @@ export function getBatchToObjects(
   }
 
   return routesAll;
+}
+
+/**
+Set all seqParent by seq and depth property.
+
+Q. Why does not set seqParent when adding new route?
+
+A. Because no way to get seqParent in query in TCache.selectObjectsDeep method.
+
+@param routes All routes
+@param seqParent caller's seq
+
+@example
+// 0 Root
+// 1 +-- Child1
+// 2 +------ Child1-1
+// 3 +------ Child1-2
+// 4 +-- Child2
+// 5 +------ Child2-2
+// 6 +---------- Child2-2-1
+const routes: RouteCommon[] = [];
+routes.push({ seq: routes.length, depth: 0, routeType: 'Root' });
+routes.push({ seq: routes.length, depth: 1, routeType: 'Child1' });
+routes.push({ seq: routes.length, depth: 2, routeType: 'Child1-1' });
+routes.push({ seq: routes.length, depth: 2, routeType: 'Child1-2' });
+routes.push({ seq: routes.length, depth: 1, routeType: 'Child2' });
+routes.push({ seq: routes.length, depth: 2, routeType: 'Child2-2' });
+routes.push({ seq: routes.length, depth: 3, routeType: 'Child2-2-1' });
+
+setSeqParent(routes, 0);
+console.log(routes);
+->
+[
+  { seq: 0, depth: 0, routeType: 'Root' },
+  { seq: 1, depth: 1, routeType: 'Child1', seqParent: 0 },
+  { seq: 2, depth: 2, routeType: 'Child1-1', seqParent: 1 },
+  { seq: 3, depth: 2, routeType: 'Child1-2', seqParent: 1 },
+  { seq: 4, depth: 1, routeType: 'Child2', seqParent: 0 },
+  { seq: 5, depth: 2, routeType: 'Child2-2', seqParent: 4 },
+  { seq: 6, depth: 3, routeType: 'Child2-2-1', seqParent: 5 }
+]
+*/
+export function setSeqParent(routes: RouteCommon[], seqParent: number): void {
+  const parent = routes.find((route) => route.seq === seqParent);
+  if (!parent) return;
+
+  const depthChild = parent.depth + 1;
+
+  let seqCur = seqParent;
+  while (true) {
+    seqCur++;
+
+    const routeCur = routes.find((route) => route.seq === seqCur);
+    if (!routeCur) break;
+
+    const depthCur = routeCur.depth;
+    if (depthCur < depthChild) break;
+    if (depthCur > depthChild) continue;
+
+    routeCur.seqParent = seqParent;
+    setSeqParent(routes, routeCur.seq);
+  }
+}
+
+export function setGroupSeqAndSeqParent(routesAll: RouteCommon[][]): any[] {
+  for (const routes of routesAll) {
+    routes[0].seqParent = -1;
+    setSeqParent(routes, 0);
+  }
+
+  const routes = routesAll
+    .map((routes, i) => {
+      return routes.map((route) => ({ groupSeq: i, ...route }));
+    })
+    .flat();
+  return routes;
 }

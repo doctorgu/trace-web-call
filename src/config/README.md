@@ -2,49 +2,50 @@
 
 ```sql
 -- h2o_hmall_route_table
-select  r.keyName key_name, r.groupSeq group_seq, r.seq, r.depth, r.routeType route_type,
-        r.valueMethod value_method, r.valueXml value_xml, r.valueView value_view, r.valueFunction value_function, r.valueProcedure value_procedure,
+select  r.keyName key_name, r.groupSeq group_seq, r.seq, r.seqParent seq_parent, r.depth, r.routeType route_type,
+        r.value, r.valueList value_list,
         r.selectExists select_exists
 from    RouteTable r;
 
 -- h2o_hmall_route_mapping
-select  r.keyName key_name, r.groupSeq group_seq, r.seq, j.value
+select  r.keyName key_name, r.groupSeq group_seq, r.seq, r.seqParent seq_parent, j.value
 from    RouteTable r
-        inner join json_each(r.valueMapping) j;
+        inner join json_each(r.valueList) j
+where   r.routeType = 'mapping';
 
 -- h2o_hmall_route_objects
-select  r.keyName key_name, r.groupSeq group_seq, r.seq, j.value
+select  r.keyName key_name, r.groupSeq group_seq, r.seq, r.seqParent seq_parent, j.value
 from    RouteTable r
         inner join json_each(r.objects) j;
 
 -- h2o_hmall_route_insert
-select  r.keyName key_name, r.groupSeq group_seq, r.seq, j.value
+select  r.keyName key_name, r.groupSeq group_seq, r.seq, r.seqParent seq_parent, j.value
 from    RouteTable r
         inner join json_each(r.tablesInsert) j;
 
 -- h2o_hmall_route_update
-select  r.keyName key_name, r.groupSeq group_seq, r.seq, j.value
+select  r.keyName key_name, r.groupSeq group_seq, r.seq, r.seqParent seq_parent, j.value
 from    RouteTable r
         inner join json_each(r.tablesUpdate) j;
 
 -- h2o_hmall_route_delete
-select  r.keyName key_name, r.groupSeq group_seq, r.seq, j.value
+select  r.keyName key_name, r.groupSeq group_seq, r.seq, r.seqParent seq_parent, j.value
 from    RouteTable r
         inner join json_each(r.tablesDelete) j;
 
 -- h2o_hmall_route_other
-select  r.keyName key_name, r.groupSeq group_seq, r.seq, j.value
+select  r.keyName key_name, r.groupSeq group_seq, r.seq, r.seqParent seq_parent, j.value
 from    RouteTable r
         inner join json_each(r.tablesOther) j;
 
 
 -- h2o_hmall_route_jsp
-select  r.keyName key_name, r.groupSeq group_seq, r.seq, r.depth, r.routeType route_type,
-        r.valueMethod value_method
+select  r.keyName key_name, r.groupSeq group_seq, r.seq, r.seqParent seq_parent, r.depth, r.routeType route_type,
+        r.value, r.valueList value_list
 from    RouteJsp r;
 
 -- h2o_hmall_route_jsps
-select  r.keyName key_name, r.groupSeq group_seq, r.seq, j.value
+select  r.keyName key_name, r.groupSeq group_seq, r.seq, r.seqParent seq_parent, j.value
 from    RouteJsp r
         inner join json_each(r.jsps) j;
 
@@ -66,7 +67,8 @@ order by owner, table_name;
 -- views.txt
 with t as
 (
-    select  owner, name, type, referenced_owner, referenced_name, case when referenced_type != 'TABLE' then 'OBJECT' else 'TABLE' end referenced_type
+    select  owner, name, type, referenced_owner, referenced_name,
+            case when referenced_type != 'TABLE' then 'OBJECT' else 'TABLE' end referenced_type
     from    sys.dba_dependencies
     where   type = 'VIEW'
             and referenced_type in ('TABLE','VIEW','FUNCTION','PROCEDURE')
@@ -105,10 +107,10 @@ jobRow as
 ),
 jobRowJoined as
 (
-    select  r.keyName, r.groupSeq, jr.rnum -- r.valueJob
+    select  r.keyName, r.groupSeq, jr.rnum
     from    RouteBatch r
             inner join jobRow jr
-            on jr.value = r.valueJob
+            on jr.value = r.value
 ),
 r012 as
 (
@@ -121,16 +123,7 @@ r012 as
                 '└' || substring(replace(printf('%0' || (r.depth * 3) || 'd', '0'), '0', '-'), 3) || ' '
             end
             ||
-            case r.routeType
-            when 'job' then
-                r.valueJob
-            when 'step' then
-                r.valueStep
-            when 'method' then
-                r.valueMethod
-            when 'xml' then
-                r.valueXml
-            end value,
+            r.value value,
 
             jr.rnum
     from    RouteBatch r

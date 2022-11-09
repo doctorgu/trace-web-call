@@ -4,7 +4,7 @@ import tCommon from '../sqlTemplate/TCommon';
 import tBatchInfo from '../sqlTemplate/TBatchInfo';
 import { getObjectChild, getTablesIudFromSql, getTextCdataFromElement, ObjectChild, ObjectInfo } from './batisHelper';
 import { getDbPath } from './common';
-import { getBatchToObjects } from './traceHelper';
+import { getBatchToObjects, setGroupSeqAndSeqParent } from './traceHelper';
 import { includesPath, readFileSyncUtf16le, removeCommentLiteralSql } from './util';
 
 type BatchTasklet = {
@@ -505,11 +505,7 @@ export function insertRouteBatchKeyName() {
       directoriesXml.concat(directoriesXmlDep)
     );
 
-    const routesCur = routesAll
-      .map((routes, i) => {
-        return routes.map((route) => ({ groupSeq: i, ...route }));
-      })
-      .flat();
+    const routesCur = setGroupSeqAndSeqParent(routesAll);
     if (!routesCur.length) {
       continue;
     }

@@ -30,34 +30,35 @@ export type IudExistsSchemaDotSql = {
 };
 export type IudExistsSchemaDotSql2 = { type: ObjectType; name: string } & IudExistsSchemaDotSql;
 
-function appendLog(
-  prepend: string,
-  schemaDotObject: string,
-  name: string,
-  type: ObjectType | 'xml',
-  typeIudSub: IudExistsSchemaDotSql2 | undefined,
-  sql: string
-) {
-  const dateTime = format(new Date(), 'yyyy-MM-dd HH:mm:ss');
-  const body = `schemaDotObject: ${schemaDotObject}, name: ${name}, type: ${type}, typeSub: ${typeIudSub?.type},
-sql: ${sql}`;
-  const log = `==================================================
-${dateTime} ${prepend} ${body}
+// function appendLog(
+//   prepend: string,
+//   schemaDotObject: string,
+//   name: string,
+//   type: ObjectType | 'xml',
+//   typeIudSub: IudExistsSchemaDotSql2 | undefined,
+//   sql: string
+// ) {
+//   const dateTime = format(new Date(), 'yyyy-MM-dd HH:mm:ss');
+//   const body = `schemaDotObject: ${schemaDotObject}, name: ${name}, type: ${type}, typeSub: ${typeIudSub?.type},
+// sql: ${sql}`;
+//   const log = `==================================================
+// ${dateTime} ${prepend} ${body}
 
-`;
-  appendFileSync(resolve(config.path.logDirectory, 'getObjectChild.log'), log);
-  // console.log(log);
-}
+// `;
+//   appendFileSync(resolve(config.path.logDirectory, 'getObjectChild.log'), log);
+//   // console.log(log);
+// }
 
 function appendLogOwner(userDot: string, schemaDot: string, object: string, name: string, sql: string) {
   const dateTime = format(new Date(), 'yyyy-MM-dd HH:mm:ss');
+  const yyyyMMdd = format(new Date(), 'yyyyMMdd');
   const body = `userDot: ${userDot}, schemaDot: ${schemaDot}, object: ${object},
 sql: ${sql}`;
   const log = `==================================================
 ${dateTime} ${name} ${body}
 
 `;
-  appendFileSync(resolve(config.path.logDirectory, 'owner.log'), log);
+  appendFileSync(resolve(config.path.logDirectory, `${yyyyMMdd}owner.log`), log);
   // console.log(log);
 }
 
@@ -300,11 +301,11 @@ function getTablesIud(
     if (nameTypeIudsAll && nameTypeIudsAllNoSchema) {
       typeIudSub = getNameTypeIuds(nameTypeIudsAll, nameTypeIudsAllNoSchema, name, nameNoSchema);
       if (!typeIudSub) {
-        appendLog('Table or objects not exists in IUD', name, nameForLog, typeForLog, typeIudSub, sqlForLog);
+        // appendLog('Table or objects not exists in IUD', name, nameForLog, typeForLog, typeIudSub, sqlForLog);
         continue;
       }
       if (typeIudSub.type !== 'view') {
-        appendLog('Object is not table or view in IUD', name, nameForLog, typeForLog, typeIudSub, sqlForLog);
+        // appendLog('Object is not table or view in IUD', name, nameForLog, typeForLog, typeIudSub, sqlForLog);
         continue;
       }
 
@@ -318,11 +319,11 @@ function getTablesIud(
     } else if (nameObjectsAll && nameObjectsAllNoSchema) {
       const objectsFound = getNameObjects(nameObjectsAll, nameObjectsAllNoSchema, name, nameNoSchema);
       if (!objectsFound) {
-        appendLog('Table or objects not exists in IUD', name, nameForLog, typeForLog, undefined, sqlForLog);
+        // appendLog('Table or objects not exists in IUD', name, nameForLog, typeForLog, undefined, sqlForLog);
         continue;
       }
       if (objectsFound.type !== 'view') {
-        appendLog('Object is not table or view in IUD', name, nameForLog, typeForLog, undefined, sqlForLog);
+        // appendLog('Object is not table or view in IUD', name, nameForLog, typeForLog, undefined, sqlForLog);
         continue;
       }
 
@@ -335,7 +336,7 @@ function getTablesIud(
     }
 
     if (!tableFound) {
-      appendLog('Table not exists inside view', name, nameForLog, typeForLog, typeIudSub, sqlForLog);
+      // appendLog('Table not exists inside view', name, nameForLog, typeForLog, typeIudSub, sqlForLog);
       continue;
     }
 

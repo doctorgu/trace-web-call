@@ -31,14 +31,11 @@ values
       ({
         groupSeq,
         seq,
+        seqParent,
         depth,
         routeType,
-        valueMapping,
-        valueMethod,
-        valueXml,
-        valueView,
-        valueFunction,
-        valueProcedure,
+        value,
+        valueList,
         objects,
         tablesInsert,
         tablesUpdate,
@@ -50,14 +47,11 @@ values
           keyName,
           groupSeq,
           seq,
+          seqParent,
           depth,
           routeType,
-          valueMapping: routeType === 'mapping' ? JSON.stringify(valueMapping) : '[]',
-          valueMethod: routeType === 'method' ? valueMethod : '',
-          valueXml: routeType === 'xml' ? valueXml : '',
-          valueView: routeType === 'view' ? valueView : '',
-          valueFunction: routeType === 'function' ? valueFunction : '',
-          valueProcedure: routeType === 'procedure' ? valueProcedure : '',
+          value,
+          valueList: JSON.stringify(valueList),
           objects:
             routeType === 'xml' || routeType === 'view' || routeType === 'function' || routeType === 'procedure'
               ? JSON.stringify([...(objects as Set<string>)])
@@ -86,16 +80,16 @@ values
     const sqlTmp = `
 insert into RouteTable
   (
-    keyName, groupSeq, seq, depth, routeType,
-    valueMapping, valueMethod, valueXml, valueView, valueFunction, valueProcedure,
+    keyName, groupSeq, seq, seqParent, depth, routeType,
+    value, valueList,
     objects, tablesInsert, tablesUpdate, tablesDelete, tablesOther, selectExists
   )
 values
   {values}`;
     const sqlTmpValues = `
   (
-    {keyName}, {groupSeq}, {seq}, {depth}, {routeType},
-    {valueMapping}, {valueMethod}, {valueXml}, {valueView}, {valueFunction}, {valueProcedure},
+    {keyName}, {groupSeq}, {seq}, {seqParent}, {depth}, {routeType},
+    {value}, {valueList},
     {objects}, {tablesInsert}, {tablesUpdate}, {tablesDelete}, {tablesOther}, {selectExists}
   )`;
     const sqlValues = new SqlTemplate(sqlTmpValues).replaceAlls(routesJson, ',\n');
@@ -106,15 +100,16 @@ values
 
   insertRouteJspKeyName(keyName: string, routes: RouteJsp<RouteTypeJsp>[]): betterSqlite3.RunResult {
     const routesJson = routes.map(
-      ({ groupSeq, seq, depth, routeType, valueMapping, valueMethod, jsps }: RouteJsp<RouteTypeJsp>) => {
+      ({ groupSeq, seq, seqParent, depth, routeType, value, valueList, jsps }: RouteJsp<RouteTypeJsp>) => {
         return {
           keyName,
           groupSeq,
           seq,
+          seqParent,
           depth,
           routeType,
-          valueMapping: routeType === 'mapping' ? JSON.stringify(valueMapping) : '[]',
-          valueMethod: routeType === 'method' ? valueMethod : '',
+          value,
+          valueList: JSON.stringify(valueList),
           jsps: routeType === 'jsp' ? JSON.stringify([...(jsps as Set<string>)]) : JSON.stringify([]),
         };
       }
@@ -122,10 +117,10 @@ values
 
     const sqlTmp = `
 insert into RouteJsp
-  (keyName, groupSeq, seq, depth, routeType, valueMapping, valueMethod, jsps)
+  (keyName, groupSeq, seq, seqParent, depth, routeType, value, valueList, jsps)
 values
   {values}`;
-    const sqlTmpValues = `({keyName}, {groupSeq}, {seq}, {depth}, {routeType}, {valueMapping}, {valueMethod}, {jsps})`;
+    const sqlTmpValues = `({keyName}, {groupSeq}, {seq}, {seqParent}, {depth}, {routeType}, {value}, {valueList}, {jsps})`;
     const sqlValues = new SqlTemplate(sqlTmpValues).replaceAlls(routesJson, ',\n');
     const sql = sqlTmp.replace('{values}', escapeDollar(sqlValues));
 
@@ -137,36 +132,25 @@ values
       ({
         groupSeq,
         seq,
+        seqParent,
         depth,
         routeType,
-        valueJob,
-        valueStep,
-        valueMethod,
-        valueXml,
-        valueView,
-        valueFunction,
-        valueProcedure,
+        value,
         objects,
         tablesInsert,
         tablesUpdate,
         tablesDelete,
         tablesOther,
         selectExists,
-        valueError,
       }: RouteBatch<RouteTypeBatch>) => {
         return {
           keyName,
           groupSeq,
           seq,
+          seqParent,
           depth,
           routeType,
-          valueJob: routeType === 'job' ? valueJob : '',
-          valueStep: routeType === 'step' ? valueStep : '',
-          valueMethod: routeType === 'method' ? valueMethod : '',
-          valueXml: routeType === 'xml' ? valueXml : '',
-          valueView: routeType === 'view' ? valueView : '',
-          valueFunction: routeType === 'function' ? valueFunction : '',
-          valueProcedure: routeType === 'procedure' ? valueProcedure : '',
+          value,
           objects:
             routeType === 'xml' || routeType === 'view' || routeType === 'function' || routeType === 'procedure'
               ? JSON.stringify([...(objects as Set<string>)])
@@ -188,7 +172,6 @@ values
               ? JSON.stringify([...(tablesOther as Set<string>)])
               : JSON.stringify([]),
           selectExists: selectExists ? 1 : 0,
-          valueError: routeType === 'error' ? JSON.stringify(valueError) : JSON.stringify({}),
         };
       }
     );
@@ -196,19 +179,17 @@ values
     const sqlTmp = `
 insert into RouteBatch
   (
-    keyName, groupSeq, seq, depth, routeType,
-    valueJob, valueStep, valueMethod, valueXml, valueView, valueFunction, valueProcedure,
-    objects, tablesInsert, tablesUpdate, tablesDelete, tablesOther, selectExists,
-    valueError
+    keyName, groupSeq, seq, seqParent, depth, routeType,
+    value,
+    objects, tablesInsert, tablesUpdate, tablesDelete, tablesOther, selectExists
   )
 values
   {values}`;
     const sqlTmpValues = `
   (
-    {keyName}, {groupSeq}, {seq}, {depth}, {routeType},
-    {valueJob}, {valueStep}, {valueMethod}, {valueXml}, {valueView}, {valueFunction}, {valueProcedure},
-    {objects}, {tablesInsert}, {tablesUpdate}, {tablesDelete}, {tablesOther}, {selectExists},
-    {valueError}
+    {keyName}, {groupSeq}, {seq}, {seqParent}, {depth}, {routeType},
+    {value},
+    {objects}, {tablesInsert}, {tablesUpdate}, {tablesDelete}, {tablesOther}, {selectExists}
   )`;
     const sqlValues = new SqlTemplate(sqlTmpValues).replaceAlls(routesJson, ',\n');
     const sql = sqlTmp.replace('{values}', escapeDollar(sqlValues));

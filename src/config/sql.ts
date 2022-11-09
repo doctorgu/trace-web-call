@@ -140,14 +140,11 @@ create table RouteTable (
     keyName text not null,
     groupSeq int not null,
     seq int not null,
+    seqParent int not null,
     depth int not null,
     routeType text not null,
-    valueMapping text not null,
-    valueMethod text not null,
-    valueXml text not null,
-    valueView text not null,
-    valueFunction text not null,
-    valueProcedure text not null,
+    value text not null,
+    valueList text not null,
 
     objects text not null,
     tablesInsert text not null,
@@ -173,10 +170,11 @@ create table RouteJsp (
     keyName text not null,
     groupSeq int not null,
     seq int not null,
+    seqParent int not null,
     depth int not null,
     routeType text not null,
-    valueMapping text not null,
-    valueMethod text not null,
+    value text not null,
+    valueList text not null,
     jsps text not null,
     insertTime timestamp not null default current_timestamp,
     primary key (keyName, groupSeq, seq)
@@ -245,15 +243,10 @@ create table RouteBatch (
     keyName text not null,
     groupSeq int not null,
     seq int not null,
+    seqParent int not null,
     depth int not null,
     routeType text not null,
-    valueJob text not null,
-    valueStep text not null,
-    valueMethod text not null,
-    valueXml text not null,
-    valueView text not null,
-    valueFunction text not null,
-    valueProcedure text not null,
+    value text not null,
 
     objects text not null,
     tablesInsert text not null,
@@ -274,12 +267,8 @@ as
 select  r.keyName, r.groupSeq, r.seq, min(r.depth) depth, min(r.routeType) routeType,
         ifnull(
             case routeType
-            when 'mapping' then group_concat(distinct jMapping.value)
-            when 'method' then group_concat(distinct r.valueMethod)
-            when 'xml' then group_concat(distinct r.valueXml)
-            when 'view' then group_concat(distinct r.valueView)
-            when 'function' then group_concat(distinct r.valueFunction)
-            when 'procedure' then group_concat(distinct r.valueProcedure)
+            when 'mapping' then group_concat(distinct jValueList.value)
+            else group_concat(distinct r.value)
             end
         , ''
         ) value,
@@ -316,7 +305,7 @@ select  r.keyName, r.groupSeq, r.seq, min(r.depth) depth, min(r.routeType) route
         , '') selectExists
 
 from    RouteTable r
-        left join json_each(r.valueMapping) jMapping
+        left join json_each(r.valueList) jValueList
         left join json_each(r.objects) jObjects
         left join json_each(r.tablesInsert) jTablesInsert
         left join json_each(r.tablesUpdate) jTablesUpdate
@@ -371,8 +360,8 @@ from    (
         select  r.keyName, r.groupSeq,
         
                 case r.routeType 
-                when 'mapping' then jMapping.value
-                when 'method' then r.valueMethod
+                when 'mapping' then jValueList.value
+                else r.value
                 end start,
         
                 case when r.routeType in ('xml', 'view', 'function', 'procedure') then
@@ -387,12 +376,12 @@ from    (
                     end
                 end type,
 
-                nullif(r.valueView, '') valueView,
-                nullif(r.valueFunction, '') valueFunction,
-                nullif(r.valueProcedure, '') valueProcedure
+                nullif(case when r.routeType = 'view' then r.value end, '') valueView,
+                nullif(case when r.routeType = 'function' then r.value end, '') valueFunction,
+                nullif(case when r.routeType = 'procedure' then r.value end, '') valueProcedure
 
         from    RouteTable r
-                left join json_each(r.valueMapping) jMapping
+                left join json_each(r.valueList) jValueList
                 left join AllTables a
                 on r.keyName = a.keyName
                 and r.groupSeq = a.groupSeq
@@ -410,15 +399,15 @@ as
 select  r.keyName, r.groupSeq, r.seq, min(r.depth) depth, min(r.routeType) routeType,
         ifnull(
             case routeType
-            when 'mapping' then group_concat(distinct jMapping.value)
-            when 'method' then group_concat(distinct r.valueMethod)
+            when 'mapping' then group_concat(distinct jValueList.value)
             when 'jsp' then group_concat(distinct jJsps.value)
+            else group_concat(distinct r.value)
             end
         , ''
         ) value
 
 from    RouteJsp r
-        left join json_each(r.valueMapping) jMapping
+        left join json_each(r.valueList) jValueList
         left join json_each(r.jsps) jJsps
 
 group by r.keyName, r.groupSeq, r.seq;
@@ -444,15 +433,15 @@ from    (
         select  r.keyName, r.groupSeq,
         
                 case routeType 
-                when 'mapping' then jMapping.value
-                when 'method' then r.valueMethod
+                when 'mapping' then jValueList.value
+                else r.value
                 end start,
         
                 case routeType
                 when 'jsp' then jJsp.value
                 end jsps
         from    RouteJsp r
-                left join json_each(r.valueMapping) jMapping
+                left join json_each(r.valueList) jValueList
                 left join json_each(r.jsps) jJsp
         where   r.seq = 0 and r.routeType in ('mapping', 'method')
                 or r.routeType in ('jsp')
@@ -476,19 +465,7 @@ group by f.keyName, f.className, json_extract(jVn.value, '$.name');
 create view vRouteBatch
 as
 select  r.keyName, r.groupSeq, r.seq, min(r.depth) depth, min(r.routeType) routeType,
-        ifnull(
-            case routeType
-            when 'job' then group_concat(distinct r.valueJob)
-            when 'step' then group_concat(distinct r.valueStep)
-            when 'method' then group_concat(distinct r.valueMethod)
-            when 'xml' then group_concat(distinct r.valueXml)
-            when 'view' then group_concat(distinct r.valueView)
-            when 'function' then group_concat(distinct r.valueFunction)
-            when 'procedure' then group_concat(distinct r.valueProcedure)
-            when 'error' then group_concat(distinct r.valueError)
-            end
-        , ''
-        ) value,
+        ifnull(group_concat(distinct r.value), '') value,
 
         ifnull(
             case when routeType in ('xml', 'view', 'function', 'procedure') then
@@ -576,7 +553,7 @@ from    (
         select  r.keyName, r.groupSeq,
         
                 case r.routeType 
-                when 'job' then r.valueJob
+                when 'job' then r.value
                 end start,
         
                 case when r.routeType in ('xml', 'view', 'function', 'procedure') then
@@ -591,9 +568,9 @@ from    (
                     end
                 end type,
 
-                nullif(r.valueView, '') valueView,
-                nullif(r.valueFunction, '') valueFunction,
-                nullif(r.valueProcedure, '') valueProcedure
+                nullif(case when routeType = 'view' then r.value end, '') valueView,
+                nullif(case when routeType = 'function' then r.value end, '') valueFunction,
+                nullif(case when routeType = 'procedure' then r.value end, '') valueProcedure
 
         from    RouteBatch r
                 left join AllTables a

@@ -12,20 +12,12 @@ import {
   getFirstPath,
   getAbsolutePathByDotDot,
 } from './util';
-import { SqlTemplate } from '../common/sqliteHelper';
 import { config } from '../config/config';
-import { configReader } from '../config/configReader';
-import { readdirSync, existsSync, statSync } from 'fs';
-import { resolve } from 'path';
-import betterSqlite3 from 'better-sqlite3';
-import { runInsertToDbFirst } from './message';
 import { getDbPath } from './common';
-import tCache from '../sqlTemplate/TCache';
-import tXmlInfo from '../sqlTemplate/TXmlInfo';
 import tJspInfo from '../sqlTemplate/TJspInfo';
 import tCommon from '../sqlTemplate/TCommon';
 import { getFindsByClassPathClassNameFromDb } from './classHelper';
-import { getStartingToJsps } from './traceHelper';
+import { getStartingToJsps, setGroupSeqAndSeqParent } from './traceHelper';
 
 /** not starts with 'jsp' */
 export type JspView = {
@@ -132,11 +124,7 @@ export function insertRouteJspKeyName() {
     console.log(`getStartingToJsps`);
     const routesAll = getStartingToJsps(keyName, findsStarting, jspDirectory, config.startingPoint);
 
-    const routesCur = routesAll
-      .map((routes, i) => {
-        return routes.map((route) => ({ groupSeq: i, ...route }));
-      })
-      .flat();
+    const routesCur = setGroupSeqAndSeqParent(routesAll);
     if (!routesCur.length) {
       continue;
     }

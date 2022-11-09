@@ -4,7 +4,7 @@ import { trims, trimEnd, trim } from './util';
 import { config } from '../config/config';
 import { runInsertToDbFirst } from './message';
 import { getDbPath } from './common';
-import { getStartingToObjects } from './traceHelper';
+import { getStartingToObjects, setGroupSeqAndSeqParent } from './traceHelper';
 import tClassInfo from '../sqlTemplate/TClassInfo';
 import tCommon from '../sqlTemplate/TCommon';
 import tCache from '../sqlTemplate/TCache';
@@ -1095,11 +1095,7 @@ export function insertRouteTableKeyName() {
       config.startingPoint
     );
 
-    const routesCur = routesAll
-      .map((routes, i) => {
-        return routes.map((route) => ({ groupSeq: i, ...route }));
-      })
-      .flat();
+    const routesCur = setGroupSeqAndSeqParent(routesAll);
     if (!routesCur.length) {
       continue;
     }
