@@ -385,33 +385,56 @@ function getCallerInfos2(
     }
   }
 
-  const rangeBrace = range.filter((v, i) => i > posLBrace && i < posRBrace);
-
   let stringLiteral = '';
-  for (let i = 0; i < rangeBrace.length; i++) {
-    const { paths, image } = rangeBrace[i];
-    const lBraceInnerFound = endsWith(paths, 'LBrace');
-    if (lBraceInnerFound) {
-      const posLBraceInner = i;
-      const posRBraceInner = getRBracePosition(rangeBrace, posLBraceInner);
-
-      // Not calling getNewClass here because no such case yet
-      // ex: (new BatchUtil(this)).insertJob((new BatchUtil(this)).getJobInfo());
-
-      const callersInner = getCallerInfos2(cstSimple, rangeBrace, vars, 0, posRBraceInner);
-      callers = callers.concat(callersInner);
-      i = posRBraceInner;
-    }
-    if (endsWith(paths, 'StringLiteral') && image) {
-      stringLiteral = trims(image, ['"']);
-    }
+  const { paths: pathsNext, image: imageNext } = range[posLBrace + 1];
+  if (endsWith(pathsNext, 'StringLiteral') && imageNext) {
+    stringLiteral = trims(imageNext, ['"']);
   }
-
-  const parameterCount = getParameterCount(cstSimple, rangeBrace, false);
+  const rangeInBrace = range.filter((v, i) => i > posLBrace && i < posRBrace);
+  const parameterCount = getParameterCount(cstSimple, rangeInBrace, false);
 
   if (methodName) {
     callers.push({ typeName, instanceName, methodName, stringLiteral, parameterCount });
   }
+
+  let posStart2 = posLBrace + 1;
+  while (true) {
+    const posLBrace2 = range.findIndex(({ paths }, i) => i >= posStart2 && i < posRBrace && endsWith(paths, 'LBrace'));
+    if (posLBrace2 === -1) break;
+
+    const posRBrace2 = getRBracePosition(range, posLBrace2);
+    const callersInner = getCallerInfos2(cstSimple, range, vars, posStart2, posRBrace2, newClassName);
+    callers = callers.concat(callersInner);
+    posStart2 = posRBrace2 + 1;
+  }
+
+  // const rangeBrace = range.filter((v, i) => i > posLBrace && i < posRBrace);
+
+  // let stringLiteral = '';
+  // for (let i = 0; i < rangeBrace.length; i++) {
+  //   const { paths, image } = rangeBrace[i];
+  //   const lBraceInnerFound = endsWith(paths, 'LBrace');
+  //   if (lBraceInnerFound) {
+  //     const posLBraceInner = i;
+  //     const posRBraceInner = getRBracePosition(rangeBrace, posLBraceInner);
+
+  //     // Not calling getNewClass here because no such case yet
+  //     // ex: (new BatchUtil(this)).insertJob((new BatchUtil(this)).getJobInfo());
+
+  //     const callersInner = getCallerInfos2(cstSimple, rangeBrace, vars, 0, posRBraceInner);
+  //     callers = callers.concat(callersInner);
+  //     i = posRBraceInner;
+  //   }
+  //   if (endsWith(paths, 'StringLiteral') && image) {
+  //     stringLiteral = trims(image, ['"']);
+  //   }
+  // }
+
+  // const parameterCount = getParameterCount(cstSimple, rangeBrace, false);
+
+  // if (methodName) {
+  //   callers.push({ typeName, instanceName, methodName, stringLiteral, parameterCount });
+  // }
 
   return callers;
 }
@@ -446,6 +469,7 @@ function getNewClass(
 function getCallerInfos(
   cstSimple: any,
   methodDecls: PathsAndImage[],
+  header: HeaderInfo,
   vars: VarInfo[],
   posLCurly: number,
   posRCurly: number
@@ -489,9 +513,13 @@ function getCallerInfos(
   const callersFiltered = callers.filter(
     (caller) =>
       !ignoresInstance.includes(caller.instanceName) &&
-      !ignoresInstanceMethod.some(
-        ([instance, method]) => instance === caller.instanceName && method === caller.methodName
-      )
+      !ignoresInstanceMethod.some(([instance, method]) => {
+        const callerInstanceNames = [header.name];
+        if (caller.instanceName) callerInstanceNames.push(caller.instanceName);
+        if (header.extendsName) callerInstanceNames.push(header.extendsName);
+
+        return callerInstanceNames.includes(instance) && method === caller.methodName;
+      })
   );
 
   return callersFiltered;
@@ -763,7 +791,12 @@ function getJspViews(methodDecls: PathsAndImage[], posLCurly: number, posRCurly:
   return jspViewsUnique;
 }
 
-function getMethods(cstSimple: any, pathsAndImageList: PathsAndImage[], vars: VarInfo[]): MethodInfo[] {
+function getMethods(
+  cstSimple: any,
+  pathsAndImageList: PathsAndImage[],
+  header: HeaderInfo,
+  vars: VarInfo[]
+): MethodInfo[] {
   const methodDecls = pathsAndImageList.filter(({ paths, image }) => includes(paths, 'methodDeclaration'));
 
   const methods: MethodInfo[] = [];
@@ -795,7 +828,7 @@ function getMethods(cstSimple: any, pathsAndImageList: PathsAndImage[], vars: Va
     } else if (endsWith(paths, 'LCurly') && methodName) {
       const posLCurly = i;
       const posRCurly = getRCurlyPosition(methodDecls, posLCurly);
-      callers = getCallerInfos(cstSimple, methodDecls, vars, posLCurly, posRCurly);
+      callers = getCallerInfos(cstSimple, methodDecls, header, vars, posLCurly, posRCurly);
       if (returnType === 'ModelAndView' || returnType === 'View') {
         jspViews = getJspViews(methodDecls, posLCurly, posRCurly);
       }
@@ -947,7 +980,7 @@ export function getClassInfo(fullPath: string): {
 
   const header = getHeaderInfo(classDeclaration);
   const vars = getVars(pathsAndImageList);
-  const methods = getMethods(classDeclaration, pathsAndImageList, vars);
+  const methods = getMethods(classDeclaration, pathsAndImageList, header, vars);
 
   return { header, vars, methods };
 }

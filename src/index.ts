@@ -4,6 +4,7 @@
 // * Unite to value from valueJob or valueStep...
 // Ignore unneeded route
 // Function to get all route used by specific table
+// Merge config of FO, BO and Core
 
 /*
 with tree as
@@ -107,38 +108,10 @@ function doTest() {
   //   console.log(ret.nodes);
   // }
   // --
-  // /*
-  // 0 Root
-  // 1 +-- Child1
-  // 2 +------ Child1-1
-  // 3 +------ Child1-2
-  // 4 +-- Child2
-  // 5 +------ Child2-2
-  // 6 +---------- Child2-2-1
-  // */
-  // const routes: RouteCommon[] = [];
-  // routes.push({ seq: routes.length, depth: 0, routeType: 'Root' });
-  // routes.push({ seq: routes.length, depth: 1, routeType: 'Child1' });
-  // routes.push({ seq: routes.length, depth: 2, routeType: 'Child1-1' });
-  // routes.push({ seq: routes.length, depth: 2, routeType: 'Child1-2' });
-  // routes.push({ seq: routes.length, depth: 1, routeType: 'Child2' });
-  // routes.push({ seq: routes.length, depth: 2, routeType: 'Child2-2' });
-  // routes.push({ seq: routes.length, depth: 3, routeType: 'Child2-2-1' });
-  // setSeqParent(routes, 0);
-  // console.log(routes);
-  // /*
-  // [
-  //   { seq: 0, depth: 0, routeType: 'Root' },
-  //   { seq: 1, depth: 1, routeType: 'Child1', seqParent: 0 },
-  //   { seq: 2, depth: 2, routeType: 'Child1-1', seqParent: 1 },
-  //   { seq: 3, depth: 2, routeType: 'Child1-2', seqParent: 1 },
-  //   { seq: 4, depth: 1, routeType: 'Child2', seqParent: 0 },
-  //   { seq: 5, depth: 2, routeType: 'Child2-2', seqParent: 4 },
-  //   { seq: 6, depth: 3, routeType: 'Child2-2-1', seqParent: 5 }
-  // ]
-  // */
+  const ret = getClassInfo('C:/source/trace-web-call/test/ParenthesisTest.java');
 }
 // doTest();
-insertToDb();
+// insertToDb();
+logCompared();
 // copyModifiedUntracked();
 // logCompared();

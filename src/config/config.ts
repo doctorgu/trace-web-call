@@ -1,4 +1,4 @@
 import { ConfigType } from './ConfigType';
-import { configWellness } from './template/configWellness';
+import { configComposite } from './template/configComposite';
 
-export const config: ConfigType = configWellness;
+export const config: ConfigType = configComposite;
