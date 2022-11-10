@@ -5,6 +5,7 @@ import { escapeDollar } from '../common/util';
 import { DbRow, SqlTemplate } from '../common/sqliteHelper';
 import { all, exec, run } from '../common/sqliteHelper';
 import { RouteBatch, RouteJsp, RouteTable, RouteTypeBatch, RouteTypeJsp, RouteTypeTable } from '../common/traceHelper';
+import { config } from '../config/config';
 
 class TCommon {
   initDb(sql: string): betterSqlite3.Database {
@@ -293,59 +294,41 @@ attach database '${pathDest}' as ${dbNameDest}`;
   }
 
   /** Delete all route that ends with method (not touch table) except starting point */
-  deleteNoNeedRouteTableRouteBatch(): betterSqlite3.Database {
+  deleteNoNeedRouteTableRouteBatch(): boolean {
+    const keyNames = config.path.source.main.map(({ keyName }) => keyName);
     const tables = ['RouteTable', 'RouteBatch'];
-    const sqls: string[] = [];
-    for (const table of tables) {
-      const sql = `
+
+    for (const keyName of keyNames) {
+      for (const table of tables) {
+        const sql = `
 with recursive t as
 (
-    select  keyName, groupSeq, seq, seqParent, routeType,
-            json_insert('[]', '$[#]', seq) path,
-            0 isLast,
-            '' keyNameLast, 0 groupSeqLast, '' pathLast,
-            '' routeTypeLast
+    select  keyName, groupSeq, seq, seqParent
     from    ${table}
-    where   seqParent = -1
+    where   routeType in ('xml', 'view', 'function', 'procedure', 'error')
+            and keyName = @keyName
     union all
-    select  c.keyName, c.groupSeq, c.seq, c.seqParent, c.routeType,
-            json_insert(p.path, '$[#]', c.seq) path,
-            case when c.seqParent is null then 1 else 0 end isLast,
-            case when c.seqParent is null then p.keyName else '' end keyNameLast,
-            case when c.seqParent is null then p.groupSeq else '' end groupSeqLast,
-            case when c.seqParent is null then p.path else '' end pathLast,
-            case when c.seqParent is null then p.routeType else '' end routeTypeLast            
-    from    t p
-            left join ${table} c
+    select  p.keyName, p.groupSeq, p.seq, p.seqParent
+    from    ${table} p
+            inner join t c
             on c.keyName = p.keyName
             and c.groupSeq = p.groupSeq
             and c.seqParent = p.seq
-    where   p.isLast = 0
-), need as
-(
-    select  t.keyNameLast, t.groupSeqLast, j.value seq
-    from    t
-            inner join json_each(t.pathLast) j
-    where   t.isLast = 1 and t.routeTypeLast in ('xml', 'view', 'function', 'procedure', 'error')
-), noNeed as
-(
-    select  r.keyName, r.groupSeq, r.seq
-    from    ${table} r
-            left join need t
-            on t.keyNameLast = r.keyName
-            and t.groupSeqLast = r.groupSeq
-            and t.seq = r.seq
-    where   t.seq is null
-            and r.seq > 0 -- keep starting
 )
-delete  
+select  keyName, groupSeq, seq, seqParent
 from    ${table}
-where   (keyName, groupSeq, seq) in
-        (select keyName, groupSeq, seq from noNeed)`;
-      sqls.push(sql);
+where   (keyName, groupSeq, seq, seqParent) not in
+        (
+            select  keyName, groupSeq, seq, seqParent
+            from    t
+        )
+        and keyName = @keyName
+        and seq > 0 -- keep starting point`;
+        run(configReader.db(), sql);
+      }
     }
 
-    return exec(configReader.db(), sqls.join(';'));
+    return true;
   }
 }
 export default new TCommon();

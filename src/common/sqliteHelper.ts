@@ -1,4 +1,5 @@
 import betterSqlite3, { SqliteError } from 'better-sqlite3';
+import { format } from 'date-fns';
 import { writeFileSync } from 'fs';
 import { resolve } from 'path';
 import { config } from '../config/config';
@@ -8,8 +9,9 @@ import { escapeDollar, escapeRegexp } from './util';
 export type DbRow = { [key: string]: any };
 
 function writeAndError(ex: any, sql: string, params: DbRow = {}): any {
+  const yyyyMMdd = format(new Date(), 'yyyyMMdd');
   const msg = `${sql}\n${JSON.stringify(params)}\n${ex?.code} ${ex?.message}\n${ex?.stack}`;
-  writeFileSync(resolve(config.path.logDirectory, 'exception.log'), msg);
+  writeFileSync(resolve(config.path.logDirectory, `${yyyyMMdd}exception.log`), msg);
   throw new Error(msg);
 }
 
