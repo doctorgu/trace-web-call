@@ -315,7 +315,7 @@ with recursive t as
             and c.groupSeq = p.groupSeq
             and c.seqParent = p.seq
 )
-select  keyName, groupSeq, seq, seqParent
+delete  
 from    ${table}
 where   (keyName, groupSeq, seq, seqParent) not in
         (
