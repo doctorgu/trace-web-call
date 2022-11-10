@@ -152,6 +152,13 @@ export const ignoresImage = new Set(['int', 'float', 'char', 'boolean', 'string'
 export const ignoresInstance = ['Date', 'String', 'Integer'];
 
 export const ignoresInstanceMethod = [
-  ['BaseController', 'getRequest'],
-  ['BaseController', 'getSession'],
+  { className: 'BaseController', method: 'getMember', parameterCount: 0 },
+  { className: 'BaseController', method: 'getMember', parameterCount: 1 },
+  { className: 'BaseController', method: 'getMemberId', parameterCount: 0 },
+  { className: 'BaseController', method: 'getRequest', parameterCount: 0 },
+  { className: 'BaseController', method: 'getSession', parameterCount: 0 },
+  { className: 'BaseController', method: 'getClientIp', parameterCount: 0 },
+  { className: 'BaseController', method: 'getReferCode', parameterCount: 0 },
+  { className: 'HOrderCommService', method: 'insertLog', parameterCount: 3 },
+  { className: 'CUAMemberRegistServiceImpl', method: 'getReqNum', parameterCount: 1 },
 ];

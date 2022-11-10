@@ -32,6 +32,9 @@ drop view if exists vRouteBatch;
 drop view if exists vRouteBatchIndent;
 drop view if exists vBatchToObject;
 
+drop view if exists vObjectToStart;
+drop view if exists vObjectToBatch;
+
 -- strict removed because SQLiteStudio does not support it.
 
 create table KeyInfo (
@@ -330,7 +333,7 @@ from    vRouteTable;
 create view vStartToObject
 as
 with 
-AllTables as
+allTables as
 (
     select  keyName, groupSeq, seq, 'I' type, r.selectExists, jtables.value tables
     from    RouteTable r
@@ -380,7 +383,7 @@ from    (
 
         from    RouteTable r
                 left join json_each(r.valueList) jValueList
-                left join AllTables a
+                left join allTables a
                 on r.keyName = a.keyName
                 and r.groupSeq = a.groupSeq
                 and r.seq = a.seq
@@ -523,7 +526,7 @@ from    vRouteBatch;
 create view vBatchToObject
 as
 with 
-AllTables as
+allTables as
 (
     select  keyName, groupSeq, seq, 'I' type, r.selectExists, jtables.value tables
     from    RouteBatch r
@@ -571,7 +574,7 @@ from    (
                 nullif(case when routeType = 'procedure' then r.value end, '') valueProcedure
 
         from    RouteBatch r
-                left join AllTables a
+                left join allTables a
                 on r.keyName = a.keyName
                 and r.groupSeq = a.groupSeq
                 and r.seq = a.seq
@@ -581,4 +584,129 @@ from    (
         order by r.keyName, r.groupSeq, tables
         )
 group by keyName, groupSeq;
+
+create view vObjectToStart
+as
+/*
+select  *
+from    vObjectToStart
+where   objects = 'HDHS.CM_GA_MST'
+order by keyName, groupSeq, objects, seq desc;
+*/
+with recursive t as
+(
+    select  r.keyName, r.groupSeq, r.seq, r.seqParent, 0 depth,
+            r.routeType,
+            r.value,
+            r.value valueIndent,
+            t.objects
+    from    RouteTable r
+            inner join
+            (
+                select  keyName, groupSeq, seq, jobjects.value objects
+                from    RouteTable r
+                        inner join json_each(r.objects) jobjects
+                union all
+                select  keyName, groupSeq, seq, jtables.value objects
+                from    RouteTable r
+                        inner join json_each(r.tablesInsert) jtables
+                union all
+                select  keyName, groupSeq, seq, jtables.value objects
+                from    RouteTable r
+                        inner join json_each(r.tablesUpdate) jtables
+                union all
+                select  keyName, groupSeq, seq, jtables.value objects
+                from    RouteTable r
+                        inner join json_each(r.tablesDelete) jtables
+                union all
+                select  keyName, groupSeq, seq, jtables.value objects
+                from    RouteTable r
+                        inner join json_each(r.tablesOther) jtables
+            ) t
+            on t.keyName = r.keyName and t.groupSeq = r.groupSeq and t.seq = r.seq
+    union all
+    select  p.keyName, p.groupSeq, p.seq, p.seqParent, c.depth + 1 depth,
+            p.routeType,
+            case when p.value != '' then
+                p.value
+            else
+                json_extract(p.valueList, '$[0]') || ifnull(',' || json_extract(p.valueList, '$[1]'), '')
+            end value,
+
+            replace(substring(printf('%0' || ((c.depth + 1) * 4) || 'd', 0) || '+-- ', 5), '0', ' ')
+            ||
+            case when p.value != '' then
+                p.value
+            else
+                json_extract(p.valueList, '$[0]') || ifnull(',' || json_extract(p.valueList, '$[1]'), '')
+            end valueIndent,
+            
+            c.objects
+    from    t c
+            inner join RouteTable p
+            on p.keyName = c.keyName
+            and p.groupSeq = c.groupSeq
+            and p.seq = c.seqParent
+)
+select  distinct
+        t.keyName, t.groupSeq, t.seq, t.seqParent, t.depth, t.objects, t.routeType, t.value, t.valueIndent
+from    t
+;
+
+create view vObjectToBatch
+as
+/*
+select  *
+from    vObjectToBatch
+where   objects = 'HDHS.CM_GA_MST'
+order by keyName, groupSeq, objects, seq desc;
+*/
+with recursive t as
+(
+    select  r.keyName, r.groupSeq, r.seq, r.seqParent, 0 depth,
+            r.routeType,
+            r.value,
+            r.value valueIndent,
+            t.objects
+    from    RouteBatch r
+            inner join
+            (
+                select  keyName, groupSeq, seq, jobjects.value objects
+                from    RouteBatch r
+                        inner join json_each(r.objects) jobjects
+                union all
+                select  keyName, groupSeq, seq, jtables.value objects
+                from    RouteBatch r
+                        inner join json_each(r.tablesInsert) jtables
+                union all
+                select  keyName, groupSeq, seq, jtables.value objects
+                from    RouteBatch r
+                        inner join json_each(r.tablesUpdate) jtables
+                union all
+                select  keyName, groupSeq, seq, jtables.value objects
+                from    RouteBatch r
+                        inner join json_each(r.tablesDelete) jtables
+                union all
+                select  keyName, groupSeq, seq, jtables.value objects
+                from    RouteBatch r
+                        inner join json_each(r.tablesOther) jtables
+            ) t
+            on t.keyName = r.keyName and t.groupSeq = r.groupSeq and t.seq = r.seq
+    union all
+    select  p.keyName, p.groupSeq, p.seq, p.seqParent, c.depth + 1 depth,
+            p.routeType,
+            p.value,
+            replace(substring(printf('%0' || ((c.depth + 1) * 4) || 'd', 0) || '+-- ', 5), '0', ' ')
+            || p.value valueIndent,
+            c.objects
+    from    t c
+            inner join RouteBatch p
+            on p.keyName = c.keyName
+            and p.groupSeq = c.groupSeq
+            and p.seq = c.seqParent
+)
+select  distinct
+        t.keyName, t.groupSeq, t.seq, t.seqParent, t.depth, t.objects, t.routeType, t.value, t.valueIndent
+from    t
+;
 `;

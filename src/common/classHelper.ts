@@ -513,12 +513,16 @@ function getCallerInfos(
   const callersFiltered = callers.filter(
     (caller) =>
       !ignoresInstance.includes(caller.instanceName) &&
-      !ignoresInstanceMethod.some(([instance, method]) => {
-        const callerInstanceNames = [header.name];
-        if (caller.instanceName) callerInstanceNames.push(caller.instanceName);
-        if (header.extendsName) callerInstanceNames.push(header.extendsName);
+      !ignoresInstanceMethod.some(({ className, method, parameterCount }) => {
+        const callerClassNames = [header.name];
+        if (caller.typeName) callerClassNames.push(caller.typeName);
+        if (header.extendsName) callerClassNames.push(header.extendsName);
 
-        return callerInstanceNames.includes(instance) && method === caller.methodName;
+        return (
+          callerClassNames.includes(className) &&
+          method === caller.methodName &&
+          parameterCount === caller.parameterCount
+        );
       })
   );
 

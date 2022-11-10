@@ -111,7 +111,7 @@ function doTest() {
   const ret = getClassInfo('C:/source/trace-web-call/test/ParenthesisTest.java');
 }
 // doTest();
-// insertToDb();
-logCompared();
+insertToDb();
+// logCompared();
 // copyModifiedUntracked();
 // logCompared();

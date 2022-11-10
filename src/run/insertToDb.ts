@@ -27,6 +27,7 @@ import { sqlInit } from '../config/sql';
 import tCommon from '../sqlTemplate/TCommon';
 import { insertJspInfo, insertRouteJspKeyName, JspInfo } from '../common/jspHelper';
 import { insertBatchInfo, insertRouteBatchKeyName } from '../common/batchHelper';
+import { deleteNoNeedRouteTableRouteBatch } from '../common/common';
 
 function insertJspClassXml(
   rootDir: string,
@@ -232,4 +233,7 @@ export function insertToDb() {
 
   insertRouteBatchKeyName();
   startTime = logTimeMsg(startTime, `insertRouteBatchKeyName`);
+
+  deleteNoNeedRouteTableRouteBatch();
+  startTime = logTimeMsg(startTime, `deleteNoNeedRouteTableRouteBatch`);
 }
