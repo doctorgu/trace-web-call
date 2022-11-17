@@ -599,27 +599,27 @@ with recursive t as
             r.routeType,
             r.value,
             r.value valueIndent,
-            t.objects
+            t.value name
     from    RouteTable r
             inner join
             (
-                select  keyName, groupSeq, seq, jobjects.value objects
+                select  keyName, groupSeq, seq, jobjects.value
                 from    RouteTable r
                         inner join json_each(r.objects) jobjects
                 union all
-                select  keyName, groupSeq, seq, jtables.value objects
+                select  keyName, groupSeq, seq, jtables.value
                 from    RouteTable r
                         inner join json_each(r.tablesInsert) jtables
                 union all
-                select  keyName, groupSeq, seq, jtables.value objects
+                select  keyName, groupSeq, seq, jtables.value
                 from    RouteTable r
                         inner join json_each(r.tablesUpdate) jtables
                 union all
-                select  keyName, groupSeq, seq, jtables.value objects
+                select  keyName, groupSeq, seq, jtables.value
                 from    RouteTable r
                         inner join json_each(r.tablesDelete) jtables
                 union all
-                select  keyName, groupSeq, seq, jtables.value objects
+                select  keyName, groupSeq, seq, jtables.value
                 from    RouteTable r
                         inner join json_each(r.tablesOther) jtables
             ) t
@@ -641,7 +641,7 @@ with recursive t as
                 json_extract(p.valueList, '$[0]') || ifnull(',' || json_extract(p.valueList, '$[1]'), '')
             end valueIndent,
             
-            c.objects
+            c.name
     from    t c
             inner join RouteTable p
             on p.keyName = c.keyName
@@ -649,7 +649,7 @@ with recursive t as
             and p.seq = c.seqParent
 )
 select  distinct
-        t.keyName, t.groupSeq, t.seq, t.seqParent, t.depth, t.objects, t.routeType, t.value, t.valueIndent
+        t.keyName, t.groupSeq, t.seq, t.seqParent, t.depth, t.name, t.routeType, t.value, t.valueIndent
 from    t
 ;
 
@@ -667,27 +667,27 @@ with recursive t as
             r.routeType,
             r.value,
             r.value valueIndent,
-            t.objects
+            t.value name
     from    RouteBatch r
             inner join
             (
-                select  keyName, groupSeq, seq, jobjects.value objects
+                select  keyName, groupSeq, seq, jobjects.value
                 from    RouteBatch r
                         inner join json_each(r.objects) jobjects
                 union all
-                select  keyName, groupSeq, seq, jtables.value objects
+                select  keyName, groupSeq, seq, jtables.value
                 from    RouteBatch r
                         inner join json_each(r.tablesInsert) jtables
                 union all
-                select  keyName, groupSeq, seq, jtables.value objects
+                select  keyName, groupSeq, seq, jtables.value
                 from    RouteBatch r
                         inner join json_each(r.tablesUpdate) jtables
                 union all
-                select  keyName, groupSeq, seq, jtables.value objects
+                select  keyName, groupSeq, seq, jtables.value
                 from    RouteBatch r
                         inner join json_each(r.tablesDelete) jtables
                 union all
-                select  keyName, groupSeq, seq, jtables.value objects
+                select  keyName, groupSeq, seq, jtables.value
                 from    RouteBatch r
                         inner join json_each(r.tablesOther) jtables
             ) t
@@ -698,7 +698,7 @@ with recursive t as
             p.value,
             replace(substring(printf('%0' || ((c.depth + 1) * 4) || 'd', 0) || '+-- ', 5), '0', ' ')
             || p.value valueIndent,
-            c.objects
+            c.name
     from    t c
             inner join RouteBatch p
             on p.keyName = c.keyName
@@ -706,7 +706,7 @@ with recursive t as
             and p.seq = c.seqParent
 )
 select  distinct
-        t.keyName, t.groupSeq, t.seq, t.seqParent, t.depth, t.objects, t.routeType, t.value, t.valueIndent
+        t.keyName, t.groupSeq, t.seq, t.seqParent, t.depth, t.name, t.routeType, t.value, t.valueIndent
 from    t
 ;
 `;
