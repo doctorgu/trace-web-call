@@ -316,9 +316,9 @@ export function getRBracePosition(pathsAndImages: PathsAndImage[], posLBrace: nu
   throw new Error(`RBrace not found after ${posLBrace} index.`);
 }
 
-function getPathsAndImageListFromSimpleCst2(parent: any, paths: string[], pathsAndImageList: PathsAndImage[]): void {
+function getPathsAndImages(parent: any, paths: string[], pathsAndImages: PathsAndImage[]): void {
   if (typeof parent === 'string') {
-    pathsAndImageList.push({ paths, image: parent });
+    pathsAndImages.push({ paths, image: parent });
     return;
   }
 
@@ -330,7 +330,7 @@ function getPathsAndImageListFromSimpleCst2(parent: any, paths: string[], pathsA
 
     const pathsNew = [...paths];
     pathsNew.push(key);
-    getPathsAndImageListFromSimpleCst2(prop, pathsNew, pathsAndImageList);
+    getPathsAndImages(prop, pathsNew, pathsAndImages);
   }
 }
 
@@ -406,12 +406,11 @@ export function reorderBinOpCommaColon(pathsAndImageList: PathsAndImage[]): Path
   }
   return list;
 }
-export function getPathsAndImagesFromSimpleCst(parent: any): PathsAndImage[] {
+export function getPathsAndImagesFromCstSimple(cstSimple: any): PathsAndImage[] {
   const paths: string[] = [];
-  const pathsAndImageList: PathsAndImage[] = [];
+  const pathsAndImages: PathsAndImage[] = [];
+  getPathsAndImages(cstSimple, paths, pathsAndImages);
 
-  getPathsAndImageListFromSimpleCst2(parent, paths, pathsAndImageList);
-
-  const pathsAndImageListOrdered = reorderBinOpCommaColon(pathsAndImageList);
+  const pathsAndImageListOrdered = reorderBinOpCommaColon(pathsAndImages);
   return pathsAndImageListOrdered;
 }

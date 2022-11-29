@@ -279,23 +279,30 @@ export function testWildcardFileName(pattern: string, fileName: string, ignoreCa
  *
  * for (const fullPath of [...findFiles(rootDir)]) { }
  */
-export function* findFiles(rootDir: string, pattern: string | RegExp = ''): string | any | undefined {
+export function* findFiles(
+  rootDir: string,
+  pattern: string | RegExp = '',
+  convertToSlash = false
+): string | any | undefined {
+  function getFullPath(fullPath: string): string {
+    return convertToSlash ? fullPath.replace(/\\/g, '/') : fullPath;
+  }
   const files = readdirSync(rootDir);
 
   for (let i = 0; i < files.length; i++) {
     const file = files[i];
     const fullPath = resolve(rootDir, file);
     if (statSync(fullPath).isDirectory()) {
-      yield* findFiles(fullPath, pattern);
+      yield* findFiles(fullPath, pattern, convertToSlash);
     } else {
       if (pattern) {
         if (typeof pattern === 'string') {
-          if (testWildcardFileName(pattern, file)) yield fullPath;
+          if (testWildcardFileName(pattern, file)) yield getFullPath(fullPath);
         } else {
-          if (pattern.test(file)) yield fullPath;
+          if (pattern.test(file)) yield getFullPath(fullPath);
         }
       } else {
-        yield fullPath;
+        yield getFullPath(fullPath);
       }
     }
   }

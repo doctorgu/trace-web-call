@@ -30,6 +30,8 @@ import {
   ObjectInfo,
   ObjectType,
 } from './batisHelper';
+import { MethodInfoFind } from './classHelper';
+import { rowToObjectChild } from './traceHelper';
 
 export type XmlNodeInfo = {
   id: string;
@@ -314,6 +316,20 @@ export function getXmlInfoFromDb(xmlPath: string): XmlInfo | null {
   );
 
   return { xmlPath, namespace, nodes };
+}
+
+export function getXmlNodeInfoFindByNamespaceId(
+  keyName: string,
+  directoriesXml: string[],
+  stringLiteral: string
+): ({ xmlPath: string } & ObjectChild) | null {
+  const row = tXmlInfo.selectXmlNodeInfoFindByNamespaceId(keyName, directoriesXml, stringLiteral);
+  if (!row) {
+    return null;
+  }
+
+  const { xmlPath } = row;
+  return { xmlPath, ...rowToObjectChild(row) };
 }
 
 export function insertUsersToDb(): Set<string> {

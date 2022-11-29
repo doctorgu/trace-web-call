@@ -23,7 +23,7 @@ export function get(db: betterSqlite3.Database, sql: string, params: DbRow = {})
   }
 }
 
-export function pluck(db: betterSqlite3.Database, sql: string, params: DbRow = {}): DbRow[] {
+export function pluck(db: betterSqlite3.Database, sql: string, params: DbRow = {}): any {
   try {
     return db.prepare(sql).pluck().get(params);
   } catch (ex) {

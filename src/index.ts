@@ -34,12 +34,12 @@ select * from vRouteTableIndent where keyName = 'bz-store-api-bizgroup' and grou
 import { writeFileSync } from 'fs';
 import { resolve } from 'path';
 import { config } from './config/config';
-import { getClassInfo, getCstClassDeclaration, getFindsByClassPathClassNameFromDb } from './common/classHelper';
-import { getCstSimple } from './common/cstSimpleHelper';
+import { getClassInfo, getFindsByClassPathClassNameFromDb } from './common/classHelper';
+import { convertCstWithLocationToCstSimple, getCstWithLocation } from './common/cstSimpleHelper';
 import { getStartingToObjects, RouteCommon, RouteTable, setSeqParent } from './common/traceHelper';
 import { findFiles, readFileSyncUtf16le, removeCommentLiteralSql } from './common/util';
 import { insertToDb } from './run/insertToDb';
-import { getDbPath } from './common/common';
+import { deleteNoNeedRouteTableRouteBatch, getDbPath } from './common/common';
 import { getJspIncludes } from './common/jspHelper';
 import { logCompared } from './run/logCompared';
 import { copyModifiedUntracked } from './run/copyModifiedUntracked';
@@ -50,8 +50,9 @@ import {
   getXmlInfoXmlNodeInfo,
   insertTablesToDb,
 } from './common/sqlMapperHelper';
-import { getPathsAndImagesFromSimpleCst } from './common/cstHelper';
+import { getPathsAndImagesFromCstSimple } from './common/cstHelper';
 import { insertBatchInfo } from './common/batchHelper';
+import { copyFile } from './run/tmpLogDirectory';
 
 function doTest() {
   // const ret = getClassInfo('C:/source/trace-web-call/test/AnnotationTestController.java');
@@ -63,13 +64,13 @@ function doTest() {
   //   console.log(callers);
   // }
   // --
-  // const { methods } = getClassInfo('./test/jspTest/JspTestController.java');
-  // const { methods } = getClassInfo('./test/SeparatorTest.java');
-  // const { methods } = getClassInfo('./test/jspModelAndView/ModelAndViewTestController.java');
-  // for (let nMethod = 0; nMethod < methods.length; nMethod++) {
-  //   const { jspViews } = methods[nMethod];
-  //   console.log(jspViews);
-  // }
+  //   const { methods } = getClassInfo('./test/jspTest/JspTestController.java');
+  //   const { methods } = getClassInfo('./test/jspModelAndView/ModelAndViewTestController.java');
+  // const cstWithLocation = getCstWithLocation('c:/source/trace-web-call/test/SeparatorTest.java');
+  // const cstSimple = convertCstWithLocationToCstSimple(cstWithLocation);
+  // const pathsAndImages = getPathsAndImagesFromCstSimple(cstSimple);
+  // const ret = getClassInfo('c:/source/trace-web-call/test/SeparatorTest.java');
+  // console.log(ret);
   // --
   // const cstSimple = getCstSimple('./test/VariableHistoryTest.java');
   // const classDeclaration = getCstClassDeclaration(cstSimple);
@@ -108,10 +109,13 @@ function doTest() {
   //   console.log(ret.nodes);
   // }
   // --
-  const ret = getClassInfo('C:/source/trace-web-call/test/ParenthesisTest.java');
+  //   const ret = getClassInfo('C:/source/trace-web-call/test/ParenthesisTest.java');
+  // --
+  copyFile('c:/source/hmall/hdhs_hmall/hmall_pc_was/src/main/java/hmall/cp/cpa/web/CPACsegLnbSrvyController.java');
 }
-// doTest();
-insertToDb();
+doTest();
+// insertToDb();
+// deleteNoNeedRouteTableRouteBatch();
 // logCompared();
 // copyModifiedUntracked();
 // logCompared();

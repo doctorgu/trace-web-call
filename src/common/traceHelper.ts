@@ -17,6 +17,7 @@ import {
   getBeanSqlFromDb,
   getBeanTargetObjectFromDb,
 } from './batchHelper';
+import { getXmlNodeInfoFindByNamespaceId } from './sqlMapperHelper';
 
 export type RouteCommon = {
   groupSeq?: number; // Only used for inserting to table
@@ -142,12 +143,13 @@ function getObjectByStringLiteral(
   // User.updateInfo
   // User.UserDao.updateInfo
 
-  const row = tXmlInfo.selectXmlNodeInfoFindByNamespaceId(keyName, directoriesXml, stringLiteral);
-  if (!row) {
+  const ret = getXmlNodeInfoFindByNamespaceId(keyName, directoriesXml, stringLiteral);
+  if (!ret) {
     return false;
   }
 
-  const { objects, tablesInsert, tablesUpdate, tablesDelete, tablesOther, selectExists } = rowToObjectChild(row);
+  const { objects, tablesInsert, tablesUpdate, tablesDelete, tablesOther, selectExists } = ret;
+
   const routeXml: RouteTable<'xml'> = {
     seq: routes.length,
     depth,

@@ -43,7 +43,7 @@ create index IxObjects1 on Objects (name);
 create table CstSimple (
     path text not null,
     mtime timestamp not null,
-    cstSimple text not null,
+    cstWithLocation text not null,
     insertTime timestamp not null default current_timestamp,
     primary key (path, mtime)
 );

@@ -153,22 +153,26 @@ values
     return exec(configReader.dbCache(), sql);
   }
 
-  selectCstSimpleByMtime(path: string, mtime: Date): any {
+  selectCstWithLocationByMtime(path: string, mtime: Date): any {
     const sql = `
-select  cstSimple
+select  cstWithLocation
 from    CstSimple
 where   path = @path
         and mtime = datetime(@mtime)`;
     return pluck(configReader.dbCache(), sql, { path, mtime: mtime.toISOString() });
   }
 
-  insertCstSimple(path: string, mtime: Date, cstSimple: any): betterSqlite3.RunResult {
+  insertCstSimple(path: string, mtime: Date, cstWithLocation: any): betterSqlite3.RunResult {
     const sql = `
 insert into CstSimple
-  (path, mtime, cstSimple)
+  (path, mtime, cstWithLocation)
 values
-  (@path, datetime(@mtime), @cstSimple)`;
-    return run(configReader.dbCache(), sql, { path, mtime: mtime.toISOString(), cstSimple: JSON.stringify(cstSimple) });
+  (@path, datetime(@mtime), @cstWithLocation)`;
+    return run(configReader.dbCache(), sql, {
+      path,
+      mtime: mtime.toISOString(),
+      cstWithLocation: JSON.stringify(cstWithLocation),
+    });
   }
 
   truncateUsers() {

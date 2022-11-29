@@ -27,7 +27,7 @@ where   xmlPath = @xmlPath
 
   selectXmlNodeInfoFindByNamespaceId(keyName: string, xmlPathsLike: string[], id: string): any {
     const sql = `
-select  xmlPath, id, tagName, params,
+select  xmlPath,
         objects, tablesInsert, tablesUpdate, tablesDelete, tablesOther, selectExists
 from    XmlNodeInfoFind
 where   keyName = @keyName
@@ -35,7 +35,7 @@ where   keyName = @keyName
         and
         (${xmlPathsLike.map((xmlPathLike) => `xmlPath like '${xmlPathLike}' || '%'`).join(' or ')})
 union all
-select  xmlPath, id, tagName, params,
+select  xmlPath,
         objects, tablesInsert, tablesUpdate, tablesDelete, tablesOther, selectExists
 from    XmlNodeInfoFind
 where   keyName = @keyName

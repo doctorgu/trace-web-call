@@ -18,7 +18,7 @@ import {
   includes,
   includes2,
   execImages,
-  getPathsAndImagesFromSimpleCst,
+  getPathsAndImagesFromCstSimple,
   indexOf,
   rangeOfImages,
   lastRangeOfImages,
@@ -35,7 +35,7 @@ import {
   ignoresInstanceMethod,
   ValueType,
 } from '../config/configFunc';
-import { getCstSimple, PathsAndImage } from './cstSimpleHelper';
+import { convertCstWithLocationToCstSimple, getCstWithLocation, PathsAndImage } from './cstSimpleHelper';
 
 export type Keyword =
   | 'LCurly'
@@ -200,7 +200,7 @@ function getHeaderInfo(classDeclaration: any): HeaderInfo {
   const classModifier = getProperty(classDeclaration, 'classModifier'.split('.'));
   let mapping: Mapping = { method: '', values: [] };
   if (classModifier !== null) {
-    const pathsAndImages = getPathsAndImagesFromSimpleCst(classModifier);
+    const pathsAndImages = getPathsAndImagesFromCstSimple(classModifier);
     for (let i = 0; i < pathsAndImages.length; i++) {
       const { paths, image } = pathsAndImages[i];
 
@@ -797,11 +797,11 @@ function getJspViews(methodDecls: PathsAndImage[], posLCurly: number, posRCurly:
 
 function getMethods(
   cstSimple: any,
-  pathsAndImageList: PathsAndImage[],
+  pathsAndImages: PathsAndImage[],
   header: HeaderInfo,
   vars: VarInfo[]
 ): MethodInfo[] {
-  const methodDecls = pathsAndImageList.filter(({ paths, image }) => includes(paths, 'methodDeclaration'));
+  const methodDecls = pathsAndImages.filter(({ paths }) => includes(paths, 'methodDeclaration'));
 
   const methods: MethodInfo[] = [];
   let mapping: Mapping = { method: '', values: [] };
@@ -857,17 +857,11 @@ function getMethods(
   return methods;
 }
 
-export function getCstClassDeclaration(cstSimpleAll: any): any {
-  let classDeclaration = getProperty(
-    cstSimpleAll,
-    'ordinaryCompilationUnit.typeDeclaration.classDeclaration'.split('.')
-  );
+function getCstClassDeclaration(cstSimple: any): any {
+  let classDeclaration = getProperty(cstSimple, 'ordinaryCompilationUnit.typeDeclaration.classDeclaration'.split('.'));
   if (!classDeclaration) {
     // Get only first public class and ignore rest private classes if one file has multiple classes.
-    classDeclaration = getProperty(
-      cstSimpleAll,
-      'ordinaryCompilationUnit.typeDeclaration.0.classDeclaration'.split('.')
-    );
+    classDeclaration = getProperty(cstSimple, 'ordinaryCompilationUnit.typeDeclaration.0.classDeclaration'.split('.'));
   }
 
   return classDeclaration;
@@ -949,20 +943,20 @@ export function getClassInfoFromDb(rootDir: string, fullPath: string): ClassInfo
   return { classPath, header, methods };
 }
 
-function getCstSimpleFromDb(fullPath: string): any {
+export function getCstWithLocationFromDb(fullPath: string): any {
   try {
     const path = getDbPath(config.path.source.rootDir, fullPath);
     const mtime = statSync(fullPath).mtime;
 
-    const cstSimpleFromDb = tCache.selectCstSimpleByMtime(path, mtime);
-    if (cstSimpleFromDb) {
-      return JSON.parse(cstSimpleFromDb);
+    const cstWithLocationFromDb = tCache.selectCstWithLocationByMtime(path, mtime);
+    if (cstWithLocationFromDb) {
+      return JSON.parse(cstWithLocationFromDb);
     }
 
-    const cstSimple = getCstSimple(fullPath);
-    tCache.insertCstSimple(path, mtime, cstSimple);
+    const cstWithLocation = getCstWithLocation(fullPath);
+    tCache.insertCstSimple(path, mtime, cstWithLocation);
 
-    return cstSimple;
+    return cstWithLocation;
   } catch (ex) {
     console.error(fullPath);
     throw new Error(ex);
@@ -974,17 +968,18 @@ export function getClassInfo(fullPath: string): {
   vars: VarInfo[];
   methods: MethodInfo[];
 } | null {
-  const cstSimple = getCstSimpleFromDb(fullPath);
-  // const cstSimple = getCstSimple(fullPath);
+  const cstWithLocation = getCstWithLocationFromDb(fullPath);
+  const cstSimple = convertCstWithLocationToCstSimple(cstWithLocation);
+
   const classDeclaration = getCstClassDeclaration(cstSimple);
   // Skip interface
   if (!classDeclaration) return null;
 
-  const pathsAndImageList = getPathsAndImagesFromSimpleCst(classDeclaration);
+  const pathsAndImages = getPathsAndImagesFromCstSimple(classDeclaration);
 
   const header = getHeaderInfo(classDeclaration);
-  const vars = getVars(pathsAndImageList);
-  const methods = getMethods(classDeclaration, pathsAndImageList, header, vars);
+  const vars = getVars(pathsAndImages);
+  const methods = getMethods(classDeclaration, pathsAndImages, header, vars);
 
   return { header, vars, methods };
 }

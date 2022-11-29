@@ -323,7 +323,7 @@ where   (keyName, groupSeq, seq, seqParent) not in
             from    t
         )
         and keyName = @keyName
-        and seq > 0 -- keep starting point`;
+        and seq > 0`;
         run(configReader.db(), sql, { keyName });
       }
     }
