@@ -1,5 +1,8 @@
 node_modules
 dist
-data
+dataB
+dataH
 output
-src/config/template
+src/config/templateB
+src/config/templateH
+**/databases

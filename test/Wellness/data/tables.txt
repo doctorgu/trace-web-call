@@ -1,0 +1,13 @@
+comment
+event_wellness
+event_homepage
+gallery
+hash_tag
+image
+member
+notice
+package
+reservation
+tour
+video
+wish_list
