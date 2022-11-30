@@ -52,7 +52,7 @@ import {
 } from './common/sqlMapperHelper';
 import { getPathsAndImagesFromCstSimple } from './common/cstHelper';
 import { insertBatchInfo } from './common/batchHelper';
-import { copyFile } from './run/tmpLogDirectory';
+import { copyRelated } from './run/copyRelated';
 
 function doTest() {
   // const ret = getClassInfo('C:/source/trace-web-call/test/AnnotationTestController.java');
@@ -111,10 +111,25 @@ function doTest() {
   // --
   //   const ret = getClassInfo('C:/source/trace-web-call/test/ParenthesisTest.java');
   // --
-  copyFile('D:/source/hmall/hdhs_hmall/hmall_pc_was/src/main/java/hmall/cp/cpa/web/CPACsegLnbSrvyController.java');
+  // const fullPathsP = [
+  //   ...findFiles(
+  //     `${config.path.source.rootDir}/hdhs_hmall/hmall_pc_was/src/main/java/hmall/cp`,
+  //     '*Cont*oller.java',
+  //     true
+  //   ),
+  // ];
+  // const fullPathsQ = [
+  //   ...findFiles(
+  //     `${config.path.source.rootDir}/hdhs_hmall/hmall_pc_was/src/main/java/hmall/cq`,
+  //     '*Cont*oller.java',
+  //     true
+  //   ),
+  // ];
+  // const fullPathsAll = [...fullPathsP, ...fullPathsQ];
+  // copyRelated(fullPathsAll);
 }
-doTest();
-// insertToDb();
+// doTest();
+insertToDb();
 // deleteNoNeedRouteTableRouteBatch();
 // logCompared();
 // copyModifiedUntracked();

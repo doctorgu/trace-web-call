@@ -22,7 +22,8 @@
     "truncateTables": "tsc && node -e \"require('./dist/run/truncate').truncateTables()\"",
     "truncateTables2": "node -e \"require('./dist/run/truncate').truncateTables()\"",
     "truncateObjects": "tsc && node -e \"require('./dist/run/truncate').truncateObjects()\"",
-    "truncateObjects2": "node -e \"require('./dist/run/truncate').truncateObjects()\""
+    "truncateObjects2": "node -e \"require('./dist/run/truncate').truncateObjects()\"",
+    "copyRelated": "tsc && node -e \"require('./dist/run/copyRelated').copyRelated()\""
   },
   "devDependencies": {
     "@types/better-sqlite3": "^7.6.0"
