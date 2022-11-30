@@ -4,7 +4,7 @@ export const configWellness: ConfigType = {
   name: 'Wellness2',
   path: {
     source: {
-      rootDir: 'C:/source/Wellness',
+      rootDir: 'D:/source/Wellness',
       dependency: [],
       main: [
         {

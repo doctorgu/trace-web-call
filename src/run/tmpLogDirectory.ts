@@ -24,7 +24,7 @@ type FileType = 'controller' | 'dao' | 'xml' | 'unknown';
 const config = {
   keyName: 'hmall_pc_was',
   xmlDirectory: 'hdhs_hmall/hmall_pc_was/src/main/resources/hmall/sqlmap/hmall',
-  rootDir: 'C:/source/hmall',
+  rootDir: 'D:/source/hmall',
   rootSrc: 'hdhs_hmall/hmall_pc_was',
   rootDest: 'demo',
   rootSrcDependency: ['hdhs_core/hshop_core', 'hdhs_core/hshop_order', 'hdhs_core/hshop_prmo'],
@@ -128,13 +128,13 @@ function getSubSrcAndDest(fullPath: string): [string, string][] {
             // hmall/cp/cpa/service/CPACsegLnbSrvyService
             const namespace = namespaces.join('/');
 
-            // C:/source/hmall/hdhs_hmall/hmall_pc_was/src/main/java/hmall/cp/cpa/service/CPACsegLnbSrvyService.java
+            // D:/source/hmall/hdhs_hmall/hmall_pc_was/src/main/java/hmall/cp/cpa/service/CPACsegLnbSrvyService.java
             const fullPathSrcMaybe = `${config.rootDir}/${config.rootSrc}/${config.srcMainJava}/${namespace}${
               !endsWithStar ? '.java' : ''
             }`;
             const fullPathsSrc = getFullPathSrc(fullPathSrcMaybe, endsWithStar);
             for (const fullPathSrc of fullPathsSrc) {
-              // C:/source/hmall/demo/src/main/java/hmall/cp/cpa/service/CPACsegLnbSrvyService.java
+              // D:/source/hmall/demo/src/main/java/hmall/cp/cpa/service/CPACsegLnbSrvyService.java
               const fullPathDest = getFullPathDest(fullPathSrc);
 
               srcDests.push([fullPathSrc, fullPathDest]);
@@ -205,25 +205,25 @@ function copyImported(srcDests: string[][]) {
   }
 }
 
-function getSrcAndDest(fullPathSrc: string, srcAndSrcDest: Map<string, [string, string][]>): void {
+function getSrcAndSrcDests(fullPathSrc: string, srcAndSrcDests: Map<string, [string, string][]>): void {
   const fullPathDest = getFullPathDest(fullPathSrc);
 
   // if (config.skipIfExists && existsSync(fullPathSrc)) {
   //   return;
   // }
 
-  if (srcAndSrcDest.has(fullPathSrc)) {
+  if (srcAndSrcDests.has(fullPathSrc)) {
     return;
   }
 
   let srcDests: [string, string][] = [[fullPathSrc, fullPathDest]];
-  srcAndSrcDest.set(fullPathSrc, srcDests);
+  srcAndSrcDests.set(fullPathSrc, srcDests);
 
   const srcDestsSub = getSubSrcAndDest(fullPathSrc);
   srcDests = srcDests.concat(srcDestsSub);
 
   for (const [fullPathSrc] of srcDests) {
-    getSrcAndDest(fullPathSrc, srcAndSrcDest);
+    getSrcAndSrcDests(fullPathSrc, srcAndSrcDests);
   }
 
   // copyImported(srcDests);
@@ -232,17 +232,18 @@ function getSrcAndDest(fullPathSrc: string, srcAndSrcDest: Map<string, [string, 
 }
 
 export function copyFile(fullPathSrc: string) {
-  const srcAndSrcDest = new Map<string, [string, string][]>();
-  getSrcAndDest(fullPathSrc, srcAndSrcDest);
+  const srcAndSrcDests = new Map<string, [string, string][]>();
+  getSrcAndSrcDests(fullPathSrc, srcAndSrcDests);
 
   const srcAndDest = new Map<string, string>();
-  for (const [, srcDests] of srcAndSrcDest) {
+  for (const [, srcDests] of srcAndSrcDests) {
     for (const [fullPathSrc, fullPathDest] of srcDests) {
       srcAndDest.set(fullPathSrc, fullPathDest);
     }
   }
 
-  console.log(srcAndDest);
+  console.log([...srcAndDest]);
+  console.log(1);
 }
 // copyController('src/main/java/hmall/cp/cpa/web/CPACsegLnbSrvyController.java');
 

@@ -66,10 +66,10 @@ function doTest() {
   // --
   //   const { methods } = getClassInfo('./test/jspTest/JspTestController.java');
   //   const { methods } = getClassInfo('./test/jspModelAndView/ModelAndViewTestController.java');
-  // const cstWithLocation = getCstWithLocation('c:/source/trace-web-call/test/SeparatorTest.java');
+  // const cstWithLocation = getCstWithLocation('C:/source/trace-web-call/test/SeparatorTest.java');
   // const cstSimple = convertCstWithLocationToCstSimple(cstWithLocation);
   // const pathsAndImages = getPathsAndImagesFromCstSimple(cstSimple);
-  // const ret = getClassInfo('c:/source/trace-web-call/test/SeparatorTest.java');
+  // const ret = getClassInfo('C:/source/trace-web-call/test/SeparatorTest.java');
   // console.log(ret);
   // --
   // const cstSimple = getCstSimple('./test/VariableHistoryTest.java');
@@ -111,7 +111,7 @@ function doTest() {
   // --
   //   const ret = getClassInfo('C:/source/trace-web-call/test/ParenthesisTest.java');
   // --
-  copyFile('c:/source/hmall/hdhs_hmall/hmall_pc_was/src/main/java/hmall/cp/cpa/web/CPACsegLnbSrvyController.java');
+  copyFile('D:/source/hmall/hdhs_hmall/hmall_pc_was/src/main/java/hmall/cp/cpa/web/CPACsegLnbSrvyController.java');
 }
 doTest();
 // insertToDb();
