@@ -8,9 +8,14 @@
 - yarn config set prefix `C:\yarn_prefix`
 - yarn global add typescript
 - yarn global add ts-node
-- add `C:\yarn_prefix\bin` to system environment variable
-- yarn start
+- add `C:\yarn_prefix\bin` to system variables of path
 - Change path of `src/config/config.ts`
+- yarn start
+
+## Trouble shooting
+
+- When error TS2403: Subsequent variable declarations must have the same type. Variable 'AbortSignal' must be of type
+  - yarn add -D @types/node
 
 ## Exception
 

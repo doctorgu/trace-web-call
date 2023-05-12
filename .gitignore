@@ -2,7 +2,9 @@ node_modules
 dist
 dataB
 dataH
+dataK
 output
 src/config/templateB
 src/config/templateH
+src/config/templateK
 **/databases

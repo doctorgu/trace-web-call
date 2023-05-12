@@ -1,4 +1,4 @@
 import { ConfigType } from './ConfigType';
-import { configFO } from './templateH/configFO';
+import { configParti } from './templateK/configParti';
 
-export const config: ConfigType = configFO;
+export const config: ConfigType = configParti;

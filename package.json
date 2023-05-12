@@ -26,7 +26,8 @@
     "copyRelated": "tsc && node -e \"require('./dist/run/copyRelated').copyRelated()\""
   },
   "devDependencies": {
-    "@types/better-sqlite3": "^7.6.0"
+    "@types/better-sqlite3": "^7.6.0",
+    "@types/node": "^20.1.3"
   },
   "dependencies": {
     "axios": "^0.27.2",
